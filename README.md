@@ -4,7 +4,7 @@ Launcher pour jeux PC, façon console : carrousel horizontal de boîtes 3D, fond
 
 ## Installation
 
-Lance `RR Launcher Setup 1.0.0.exe`. L'installateur n'est pas signé : si Windows SmartScreen s'affiche, clique sur **Informations complémentaires → Exécuter quand même**.
+Télécharge `RR-Launcher-Setup-x.y.z.exe` depuis la [dernière release](https://github.com/RobinRahoual/RR-Launcher/releases/latest) et lance-le. L'installateur n'est pas signé : si Windows SmartScreen s'affiche, clique sur **Informations complémentaires → Exécuter quand même**.
 
 ## Ajouter un jeu
 
@@ -32,6 +32,12 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer ? **Dé
 | Favori | | F | Détails |
 | Menu | Menu / Options | Échap | Bouton Menu |
 | Plein écran | | F11 | Menu |
+
+## Mises à jour
+
+Le launcher vérifie les [Releases GitHub](https://github.com/RobinRahoual/RR-Launcher/releases) au démarrage puis toutes les 4 h, télécharge la nouvelle version en arrière-plan et affiche **« Mise à jour X · Redémarrer »** en haut à droite. Sinon elle s'installe à la fermeture. Vérification manuelle : **Menu → Rechercher les mises à jour**.
+
+**Publier une version** : augmenter `version` dans `package.json` et pousser sur `main`. Le workflow `.github/workflows/release.yml` compile l'installateur sur Windows et crée la release `vX.Y.Z` (avec `latest.yml`, indispensable aux mises à jour).
 
 ## Données
 
