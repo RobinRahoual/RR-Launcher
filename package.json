@@ -1,0 +1,52 @@
+{
+  "name": "rr-launcher",
+  "productName": "RR Launcher",
+  "version": "1.0.2",
+  "description": "Launcher pour jeux PC",
+  "author": "Robin Rahoual",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win nsis --x64",
+    "release": "electron-builder --win nsis --x64 --publish always"
+  },
+  "build": {
+    "appId": "fr.robinrahoual.rrlauncher",
+    "productName": "RR Launcher",
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.png",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "RR Launcher"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "RobinRahoual",
+        "repo": "RR-Launcher",
+        "releaseType": "release"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^45.3.1",
+    "electron-builder": "^26.18.0"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.11"
+  },
+  "repository": "https://github.com/RobinRahoual/RR-Launcher"
+}

@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; img-src 'self' rr: https: data:; style-src 'self' 'unsafe-inline'; font-src 'self'; script-src 'self'; connect-src 'self' rr:" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RR Launcher</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <!-- Fond : image du jeu assombrie -->
+  <div id="bg" aria-hidden="true">
+    <div class="bg-layer" id="bgA"></div>
+    <div class="bg-layer" id="bgB"></div>
+    <canvas id="motes"></canvas>
+    <div class="bg-shade"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-title"><span class="brand-rr">RR</span> LAUNCHER</div>
+      <div class="brand-sub" id="brandSub">PC · 0 JEUX</div>
+      <div class="brand-sub dim" id="brandSort"></div>
+    </div>
+
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Catégories"></nav>
+
+    <div class="status">
+      <div class="status-row">
+        <span class="input-ind" id="inputInd" title="Périphérique actif"></span>
+        <span class="clock"><span id="date"></span> <strong id="time"></strong></span>
+      </div>
+      <div class="counter" id="counter">0 / 0</div>
+      <button class="chip-btn update-chip" id="btnUpdate" data-action="installUpdate" hidden></button>
+      <button class="chip-btn" id="btnMenu" data-action="menu"><span class="key-mini" data-glyph="menu"></span>Menu</button>
+    </div>
+  </header>
+
+  <main id="stage" aria-live="polite">
+    <div id="carousel" class="carousel"></div>
+
+    <div id="empty" class="empty" hidden>
+      <div class="empty-box" aria-hidden="true">
+        <div class="empty-plus"></div>
+      </div>
+      <h2>Ta bibliothèque est vide</h2>
+      <p>Ajoute un jeu en choisissant son fichier <b>.exe</b>.<br/>Jaquette, logo, fond et description sont récupérés automatiquement.</p>
+      <button class="btn primary" data-action="add" data-nav>
+        <span class="key-mini" data-glyph="add"></span> Ajouter un jeu
+      </button>
+      <p class="dim small">Astuce : tu peux aussi glisser-déposer un .exe sur la fenêtre.</p>
+    </div>
+  </main>
+
+  <section class="caption" id="caption">
+    <h1 id="title"></h1>
+    <p id="subtitle"></p>
+  </section>
+
+  <footer class="hints" id="hints" aria-label="Commandes"></footer>
+
+  <!-- Détails -->
+  <div class="overlay" id="details" hidden role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="details-bg" id="dBg"></div>
+    <div class="details">
+      <div class="details-main">
+        <div class="d-logo-wrap"><img id="dLogo" alt="" hidden /><h2 id="dTitle"></h2></div>
+        <div class="d-meta" id="dMeta"></div>
+        <div class="d-tags" id="dTags"></div>
+        <p class="d-desc" id="dDesc"></p>
+        <div class="d-stats" id="dStats"></div>
+        <div class="d-actions" id="dActions">
+          <button class="btn primary" data-act="play" data-nav><span class="key-mini" data-glyph="a"></span>Jouer</button>
+          <button class="btn" data-act="fav" data-nav id="dFav">Favori</button>
+          <button class="btn" data-act="rematch" data-nav>Corriger le jeu</button>
+          <button class="btn" data-act="images" data-nav>Images</button>
+          <button class="btn" data-act="edit" data-nav>Modifier</button>
+          <button class="btn" data-act="folder" data-nav>Dossier</button>
+          <button class="btn danger" data-act="remove" data-nav>Supprimer</button>
+        </div>
+        <div class="d-sub" id="dSub" hidden></div>
+      </div>
+      <div class="details-side" id="dShots"></div>
+    </div>
+  </div>
+
+  <!-- Ajout / correction -->
+  <div class="overlay center" id="addDialog" hidden role="dialog" aria-modal="true" aria-labelledby="addTitle">
+    <div class="panel wide">
+      <h2 id="addTitle">Ajouter un jeu</h2>
+      <div class="add-step" id="addStep1">
+        <button class="drop-target" data-action="pick" data-nav>
+          <span class="drop-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 15V3m0 0L7 8m5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></svg>
+          </span>
+          <strong>Choisir le fichier .exe du jeu</strong>
+          <span class="dim">ou glisse-le ici · .exe, .lnk, .url, .bat</span>
+        </button>
+      </div>
+      <div class="add-step" id="addStep2" hidden>
+        <div class="field">
+          <label for="addPath">Exécutable</label>
+          <div class="path-row"><code id="addPath"></code><button class="btn small" data-action="pick" data-nav id="addRepick">Changer</button></div>
+        </div>
+        <div class="field">
+          <label for="addName">Nom du jeu <span class="dim">(sert à la recherche)</span></label>
+          <input id="addName" type="text" autocomplete="off" spellcheck="false" data-nav />
+        </div>
+        <div class="field">
+          <label>Correspondance trouvée <span class="dim" id="addStatus"></span></label>
+          <div class="results" id="addResults" role="listbox" aria-label="Résultats"></div>
+        </div>
+        <div class="panel-actions">
+          <button class="btn" data-action="close" data-nav>Annuler</button>
+          <button class="btn primary" id="addConfirm" data-nav>Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Menu -->
+  <div class="overlay center" id="menu" hidden role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="panel menu-panel">
+      <h2>Menu</h2>
+      <button class="menu-item" data-action="add" data-nav>Ajouter un jeu <span class="dim">N</span></button>
+      <button class="menu-item" data-action="settings" data-nav>Réglages <span class="dim">S</span></button>
+      <button class="menu-item" data-action="installUpdate" data-nav id="menuInstall" hidden>Installer la mise à jour et redémarrer</button>
+      <button class="menu-item" data-action="checkUpdate" data-nav>Rechercher les mises à jour <span class="dim" id="menuVersion"></span></button>
+      <button class="menu-item" data-action="fullscreen" data-nav>Plein écran <span class="dim">F11</span></button>
+      <button class="menu-item" data-action="minimize" data-nav>Réduire la fenêtre</button>
+      <button class="menu-item danger" data-action="quit" data-nav>Quitter</button>
+    </div>
+  </div>
+
+  <!-- Réglages -->
+  <div class="overlay center" id="settings" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
+    <div class="panel wide">
+      <h2 id="setTitle">Réglages</h2>
+      <div class="setting">
+        <div><strong>Couleur des boîtes</strong><span class="dim">Le boîtier de chaque jeu</span></div>
+        <div class="seg" data-setting="caseStyle">
+          <button data-value="red" data-nav>Rouge</button><button data-value="black" data-nav>Noir</button><button data-value="blue" data-nav>Bleu</button><button data-value="auto" data-nav>Auto</button>
+        </div>
+      </div>
+      <div class="setting">
+        <div><strong>Tri</strong><span class="dim">Ordre dans le carrousel</span></div>
+        <div class="seg" data-setting="sort">
+          <button data-value="recent" data-nav>Récents</button><button data-value="name" data-nav>Nom</button><button data-value="added" data-nav>Ajout</button><button data-value="playtime" data-nav>Temps</button>
+        </div>
+      </div>
+      <div class="setting">
+        <div><strong>Plein écran au démarrage</strong></div>
+        <button class="toggle" data-toggle="fullscreen" role="switch" data-nav></button>
+      </div>
+      <div class="setting">
+        <div><strong>Réduire le launcher pendant le jeu</strong><span class="dim">Il revient quand le jeu se ferme</span></div>
+        <button class="toggle" data-toggle="minimizeOnLaunch" role="switch" data-nav></button>
+      </div>
+      <div class="setting">
+        <div><strong>Sons d’interface</strong></div>
+        <button class="toggle" data-toggle="sounds" role="switch" data-nav></button>
+      </div>
+      <div class="setting col">
+        <div><strong>Clé API SteamGridDB</strong> <span class="dim">(optionnelle)</span>
+          <span class="dim">Plus de jaquettes et logos, y compris pour les jeux hors Steam.
+            <a href="#" data-link="https://www.steamgriddb.com/profile/preferences/api">Obtenir une clé gratuite</a></span></div>
+        <input id="sgdbKey" type="password" placeholder="Colle ta clé ici" autocomplete="off" data-nav />
+      </div>
+      <div class="panel-actions">
+        <button class="btn primary" data-action="close" data-nav>Terminé</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modification / confirmation -->
+  <div class="overlay center" id="prompt" hidden role="dialog" aria-modal="true" aria-labelledby="pTitle">
+    <div class="panel">
+      <h2 id="pTitle"></h2>
+      <div id="pBody"></div>
+      <div class="panel-actions" id="pActions"></div>
+    </div>
+  </div>
+
+  <div class="dropzone" id="dropzone" hidden><div>Dépose l’exécutable du jeu</div></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
