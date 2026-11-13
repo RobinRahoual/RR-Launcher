@@ -1,0 +1,20 @@
+"users"
+{
+	"76561197960287930"
+	{
+		"AccountName"		"robin_old"
+		"PersonaName"		"Ancien"
+		"RememberPassword"		"1"
+		"MostRecent"		"0"
+		"Timestamp"		"1600000000"
+	}
+	"76561198000000001"
+	{
+		"AccountName"		"robin"
+		"PersonaName"		"Robin \"RR\""
+		"RememberPassword"		"1"
+		"WantsOfflineMode"		"0"
+		"MostRecent"		"1"
+		"Timestamp"		"1700000000"
+	}
+}

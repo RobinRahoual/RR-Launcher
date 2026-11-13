@@ -203,9 +203,10 @@ app.whenReady().then(() => {
     // rr://media/<gameId|_platforms>/<fichier>
     const u = new URL(req.url);
     const parts = decodeURIComponent(u.pathname).split('/').filter(Boolean);
-    if (u.hostname !== 'media' || parts.length !== 2) return new Response('Not found', { status: 404 });
-    const [id, file] = parts.map((p) => path.basename(p));
-    const full = path.join(MEDIA, id, file);
+    const ach = parts.length === 3 && parts[1] === 'ach'; // EXTRAS : rr://media/<gameId>/ach/<fichier> (icônes de succès)
+    if (u.hostname !== 'media' || (parts.length !== 2 && !ach)) return new Response('Not found', { status: 404 });
+    const [id, file] = (ach ? [parts[0], parts[2]] : parts).map((p) => path.basename(p));
+    const full = ach ? path.join(MEDIA, id, 'ach', file) : path.join(MEDIA, id, file);
     if (!fs.existsSync(full)) return new Response('Not found', { status: 404 });
     return net.fetch(pathToFileURL(full).toString());
   });

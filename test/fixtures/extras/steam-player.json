@@ -1,0 +1,6 @@
+{"playerstats":{"steamID":"76561197960287930","gameName":"Hades","achievements":[
+{"apiname":"ACH_FIRST","achieved":1,"unlocktime":1700000000,"name":"Premier sang","description":"Vaincre un ennemi."},
+{"apiname":"ACH_ESCAPE","achieved":0,"unlocktime":0},
+{"apiname":"ACH_SECRET","achieved":0,"unlocktime":0},
+{"apiname":"ACH_FISH","achieved":1,"unlocktime":1710000000}
+],"success":true}}
