@@ -112,63 +112,85 @@ function dismissToast(t) {
   setTimeout(() => t.remove(), reduceMotion ? 0 : 260);
 }
 
-// ---------------------------------------------------------------- Roue des consoles (accueil)
-const WHEEL_STEP = 34; // degrés entre deux consoles sur la roue
-const LAY = { k: 0, edge: 0, anchor: 0, R: 400, cx: 0, cy: 0 }; // k : 0 = accueil, 1 = console ouverte
+// ---------------------------------------------------------------- Accueil : choix de la console (façon ES-DE)
+// Fond = bannière d'un jeu de la console, panneau en biais avec le grand logo, rangée de tuiles en bas.
+const LAY = { k: 0, edge: 0, anchor: 0, R: 400, cx: 0, cy: 0 }; // géométrie partagée (layout / frameGames)
+const HOME_FADE = reduceMotion ? 0 : 350;
 
 function computeHome() {
   const g = S.lib.games;
   const by = new Map();
   for (const x of g) {
-    const e = by.get(x.platform) || { n: 0, last: 0 };
+    const e = by.get(x.platform) || { n: 0, last: 0, fav: 0 };
     e.n++; e.last = Math.max(e.last, x.lastPlayed || 0, x.addedAt || 0);
+    if (x.favorite) e.fav++;
     by.set(x.platform, e);
   }
-  const plats = [...by.entries()].sort((a, b) => b[1].last - a[1].last).map(([id, e]) => ({ id, n: e.n }));
+  const plats = [...by.entries()].sort((a, b) => b[1].last - a[1].last).map(([id, e]) => ({ id, n: e.n, fav: e.fav }));
   const items = [];
-  if (plats.length > 1) items.push({ id: 'all', n: g.length });
+  if (plats.length > 1) items.push({ id: 'all', n: g.length, fav: g.filter((x) => x.favorite).length });
   items.push(...plats);
-  items.push({ id: 'add', n: 0 });
+  items.push({ id: 'add', n: 0, fav: 0 });
   S.home.items = items;
   const i = items.findIndex((x) => x.id === S.home.selId);
   S.home.sel = i >= 0 ? i : 0;
   S.home.selId = items[S.home.sel]?.id;
 }
 // Pochettes des derniers jeux joués (visuel « Tous les jeux »)
-function recentCovers(n = 3) {
+function recentCovers(n = 4) {
   return [...S.lib.games].filter((g) => g.media?.cover)
     .sort((a, b) => (b.lastPlayed || b.addedAt || 0) - (a.lastPlayed || a.addedAt || 0))
     .slice(0, n).map((g) => mediaUrl(g, g.media.cover));
 }
-function wheelItemHTML(it) {
-  let visual, kind;
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+// Bannière d'un jeu : hero, puis header, puis une capture, puis la jaquette
+function bannerOf(g) {
+  const m = g.media || {};
+  const f = m.hero || m.header || (g.screenshots || [])[0] || m.cover;
+  return f ? mediaUrl(g, f) : '';
+}
+// Visuels tirés au hasard une fois par lancement (S.home.art) : même image en revenant sur une console
+function homeArt(id) {
+  S.home.art ||= {};
+  const games = id === 'all' ? S.lib.games : S.lib.games.filter((g) => g.platform === id);
+  const ids = new Set(games.map((g) => g.id));
+  let a = S.home.art[id];
+  if (a && (!a.gid || ids.has(a.gid)) && (!a.tid || ids.has(a.tid))) return a;
+  a = { bg: '', gid: null, tile: '', tid: null };
+  const withArt = games.filter((g) => bannerOf(g));
+  if (withArt.length) { const g = pick(withArt); a.gid = g.id; a.bg = bannerOf(g); }
+  // Tuile : une capture ou un hero, différent de la bannière si possible
+  const pool = [];
+  for (const g of games) {
+    for (const s of g.screenshots || []) pool.push([g.id, mediaUrl(g, s)]);
+    if (g.media?.hero) pool.push([g.id, mediaUrl(g, g.media.hero)]);
+  }
+  const other = pool.filter(([, u]) => u !== a.bg);
+  const t = pick(other.length ? other : pool);
+  if (t) { a.tid = t[0]; a.tile = t[1]; } else { a.tile = a.bg; a.tid = a.gid; }
+  S.home.art[id] = a;
+  return a;
+}
+function homeName(id) { return id === 'add' ? 'Ajouter des jeux' : id === 'all' ? 'Tous les jeux' : plat(id).name; }
+function tileHTML(it) {
   const p = plat(it.id);
   if (it.id === 'add') {
-    kind = 'add';
-    visual = `<div class="w-add" aria-hidden="true"><i></i></div>`;
-  } else if (it.id === 'all') {
-    const cv = recentCovers();
-    kind = 'all';
-    visual = cv.length
-      ? `<div class="w-fan">${cv.map((u, k) => `<span style="--k:${k - (cv.length - 1) / 2}"><img src="${u}" alt="" /></span>`).join('')}</div>`
-      : `<div class="w-fan is-empty"><span></span><span></span><span></span></div>`;
-  } else {
-    const img = S.platImg[it.id];
-    if (img) { kind = 'photo'; visual = `<img class="w-photo" src="${platUrl(img)}" alt="" />`; }
-    else if (it.id === 'pc') { kind = 'photo'; visual = `<img class="w-photo" src="assets/pc.svg" alt="" />`; }
-    else if (S.platLogo[it.id]) { kind = 'logo'; visual = `<img class="w-logo-img" src="${platUrl(S.platLogo[it.id])}" alt="" />`; }
-    else {
-      kind = 'emblem';
-      visual = `<div class="w-emblem">${p.maker ? `<small>${esc(p.maker)}</small>` : ''}<strong style="--fit:${Math.min(1, 7 / Math.max(4, (p.short || p.name).length)).toFixed(2)}">${esc(p.short || p.name)}</strong></div>`;
-    }
+    return `<div class="t-in t-add"><span class="t-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><b>Ajouter</b></div>`;
   }
-  const name = it.id === 'add' ? 'Ajouter' : it.id === 'all' ? 'Tous les jeux' : p.name;
-  const count = it.id === 'add' ? 'Jeux & ROMs' : `${it.n} jeu${it.n > 1 ? 'x' : ''}`;
-  return `<div class="w-stage"><div class="w-halo"></div><div class="w-contact"></div>`
-    + `<div class="w-visual" data-kind="${kind}">${visual}<div class="sweep"></div></div></div>`
-    + `<div class="w-label"><b>${esc(name)}</b><span>${esc(count)}</span></div>`;
+  if (it.id === 'all') {
+    const cv = recentCovers(4);
+    while (cv.length && cv.length < 4) cv.push(cv[cv.length % Math.max(1, cv.length)]);
+    return `<div class="t-in t-all"><div class="t-mosaic">${cv.map((u) => `<img src="${u}" alt="" decoding="async" />`).join('')}</div>`
+      + `<div class="t-shade"></div><b class="t-name">Tous<br>les jeux</b></div>`;
+  }
+  const a = homeArt(it.id);
+  const logo = S.platLogo[it.id];
+  const mark = logo ? `<img class="t-logo" src="${platUrl(logo)}" alt="" />`
+    : `<b class="t-name" style="--fit:${Math.min(1, 6 / Math.max(3, (p.short || p.name).length)).toFixed(2)}">${esc(p.short || p.name)}</b>`;
+  return `<div class="t-in" style="--pc:${p.color || '#F43F5E'}">${a.tile ? `<img class="t-art" src="${a.tile}" alt="" decoding="async" />` : ''}`
+    + `<div class="t-tint"></div><div class="t-shade"></div>${mark}</div>`;
 }
-// Logo très clair (blanc sur transparent) : illisible sur le disque clair → on le fonce
+// Logo très clair (blanc sur transparent) : illisible sur le panneau clair → on le fonce
 function checkLogoTone(img) {
   try {
     const c = document.createElement('canvas'), w = 48, h = 24;
@@ -181,41 +203,36 @@ function checkLogoTone(img) {
     img.classList.toggle('is-light', n > 0 && sum / n > 205);
   } catch { /* image non lisible (origine) : on garde le rendu d'origine */ }
 }
-function wheelColor(id) {
-  return id === 'add' || id === 'all' ? '#F43F5E' : plat(id).color || '#F43F5E';
-}
 function syncCards() {
-  const root = $('#wheelItems');
+  const root = $('#homeRow');
+  $('#home').classList.toggle('no-games', !S.lib.games.length);
   const ids = new Set(S.home.items.map((x) => x.id));
   for (const [id, el] of cards) if (!ids.has(id)) { el.remove(); cards.delete(id); }
   const covers = recentCovers().join(' ');
-  S.home.items.forEach((it) => {
+  S.home.items.forEach((it, i) => {
     let el = cards.get(it.id);
-    const sig = `${it.n}|${S.platImg[it.id] || ''}|${S.platLogo[it.id] || ''}|${it.id === 'all' ? covers : ''}`;
+    const sig = `${it.n}|${S.platLogo[it.id] || ''}|${it.id === 'all' ? covers : it.id === 'add' ? '' : homeArt(it.id).tile}`;
     if (!el) {
       el = document.createElement('div');
-      el.className = 'witem';
+      el.className = 'h-tile';
       el.dataset.id = it.id;
+      el.setAttribute('role', 'option');
       el.addEventListener('click', (e) => { e.stopPropagation(); onCardClick(it.id); });
       root.appendChild(el);
       cards.set(it.id, el);
     }
-    if (el._sig !== sig) {
-      el.innerHTML = wheelItemHTML(it);
-      el._sig = sig;
-      el.style.setProperty('--pc', wheelColor(it.id));
-      el._halo = $('.w-halo', el); el._contact = $('.w-contact', el); el._label = $('.w-label', el);
-      const logo = $('.w-logo-img', el);
-      if (logo) { if (logo.complete && logo.naturalWidth) checkLogoTone(logo); else logo.addEventListener('load', () => checkLogoTone(logo), { once: true }); }
-    }
-    if (!['all', 'add', 'pc'].includes(it.id) && S.platImg[it.id] === undefined) loadPlatImage(it.id);
+    el.setAttribute('aria-label', `${homeName(it.id)}${it.id === 'add' ? '' : `, ${it.n} jeu${it.n > 1 ? 'x' : ''}`}`);
+    el.dataset.i = i;
+    if (el._sig !== sig) { el.innerHTML = tileHTML(it); el._sig = sig; }
     loadPlatLogo(it.id);
   });
-  // Repères gravés sur le disque, un par élément (tournent avec la roue)
-  const ticks = $('#discTicks');
-  if (ticks._n !== S.home.items.length) {
-    ticks._n = S.home.items.length;
-    ticks.innerHTML = S.home.items.map((_, i) => `<i class="disc-pin" style="transform:rotate(${i * WHEEL_STEP}deg)"></i>`).join('');
+  markSelTile();
+}
+function markSelTile() {
+  for (const [id, el] of cards) {
+    const on = id === S.home.selId;
+    el.classList.toggle('is-sel', on);
+    el.setAttribute('aria-selected', on ? 'true' : 'false');
   }
 }
 async function loadPlatLogo(id) {
@@ -231,12 +248,11 @@ async function loadPlatLogo(id) {
 async function loadPlatImage(id) {
   S.platImg[id] = null;
   const f = await rr.platformImage(id).catch(() => null);
-  if (f) { S.platImg[id] = f; syncCards(); }
+  if (f) S.platImg[id] = f;
 }
 function onCardClick(id) {
-  if (S.mode !== 'main') return;
+  if (S.mode !== 'main' || S.view !== 'home') return;
   const i = S.home.items.findIndex((x) => x.id === id);
-  if (S.view === 'games') { goHome(); if (i !== S.home.sel) homeSelect(i); return; }
   if (i === S.home.sel) openHomeItem(); else homeSelect(i);
 }
 function homeSelect(i) {
@@ -245,26 +261,26 @@ function homeSelect(i) {
   S.home.sel = i;
   S.home.selId = S.home.items[i].id;
   sfx('tab');
-  setPreview();
+  markSelTile();
+  updateHomeChrome();
 }
+// Console « préparée » derrière l'accueil : on garde celle d'où l'on vient (pas d'aperçu des jeux sur l'accueil)
 function previewPlat() {
-  const it = S.home.items[S.home.sel];
-  return !it || it.id === 'add' ? '__none' : it.id;
+  return S.plat === 'all' || S.lib.games.some((g) => g.platform === S.plat) ? S.plat : '__none';
 }
-// Jeux de la console survolée, affichés à droite de la roue
-function setPreview() {
-  S.plat = previewPlat();
+// Prépare la console (S.plat / S.items / onglets) avant d'afficher ses jeux
+function setPreview(id = S.home.selId) {
+  S.plat = !id || id === 'add' ? '__none' : id;
   S.tab = 'all';
   S.flip = 0;
   computeTabs(); computeItems();
   S.sel = 0; S.pos = -1.4; S.vel = 0; S.selId = S.items[0]?.id || null;
   renderTabs(); syncSlots();
-  updateHomeChrome();
 }
 function openHomeItem() {
   const it = S.home.items[S.home.sel];
   if (!it) return;
-  if (it.id === 'add') return action('addHub');
+  if (it.id === 'add') { sfx('open'); return action('addHub'); }
   enterPlatform(it.id);
 }
 function setCapLogo(id) {
@@ -274,36 +290,81 @@ function setCapLogo(id) {
   el.style.cssText = has ? logoCss(id) : '';
   $('#title').classList.toggle('sr-only', !!has);
 }
+// Fond + panneau : préchargement puis fondu enchaîné ; la dernière demande gagne
+let homeArtTok = 0, homeArtCur = null;
+function setHomeArt(id) {
+  const url = id === 'add' ? '' : homeArt(id).bg;
+  const key = url || (id === 'add' ? '#add' : '#none');
+  if (key === homeArtCur) return;
+  homeArtCur = key;
+  const tok = ++homeArtTok;
+  const apply = () => {
+    if (tok !== homeArtTok) return;
+    const style = url ? `background-image:url("${url}")` : '';
+    const cls = url ? '' : ' is-brand';
+    for (const [root, c] of [[$('#homeScene'), 'h-bg'], [$('#homePanel'), 'h-pbg']]) {
+      const old = $$(`.${c}`, root);
+      const el = document.createElement('div');
+      el.className = c + cls;
+      el.style.cssText = style;
+      root.appendChild(el);
+      old.forEach((o) => { o.classList.add('out'); setTimeout(() => o.remove(), HOME_FADE + 60); });
+      if (HOME_FADE) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: HOME_FADE, easing: 'ease-out' });
+    }
+  };
+  if (!url) return apply();
+  const img = new Image();
+  img.onload = apply; img.onerror = apply;
+  img.src = url;
+}
+// Préchargement des bannières voisines : pas d'attente au prochain déplacement
+function warmHomeArt() {
+  for (const d of [-1, 1]) {
+    const it = S.home.items[S.home.sel + d];
+    if (it && it.id !== 'add') { const u = homeArt(it.id).bg; if (u) new Image().src = u; }
+  }
+}
+function homeLogoHTML(id) {
+  if (id === 'all' || id === 'add') {
+    return `<div class="h-brand"><span class="h-brand-t"><span class="brand-rr">RR</span> LAUNCHER</span>`
+      + `<span class="h-brand-s">${id === 'all' ? 'Tous les jeux' : 'Ajouter des jeux'}</span></div>`;
+  }
+  const p = plat(id);
+  if (S.platLogo[id]) return `<img class="h-logo-img" src="${platUrl(S.platLogo[id])}" alt="${esc(p.name)}" />`;
+  return `<div class="h-name" style="--fit:${Math.min(1, 7 / Math.max(3, p.name.length)).toFixed(2)}">${esc(p.name)}</div>`;
+}
+function setHomeLogo(id) {
+  const box = $('#homeLogo');
+  const sig = `${id}|${S.platLogo[id] || ''}`;
+  if (box._sig === sig) return;
+  box._sig = sig;
+  const el = document.createElement('div');
+  el.className = 'h-logo-in';
+  el.innerHTML = homeLogoHTML(id);
+  const img = $('img', el);
+  if (img) { if (img.complete && img.naturalWidth) checkLogoTone(img); else img.addEventListener('load', () => checkLogoTone(img), { once: true }); }
+  $$('.h-logo-in', box).forEach((o) => {
+    if (o._anim) o._anim.cancel();
+    if (!HOME_FADE) return o.remove();
+    o.style.pointerEvents = 'none';
+    o.animate([{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-2vw)' }], { duration: 200, easing: 'ease-in', fill: 'forwards' })
+      .onfinish = () => o.remove();
+  });
+  box.appendChild(el);
+  if (HOME_FADE) el._anim = el.animate([{ opacity: 0, transform: 'translateX(3vw)' }, { opacity: 1, transform: 'none' }], { duration: 340, delay: 60, easing: 'cubic-bezier(.2,.8,.2,1)', fill: 'backwards' });
+}
 function updateHomeChrome() {
   const it = S.home.items[S.home.sel];
   updateBrand();
   $('#counter').textContent = '';
   if (!it) return;
-  const cap = $('#caption');
-  cap.hidden = false;
-  cap.classList.remove('swap'); void cap.offsetWidth; cap.classList.add('swap');
-  $('#title').dataset.id = '';
-  if (it.id === 'add') {
-    setCapLogo(null);
-    $('#title').textContent = 'Ajouter des jeux';
-    $('#subtitle').textContent = 'Jeux PC, Steam, Epic, GOG, ROMs et émulateurs';
-    setBackground('', '#F43F5E');
-  } else if (it.id === 'all') {
-    setCapLogo(null);
-    $('#title').textContent = 'Tous les jeux';
-    $('#subtitle').textContent = `${it.n} jeu${it.n > 1 ? 'x' : ''} · toutes consoles`;
-    const g = recentGame();
-    setBackground(g ? heroOf(g) : '', '#F43F5E');
-  } else {
-    const p = plat(it.id);
-    setCapLogo(it.id);
-    $('#title').textContent = p.name;
-    const emu = p.id !== 'pc' && !S.lib.settings.emulators?.[p.id] && S.lib.games.some((x) => x.platform === p.id && x.kind === 'rom') ? ' · émulateur à configurer' : '';
-    $('#subtitle').textContent = [p.maker, p.year, `${it.n} jeu${it.n > 1 ? 'x' : ''}`].filter(Boolean).join(' · ') + emu;
-    const g = recentGame(p.id);
-    setBackground(g ? heroOf(g) : '', p.color);
+  setHomeArt(it.id);
+  setHomeLogo(it.id);
+  warmHomeArt();
+  if (typeof setFootInfo === 'function') {
+    setFootInfo(it.id === 'add' ? 'AJOUTER DES JEUX PC, STEAM, EPIC, GOG OU DES ROMS'
+      : `${it.n} JEU${it.n > 1 ? 'X' : ''} (${it.fav} FAVORI${it.fav > 1 ? 'S' : ''})`);
   }
-  sweepCard();
 }
 function recentGame(pid) {
   return [...S.lib.games].filter((g) => !pid || g.platform === pid).sort((a, b) => (b.lastPlayed || b.addedAt) - (a.lastPlayed || a.addedAt))[0];
@@ -312,23 +373,13 @@ function heroOf(g) {
   const f = g.media?.hero || g.media?.header || g.media?.cover;
   return f ? mediaUrl(g, f) : '';
 }
-let sweepTimer;
-function sweepCard() {
-  clearTimeout(sweepTimer);
-  sweepTimer = setTimeout(() => {
-    const el = cards.get(S.home.selId);
-    const sw = el && $('.sweep', el);
-    if (!sw) return;
-    sw.classList.remove('go'); void sw.offsetWidth; sw.classList.add('go');
-  }, 280);
-}
 
 function enterPlatform(id) {
-  if (id && id !== previewPlat()) {
+  if (id) {
     const i = S.home.items.findIndex((x) => x.id === id);
-    if (i >= 0) { S.home.sel = i; S.home.selId = id; }
-    setPreview();
+    if (i >= 0) { S.home.sel = i; S.home.selId = id; markSelTile(); }
   }
+  setPreview(S.home.selId);
   if (!S.items.length) return;
   S.view = 'games';
   document.body.dataset.view = 'games';
@@ -345,10 +396,30 @@ function goHome() {
   document.body.dataset.view = 'home';
   $('#btnBack').hidden = true;
   S.flip = 0;
-  if (S.tab !== 'all' || S.plat !== previewPlat()) setPreview();
-  else { S.sel = 0; S.selId = S.items[0]?.id || null; updateHomeChrome(); }
+  // Retour sur la console d'où l'on vient
+  const i = S.home.items.findIndex((x) => x.id === S.plat);
+  if (i >= 0) { S.home.sel = i; S.home.selId = S.plat; S.home.pos = i; S.home.vel = 0; markSelTile(); }
+  updateHomeChrome();
   sfx('back');
   renderHints();
+}
+// Rangée de tuiles : la tuile choisie reste ancrée en 2e position (≈ 22,6 % de la largeur), ressort sur S.home.pos
+function frameHome() {
+  const row = $('#homeRow');
+  if (!row || !cards.size) return;
+  const first = cards.values().next().value;
+  const T = first.offsetWidth || 200;
+  const pitch = T * 1.163;
+  const x0 = innerWidth * 0.226 - T / 2;
+  S.home.items.forEach((it, i) => {
+    const el = cards.get(it.id);
+    if (!el) return;
+    const x = x0 + (i - S.home.pos) * pitch;
+    const vis = x > -T * 1.3 && x < innerWidth + T * 0.3;
+    if (!vis) { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'; return; }
+    el.style.visibility = '';
+    el.style.transform = `translate3d(${x.toFixed(1)}px, 0, 0)`;
+  });
 }
 
 // ---------------------------------------------------------------- Bibliothèque / filtres
@@ -573,7 +644,7 @@ function frame(t) {
   LAY.k += (target - LAY.k) * Math.min(1, (reduceMotion ? 1 : 0.1) * dt);
   if (Math.abs(target - LAY.k) < 0.001) LAY.k = target;
   layout();
-  frameWheel(t);
+  frameHome();
   frameGames(t, dt);
   drawMotes(t);
   requestAnimationFrame(frame);
@@ -592,49 +663,6 @@ function layout() {
   r.setProperty('--edge', edge + 'px');
   r.setProperty('--anchor', LAY.anchor + 'px');
   r.setProperty('--glow-x', (LAY.anchor + W * 0.16) + 'px');
-}
-function frameWheel(t) {
-  const { R, cx, cy } = LAY;
-  const e = LAY.ease || 0; // 0 = accueil, 1 = console ouverte (roue réduite à une bande)
-  const disc = $('#disc');
-  disc.style.transform = `translate3d(${cx - R}px, ${cy - R}px, 0)`;
-  $('#discTicks').style.transform = `rotate(${-S.home.pos * WHEEL_STEP}deg)`;
-  const selId = S.home.items[S.home.sel]?.id;
-  if (disc._sel !== selId) {
-    disc._sel = selId;
-    disc.style.setProperty('--pc', wheelColor(selId));
-    $$('.disc-pin', disc).forEach((p, i) => p.classList.toggle('on', i === S.home.sel));
-  }
-  // En mode console, les éléments glissent vers le bord pour rester visibles dans la bande
-  const rI = R * (0.66 + 0.14 * e);
-  const size = R * 0.44;
-  S.home.items.forEach((it, i) => {
-    const el = cards.get(it.id);
-    if (!el) return;
-    const th = (i - S.home.pos) * WHEEL_STEP;
-    const a = Math.abs(th);
-    if (a > 110) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
-    el.style.display = '';
-    const rad = th * Math.PI / 180;
-    const x = cx + rI * Math.cos(rad), y = cy + rI * Math.sin(rad);
-    const f = clamp(1 - a / WHEEL_STEP, 0, 1);
-    const focus = f * f * (3 - 2 * f);
-    const sc = (0.44 + 0.56 * focus) * (1 - 0.5 * e);
-    const float = !reduceMotion && e < 0.5 ? Math.sin(t / 1700) * 3 * focus : 0;
-    el.style.transform = `translate3d(${x - size / 2}px, ${y - size / 2 + float}px, 0) scale(${sc})`;
-    el.style.opacity = (clamp(1 - Math.max(0, a - 70) / 40, 0, 1) * (1 - 0.6 * e * (1 - focus))).toFixed(3);
-    el.style.zIndex = String(200 - Math.round(a));
-    el.classList.toggle('is-sel', focus > 0.5);
-    // Halo, ombre de contact et légende : seulement opacity/transform
-    if (el._halo) el._halo.style.opacity = (focus * (1 - e)).toFixed(3);
-    if (el._contact) el._contact.style.opacity = (0.35 + 0.65 * focus).toFixed(3);
-    if (el._label) {
-      // Légende compensée : lisible même sur les consoles voisines (≈ 70 % de la taille sélectionnée)
-      const ls = (0.74 + 0.26 * focus) / Math.max(0.3, 0.44 + 0.56 * focus);
-      el._label.style.transform = `scale(${ls.toFixed(3)})`;
-      el._label.style.opacity = ((0.78 + 0.22 * focus) * clamp(1 - e * 2.2, 0, 1)).toFixed(3);
-    }
-  });
 }
 function cumAt(p) {
   const c = S.cum || [];
@@ -1589,9 +1617,9 @@ addEventListener('keydown', (e) => {
   }
   if (S.view === 'home') {
     const m = {
-      ArrowDown: () => homeSelect(S.home.sel + 1), ArrowUp: () => homeSelect(S.home.sel - 1),
+      ArrowRight: () => homeSelect(S.home.sel + 1), ArrowLeft: () => homeSelect(S.home.sel - 1),
       Home: () => homeSelect(0), End: () => homeSelect(S.home.items.length - 1),
-      Enter: openHomeItem, ' ': openHomeItem, ArrowRight: openHomeItem, n: () => action('addHub'), N: () => action('addHub'),
+      Enter: openHomeItem, ' ': openHomeItem, n: () => action('addHub'), N: () => action('addHub'),
       s: () => action('settings'), S: () => action('settings'), Escape: () => action('menu'), m: () => action('menu'), M: () => action('menu'),
     };
     if (m[k]) { e.preventDefault(); m[k](); }
@@ -1635,7 +1663,6 @@ function onWheel(e) {
 }
 $('#stage').addEventListener('wheel', onWheel, { passive: false });
 $('#home').addEventListener('wheel', onWheel, { passive: false });
-$('#disc').addEventListener('click', () => { if (S.mode === 'main' && S.view === 'games') goHome(); });
 $$('.overlay').forEach((o) => o.addEventListener('mousedown', (e) => { if (e.target === o && S.mode !== 'details' && S.mode !== 'scan') closeOverlay(); }));
 $('#details').addEventListener('mousedown', (e) => { if (e.target.closest('.details') === null || e.target.classList.contains('details')) closeOverlay(); });
 
@@ -1663,9 +1690,8 @@ function onPadDir(dir, repeat) {
   if (S.mode !== 'main') return spatial(dir);
   if (!S.lib.games.length) { if (!repeat) spatial(dir); return; }
   if (S.view === 'home') {
-    if (dir === 'up') homeSelect(S.home.sel - 1);
-    else if (dir === 'down') homeSelect(S.home.sel + 1);
-    else if (dir === 'right' && !repeat) openHomeItem();
+    if (dir === 'left') homeSelect(S.home.sel - 1);
+    else if (dir === 'right') homeSelect(S.home.sel + 1);
     return;
   }
   if (dir === 'left') { if (S.sel === 0) { if (!repeat) goHome(); } else move(-1); }
