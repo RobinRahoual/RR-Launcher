@@ -637,8 +637,11 @@ function cssPx(name, fb) {
 }
 function measure() {
   const vh = innerHeight;
-  const topH = cssPx('--top-h', 88), botH = cssPx('--bottom-h', 72);
-  const rowTop = topH + clamp(vh * 0.07, 46, 90);
+  // Hauteurs réelles des barres (les variables CSS sont des clamp() que getPropertyValue ne résout pas)
+  const topH = $('.topbar')?.getBoundingClientRect().height || cssPx('--top-h', 88);
+  const botH = $('#hints')?.getBoundingClientRect().height || cssPx('--bottom-h', 72);
+  // Place pour la rangée d'onglets + respiration au-dessus de l'anneau de la boîte sélectionnée
+  const rowTop = topH + clamp(vh * 0.105, 70, 160);
   // Hauteur dispo pour la boîte sélectionnée : il faut garder la place du bloc d'infos dessous
   const info = clamp(vh * 0.3, 250, 340);
   const selH = clamp(Math.min(vh * 0.415, vh - rowTop - botH - info), 170, 600);
@@ -754,7 +757,9 @@ function frameGames(t, dt) {
     const x = left + (bw * sc) / 2;
     const y = top + (bh * sc) / 2;
     const sel = i === S.sel;
-    let ry = 0, rx = 0, fy = 0;
+    // Boîtes en 3D comme avant : les jeux suivants sont tournés et montrent leur tranche,
+    // la sélectionnée garde un léger angle pour qu'on voie son épaisseur
+    let ry = reduceMotion ? 0 : (o > 0 ? 26 : 14) * (1 - selW) + 20 * selW, rx = 0, fy = 0;
     if (!reduceMotion) {
       ry += clamp(S.vel * 90, -22, 22);
       let sp = S.spin.get(i);

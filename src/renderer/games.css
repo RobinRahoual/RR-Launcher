@@ -27,8 +27,8 @@ body[data-view="games"] #home, body[data-view="games"] #home * { pointer-events:
 /* ---------------------------------------------------------------- Rangée de boîtes */
 body[data-view="home"] #stage { visibility: hidden; }
 #stage {
-  z-index: 2; perspective: 1900px;
-  perspective-origin: calc(var(--g-left, 100px) + 12vw) calc(var(--g-row-top, 160px) + var(--g-sel-h, 420px) / 2);
+  z-index: 2; perspective: 1500px;
+  perspective-origin: 38vw calc(var(--g-row-top, 160px) + var(--g-sel-h, 420px) / 2);
 }
 .carousel { left: 0; top: 0; }
 /* Pas de reflet au sol : la lisibilité du bloc d'infos prime (PS5 n'en a pas) */
