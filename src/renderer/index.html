@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="wheel.css" />
   <link rel="stylesheet" href="ux.css" />
+  <link rel="stylesheet" href="shell.css" />
 </head>
 <body data-view="home">
   <!-- Fond -->
@@ -20,38 +21,58 @@
     <div class="bg-shade"></div>
   </div>
 
+  <!-- SHELL : écran de démarrage (retiré par app.js, sautable) -->
+  <div id="splash" class="splash" aria-hidden="true">
+    <div class="splash-mark"><span class="brand-rr">RR</span> LAUNCHER</div>
+    <i class="splash-line"></i>
+  </div>
+
+  <!-- SHELL : barre système du haut -->
   <header class="topbar">
-    <div class="brand" id="brand">
-      <button class="back-btn" id="btnBack" data-action="home" title="Retour aux consoles" aria-label="Retour aux consoles" hidden>
-        <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
-      </button>
-      <div>
-        <div class="brand-title" id="brandTitle"><span class="brand-rr">RR</span> LAUNCHER</div>
-        <div class="brand-sub" id="brandSub"></div>
-        <div class="brand-sub dim" id="brandSort"></div>
+    <div class="tb-left">
+      <div class="brand" id="brand">
+        <button class="back-btn sys-btn" id="btnBack" data-action="home" data-tip="Consoles" aria-label="Retour aux consoles" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <div class="brand-title" id="brandTitle"></div>
       </div>
+      <span class="tb-sep" aria-hidden="true"></span>
+      <nav class="sysbar" id="sysbar" aria-label="Raccourcis système">
+        <button class="sys-btn" data-action="addHub" data-tip="Ajouter des jeux" aria-label="Ajouter des jeux">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
+        <button class="sys-btn" data-action="settings" data-tip="Réglages" aria-label="Réglages">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+        </button>
+        <button class="sys-btn" data-action="menu" data-tip="Menu" aria-label="Menu" id="btnMenu">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>
+        </button>
+        <button class="sys-btn" data-action="fullscreen" data-tip="Plein écran" aria-label="Plein écran">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+        </button>
+      </nav>
     </div>
 
     <nav class="tabs" id="tabs" role="tablist" aria-label="Catégories"></nav>
 
     <div class="status">
-      <div class="status-row">
-        <span class="input-ind" id="inputInd" title="Périphérique actif"></span>
-        <span class="clock"><span id="date"></span> <strong id="time"></strong></span>
-        <div class="win-ctrl">
-          <button class="icon-btn" data-action="minimize" title="Réduire (le launcher reste en arrière-plan)" aria-label="Réduire">
-            <svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
-          </button>
-          <button class="icon-btn quit" data-action="quitAsk" title="Quitter RR Launcher" aria-label="Quitter">
-            <svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
-          </button>
-        </div>
+      <button class="chip-btn update-chip" id="btnUpdate" data-action="installUpdate" hidden></button>
+      <div class="status-ind">
+        <span class="pad-ind" id="padInd" role="img" hidden></span>
+        <span class="input-ind" id="inputInd" role="img" title="Périphérique actif"></span>
+        <span class="net-ind" id="netInd" role="img"></span>
+        <span class="bat-ind" id="batInd" role="img" hidden></span>
       </div>
-      <div class="counter" id="counter"></div>
-      <div class="status-row">
-        <button class="chip-btn update-chip" id="btnUpdate" data-action="installUpdate" hidden></button>
-        <button class="chip-btn" id="btnMenu" data-action="menu"><span class="key-mini" data-glyph="menu"></span>Menu</button>
+      <div class="clock"><span class="clock-date" id="date"></span><time class="clock-time" id="time"></time></div>
+      <div class="win-ctrl">
+        <button class="icon-btn" data-action="minimize" title="Réduire (le launcher reste en arrière-plan)" aria-label="Réduire">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
+        </button>
+        <button class="icon-btn quit" data-action="quitAsk" title="Quitter RR Launcher" aria-label="Quitter">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
+        </button>
       </div>
+      <div class="counter" id="counter" hidden></div>
     </div>
   </header>
 
@@ -87,7 +108,10 @@
     </div>
   </div>
 
-  <footer class="hints" id="hints" aria-label="Commandes"></footer>
+  <footer class="hints" id="hints" aria-label="Commandes">
+    <div class="foot-info" id="footInfo" role="status" aria-atomic="true"></div>
+    <div class="hint-list" id="hintList"></div>
+  </footer>
 
   <!-- Détails -->
   <div class="overlay" id="details" hidden role="dialog" aria-modal="true" aria-labelledby="dTitle">
