@@ -106,6 +106,7 @@ function createWindow() {
   win.on('enter-full-screen', () => send('win:fullscreen', true));
   win.on('leave-full-screen', () => send('win:fullscreen', false));
   win.on('show', () => send('win:visible', true));
+  win.on('focus', () => recheckSessions());
   win.on('hide', () => send('win:visible', false));
   // GUIDE : « toujours au premier plan » n'est que temporaire (pour passer devant un jeu)
   win.on('blur', () => { if (win.isAlwaysOnTop()) win.setAlwaysOnTop(false); });
@@ -588,15 +589,39 @@ function splitArgs(s = '') {
 }
 
 // Nombre de processus dont l'exécutable est dans `dir` (Windows).
+// Nombre de processus dont l'exécutable est dans `dir` (-1 = inconnu).
+// 1) natif (koffi) : voit aussi les jeux lancés en administrateur ; 2) repli PowerShell.
+function normDir(dir) { return path.resolve(String(dir || '')).replace(/[\\/]+$/, '').toLowerCase(); }
 function countProcessesIn(dir) {
   return new Promise((resolve) => {
     if (process.platform !== 'win32' || !dir) return resolve(0);
-    const d = dir.replace(/'/g, "''").replace(/[\\/]+$/, '') + '\\*';
-    const ps = `(Get-CimInstance Win32_Process -Property ExecutablePath | Where-Object { $_.ExecutablePath -like '${d}' }).Count`;
+    const d = normDir(dir) + '\\';
+    const n = winNative();
+    if (n) {
+      try {
+        const procs = n.listProcesses();
+        return resolve(procs.filter((p) => p.pid !== process.pid && p.path && p.path.toLowerCase().startsWith(d)).length);
+      } catch (e) { meta.log(`suivi : liste native des processus : ${e.message}`); }
+    }
+    // StartsWith plutôt que -like : les crochets des noms de dossiers ([DODI]…) sont des jokers pour -like
+    const lit = d.replace(/'/g, "''");
+    const ps = `@(Get-CimInstance Win32_Process -Property ExecutablePath | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.ToLower().StartsWith('${lit}') }).Count`;
     execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 8000, windowsHide: true }, (err, out) => {
       resolve(err ? -1 : parseInt(String(out).trim() || '0', 10) || 0);
     });
   });
+}
+// Un dossier trop large (racine d'un disque, Program Files, profil, Bureau, dossier Steam…) contient
+// d'autres programmes qui tournent en permanence : la session ne se terminerait jamais.
+function tooBroad(dir) {
+  const d = normDir(dir);
+  if (!d || /^[a-z]:$/.test(d)) return true;
+  const env = process.env;
+  const broad = [env.ProgramFiles, env['ProgramFiles(x86)'], env.ProgramData, env.USERPROFILE, env.APPDATA, env.LOCALAPPDATA, env.SystemRoot,
+    env.USERPROFILE && path.join(env.USERPROFILE, 'Desktop'), env.USERPROFILE && path.join(env.USERPROFILE, 'Downloads')]
+    .filter(Boolean).map(normDir);
+  if (broad.includes(d)) return true;
+  return /\\(steam|steamapps|steamapps\\common|epic games|gog galaxy|gog games|games|jeux)$/.test(d);
 }
 
 function onSessionStart(id) {
@@ -617,20 +642,31 @@ function finishSession(id) {
 }
 
 // Surveille les processus du dossier du jeu (jeux Steam/Epic, ou exécutables qui se relancent).
-function watchDir(id, dir, { graceMs = 180000 } = {}) {
+function watchDir(id, dir, { graceMs = 180000, exe = '' } = {}) {
   const r = running.get(id);
   if (!r || !dir || process.platform !== 'win32') return;
-  let seen = false;
+  // Dossier trop large : on se rabat sur le dossier de l'exécutable
+  if (tooBroad(dir) && exe && !tooBroad(path.dirname(exe))) dir = path.dirname(exe);
+  if (tooBroad(dir)) meta.log(`suivi : dossier très large pour ${findGame(id)?.name} (${dir}), la fin de partie peut ne pas être détectée`);
+  clearInterval(r.timer);
+  let seen = false, misses = 0, busy = false;
   const started = Date.now();
-  let misses = 0;
-  r.timer = setInterval(async () => {
-    const n = await countProcessesIn(dir);
-    if (n < 0) return;
-    if (n > 0) { seen = true; misses = 0; return; }
-    if (seen) { if (++misses >= 2) finishSession(id); }
-    else if (Date.now() - started > graceMs) finishSession(id);
-  }, 5000);
+  const check = async () => {
+    if (busy || !running.has(id)) return;
+    busy = true;
+    try {
+      const n = await countProcessesIn(dir);
+      if (n < 0) return;
+      if (n > 0) { seen = true; misses = 0; return; }
+      if (seen) { if (++misses >= 2) finishSession(id); }
+      else if (Date.now() - started > graceMs) finishSession(id);
+    } finally { busy = false; }
+  };
+  r.check = check;
+  r.timer = setInterval(check, 3000);
 }
+// Revérifie tout de suite les sessions en cours (ex. quand on revient sur le launcher)
+function recheckSessions() { for (const r of running.values()) r.check?.(); }
 
 async function launchGame(id) {
   const g = findGame(id);
@@ -671,7 +707,7 @@ async function launchGame(id) {
     const err = await shell.openPath(g.exePath);
     if (err) return { ok: false, error: err };
     begin();
-    watchDir(id, g.installDir || path.dirname(g.exePath), { graceMs: 60000 });
+    watchDir(id, g.installDir || path.dirname(g.exePath), { graceMs: 60000, exe: g.exePath });
     return { ok: true };
   }
   const cwd = path.dirname(g.exePath);
@@ -698,7 +734,7 @@ function spawnTracked(id, file, args, cwd, begin, followDir) {
       const r = running.get(id);
       if (!r) return;
       // Si le programme a passé la main à un autre processus (petit launcher), on suit le dossier.
-      if (followDir && Date.now() - r.start < 20000) watchDir(id, followDir, { graceMs: 15000 });
+      if (followDir && Date.now() - r.start < 20000) watchDir(id, followDir, { graceMs: 15000, exe: file });
       else finishSession(id);
     });
     child.once('error', async (e) => {
@@ -706,7 +742,7 @@ function spawnTracked(id, file, args, cwd, begin, followDir) {
       settled = true;
       // Exige les droits admin (erreur 740) : on passe par le shell (UAC).
       const err = await shell.openPath(file);
-      if (!err) { begin(); watchDir(id, followDir || cwd, { graceMs: 60000 }); resolve({ ok: true }); }
+      if (!err) { begin(); watchDir(id, followDir || cwd, { graceMs: 60000, exe: file }); resolve({ ok: true }); }
       else resolve({ ok: false, error: e.message || err });
     });
   });
