@@ -10,6 +10,7 @@ const meta = require('./metadata');
 const scanner = require('./scanner');
 const { BY_ID, platformForFile, detectEmulator, publicPlatforms, romExtensions } = require('./platforms');
 const { autoUpdater } = require('electron-updater');
+const guide = require('./guide'); // GUIDE : bouton Xbox / PS / Home (natif optionnel)
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'rr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -38,6 +39,7 @@ const DEFAULT_SETTINGS = {
   platformLogos: {}, // platformId -> fichier (téléchargé localement, jamais dans le dépôt)
   platformLogoFails: {}, // platformId -> date (ms) du dernier échec ; nouvel essai après 24 h
   logosVersion: 0, // version de l'algorithme / de la liste de logos ayant rempli platformLogos
+  guideButton: true, // GUIDE : le bouton Xbox / PS / Home de la manette ouvre le launcher (menu en jeu)
 };
 const store = new JsonStore(path.join(DATA, 'library.json'), { games: [], settings: DEFAULT_SETTINGS });
 store.data.settings = { ...DEFAULT_SETTINGS, ...store.data.settings };
@@ -105,6 +107,8 @@ function createWindow() {
   win.on('leave-full-screen', () => send('win:fullscreen', false));
   win.on('show', () => send('win:visible', true));
   win.on('hide', () => send('win:visible', false));
+  // GUIDE : « toujours au premier plan » n'est que temporaire (pour passer devant un jeu)
+  win.on('blur', () => { if (win.isAlwaysOnTop()) win.setAlwaysOnTop(false); });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
 
   // Capture d'écran automatique (tests uniquement)
@@ -159,7 +163,7 @@ function send(ch, payload) {
 }
 
 app.on('second-instance', showWindow);
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => { quitting = true; guideWatch.stop(); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 
 app.whenReady().then(() => {
@@ -177,8 +181,10 @@ app.whenReady().then(() => {
   createTray();
   setupUpdater();
   // Raccourci global pour faire revenir le launcher depuis n'importe où
-  try { globalShortcut.register('CommandOrControl+Alt+L', showWindow); } catch { /* déjà pris */ }
+  // (pendant un jeu, il ouvre aussi le menu en jeu, comme le bouton Guide)
+  try { globalShortcut.register('CommandOrControl+Alt+L', () => summon('shortcut')); } catch { /* déjà pris */ }
   applyLoginItem();
+  updateGuideWatch();
 });
 app.on('window-all-closed', () => { if (quitting) app.quit(); });
 
@@ -596,7 +602,7 @@ function countProcessesIn(dir) {
 function onSessionStart(id) {
   send('game:running', { id, running: true });
   commit();
-  if (store.data.settings.hideOnLaunch) setTimeout(hideToTray, 900);
+  if (store.data.settings.hideOnLaunch) setTimeout(() => { if (running.has(id) && !ingameOpen) hideToTray(); }, 900);
 }
 function finishSession(id) {
   const r = running.get(id);
@@ -629,7 +635,8 @@ function watchDir(id, dir, { graceMs = 180000 } = {}) {
 async function launchGame(id) {
   const g = findGame(id);
   if (!g) return { ok: false, error: 'Jeu introuvable.' };
-  if (running.has(id)) { return { ok: false, error: 'Le jeu est déjà lancé.' }; }
+  // GUIDE : relancer un jeu déjà en cours = le reprendre (remise au premier plan), pas une 2e instance
+  if (running.has(id)) return resumeGame(id);
 
   const begin = (extra = {}) => {
     g.lastPlayed = Date.now();
@@ -712,6 +719,7 @@ ipcMain.handle('settings:set', (_e, patch) => {
   Object.assign(store.data.settings, patch);
   if ('fullscreen' in patch && win) win.setFullScreen(!!patch.fullscreen);
   if ('openAtLogin' in patch) applyLoginItem();
+  if ('guideButton' in patch) updateGuideWatch();
   commit();
   return store.data.settings;
 });
@@ -755,4 +763,158 @@ ipcMain.handle('update:check', async () => {
 });
 ipcMain.handle('update:install', () => {
   if (update.state === 'ready') { quitting = true; setImmediate(() => autoUpdater.quitAndInstall(true, true)); }
+});
+
+// ---------------------------------------------------------------- GUIDE : bouton Xbox / PS / Home, menu en jeu, alimentation
+// Le bouton Guide (ou Ctrl+Alt+L) fait revenir le launcher au premier plan ; le renderer ouvre alors le
+// menu en jeu (reprendre, quitter, changer de jeu, alimentation). Sondage natif optionnel (src/guide.js).
+let ingameOpen = false; // le renderer signale l'ouverture / fermeture du menu en jeu
+let nativeWin; // undefined = pas encore essayé, null = indisponible
+function winNative() {
+  if (nativeWin !== undefined) return nativeWin;
+  nativeWin = null;
+  if (process.platform !== 'win32') return null;
+  try { nativeWin = require('./native-win'); } catch (e) { meta.log(`guide : module natif indisponible (${e.message})`); }
+  return nativeWin;
+}
+const guideWatch = guide.createGuideWatcher({
+  log: (m) => meta.log(m),
+  loadNative: () => { const n = winNative(); if (!n) throw new Error(process.platform !== 'win32' ? 'Windows uniquement' : 'koffi non chargé'); return n; },
+  onGuide: () => summon('guide'),
+  // Menu en jeu affiché mais fenêtre sans focus (Windows a refusé le premier plan) : on relaie la manette
+  wantRemote: () => ingameOpen && !!win && win.isVisible() && !win.isFocused(),
+  onRemote: (btn) => send('pad:remote', btn),
+});
+function updateGuideWatch() {
+  if (store.data.settings.guideButton !== false) guideWatch.start(); else guideWatch.stop();
+}
+
+// Fait revenir le launcher devant tout (y compris un jeu en plein écran fenêtré) et prévient le renderer.
+// Fenêtre déjà active et visible : le renderer décide seul (ouvrir / fermer le menu en jeu ou le menu).
+function summon(source) {
+  if (!win || win.isDestroyed()) return;
+  const front = win.isVisible() && !win.isMinimized() && win.isFocused();
+  if (!front) {
+    if (running.size) win.setAlwaysOnTop(true, 'screen-saver');
+    showWindow();
+    win.moveTop();
+    const n = winNative();
+    if (n && !win.isFocused()) n.focusWindow(n.hwndOf(win.getNativeWindowHandle()));
+  }
+  send('guide:press', { source, summoned: !front, running: [...running.keys()] });
+}
+
+// ---------- Processus d'un jeu en cours
+// Dossier dont les processus appartiennent au jeu (jamais une racine de disque ni un dossier système)
+function gameDir(g) {
+  if (!g) return '';
+  let d = '';
+  if (g.kind === 'steam' || g.kind === 'epic') d = g.installDir;
+  else if (g.kind === 'rom') d = path.dirname(store.data.settings.emulators[g.platform]?.path || '');
+  else d = g.installDir || (g.exePath ? path.dirname(g.exePath) : '');
+  d = (d || '').replace(/[\\/]+$/, '');
+  const parts = d.split(/[\\/]/).filter(Boolean);
+  if (parts.length < 2 || /^(windows|system32|program files( \(x86\))?|programdata|users|common|steamapps|games|jeux)$/i.test(parts[parts.length - 1])) return '';
+  return d;
+}
+function listProcessesPs() {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') return resolve([]);
+    const ps = 'Get-CimInstance Win32_Process | Select-Object ProcessId,ParentProcessId,ExecutablePath | ConvertTo-Json -Compress';
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 10000, windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (err, out) => {
+      if (err) return resolve([]);
+      try { resolve([].concat(JSON.parse(out)).map((p) => ({ pid: p.ProcessId, ppid: p.ParentProcessId, path: p.ExecutablePath || '' }))); } catch { resolve([]); }
+    });
+  });
+}
+// PID du jeu : processus enfant lancé (et ses descendants) + processus dont l'exe est dans le dossier du jeu
+async function gamePids(id) {
+  const r = running.get(id);
+  const g = findGame(id);
+  if (!r) return [];
+  const n = winNative();
+  let procs = [];
+  try { procs = n ? n.listProcesses() : await listProcessesPs(); } catch (e) { meta.log(`guide : liste des processus : ${e.message}`); procs = await listProcessesPs(); }
+  const set = new Set();
+  const child = r.child && r.child.exitCode === null && r.child.pid ? r.child.pid : 0;
+  if (child) set.add(child);
+  const dir = gameDir(g).toLowerCase();
+  if (dir) for (const p of procs) if (p.path && p.path.toLowerCase().startsWith(dir + '\\')) set.add(p.pid);
+  // Descendants (un jeu lancé par un petit launcher, un émulateur qui ouvre une 2e fenêtre…)
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const p of procs) if (!set.has(p.pid) && set.has(p.ppid) && p.pid !== process.pid) { set.add(p.pid); grew = true; }
+  }
+  set.delete(process.pid);
+  return [...set];
+}
+
+// Reprendre : remet la fenêtre du jeu au premier plan, puis masque le launcher
+async function resumeGame(id) {
+  id = id && running.has(id) ? id : [...running.keys()].pop();
+  if (!id) { hideToTray(); return { ok: false, error: 'Aucun jeu en cours.' }; }
+  let focused = false;
+  const n = winNative();
+  if (n) {
+    try {
+      n.allowForeground();
+      const hwnd = n.findMainWindow(await gamePids(id));
+      if (hwnd) focused = n.focusWindow(hwnd);
+      if (!hwnd) meta.log(`guide : fenêtre du jeu ${findGame(id)?.name} introuvable`);
+    } catch (e) { meta.log(`guide : reprise ${e.message}`); }
+  }
+  if (win && !win.isDestroyed()) {
+    win.setAlwaysOnTop(false);
+    if (store.data.settings.hideOnLaunch || !focused) hideToTray();
+  }
+  return { ok: true, resumed: true, focused };
+}
+
+// Quitter : termine le jeu et ses processus, comptabilise le temps de jeu
+async function quitGame(id) {
+  const r = running.get(id);
+  if (!r) return { ok: false, error: 'Ce jeu n’est plus en cours.' };
+  const pids = await gamePids(id);
+  if (process.platform === 'win32') {
+    if (pids.length) {
+      await new Promise((resolve) => execFile('taskkill', ['/F', '/T', ...pids.flatMap((p) => ['/PID', String(p)])], { windowsHide: true, timeout: 15000 }, (err, _o, se) => {
+        if (err) meta.log(`guide : taskkill ${String(se || err.message).trim().slice(0, 300)}`);
+        resolve();
+      }));
+    } else meta.log(`guide : aucun processus trouvé pour ${findGame(id)?.name}`);
+  } else {
+    for (const p of pids) { try { process.kill(p, 'SIGTERM'); } catch {} }
+  }
+  finishSession(id);
+  return { ok: true, killed: pids.length };
+}
+
+ipcMain.handle('game:resume', (_e, id) => resumeGame(id));
+ipcMain.handle('game:quit', (_e, id) => quitGame(id));
+ipcMain.handle('game:sessions', () => [...running.entries()].map(([id, r]) => ({ id, start: r.start })));
+ipcMain.handle('guide:status', () => ({ ...guideWatch.status(), enabled: store.data.settings.guideButton !== false }));
+ipcMain.handle('guide:ingame', (_e, open) => {
+  ingameOpen = !!open;
+  if (!ingameOpen && win && !win.isDestroyed() && win.isAlwaysOnTop() && win.isFocused()) win.setAlwaysOnTop(false);
+});
+
+// ---------- Alimentation (Windows)
+// Veille : SetSuspendState(FALSE…) via koffi. Repli : rundll32 powrprof.dll,SetSuspendState 0,1,0 —
+// attention, rundll32 passe mal les arguments et Windows HIBERNE au lieu de mettre en veille si
+// l'hibernation est activée (powercfg /h off pour l'éviter).
+function endAllSessions() { for (const id of [...running.keys()]) finishSession(id); store.save(); }
+ipcMain.handle('power:action', async (_e, act) => {
+  if (!['shutdown', 'restart', 'sleep'].includes(act)) return { ok: false, error: 'Action inconnue' };
+  if (process.platform !== 'win32') return { ok: false, error: 'Disponible uniquement sous Windows' };
+  meta.log(`alimentation : ${act}`);
+  if (act === 'sleep') {
+    const n = winNative();
+    if (n?.canSleep) { setTimeout(() => { try { n.sleep(); } catch (e) { meta.log(`veille : ${e.message}`); } }, 400); return { ok: true }; }
+    execFile('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0'], { windowsHide: true }, () => {});
+    return { ok: true };
+  }
+  endAllSessions();
+  return new Promise((resolve) => execFile('shutdown', [act === 'restart' ? '/r' : '/s', '/t', '0'], { windowsHide: true }, (err) => {
+    resolve(err ? { ok: false, error: String(err.message || err) } : { ok: true });
+  }));
 });

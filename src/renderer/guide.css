@@ -1,0 +1,109 @@
+/* RR Launcher — GUIDE : menu en jeu (bouton Xbox / PS / Home), façon guide de console.
+   Panneau ancré à gauche par-dessus le visuel du jeu en cours. Couleurs : tokens de theme.css uniquement. */
+
+#ingame.overlay { background: none; backdrop-filter: none; padding: 0; display: block; }
+
+/* Fond : visuel du jeu, flouté et voilé avec la couleur de fond du thème */
+.ig-bg { position: absolute; inset: 0; background: var(--surface-0) center / cover no-repeat; transform: scale(1.06); filter: blur(18px) saturate(1.1); }
+.ig-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(90deg, rgba(var(--bg-rgb), .92) 0%, rgba(var(--bg-rgb), .72) 38%, rgba(var(--bg-rgb), .45) 100%);
+}
+
+.ig-panel {
+  position: relative; z-index: 1;
+  width: min(calc(480px * var(--ui)), 100vw);
+  height: 100%;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; gap: calc(18px * var(--ui));
+  padding: calc(28px * var(--ui)) calc(28px * var(--ui)) calc(var(--bottom-h, 64px) + 18px);
+  background: rgba(var(--bg-rgb), .9);
+  border-right: 1px solid var(--line);
+  box-shadow: var(--shadow-panel);
+  backdrop-filter: blur(16px);
+  overflow-y: auto;
+  animation: igIn 260ms var(--ease-out);
+}
+@keyframes igIn { from { transform: translateX(-24px); opacity: 0; } to { transform: none; opacity: 1; } }
+#ingame.is-closing .ig-panel { animation: igOut var(--dur-exit, 160ms) ease-in forwards; }
+@keyframes igOut { to { transform: translateX(-24px); opacity: 0; } }
+
+/* En-tête : « En cours » + heure */
+.ig-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.ig-live {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px; border-radius: var(--radius-pill);
+  background: var(--accent-soft); color: var(--accent-text);
+  font-size: calc(12px * var(--ui)); font-weight: 700; letter-spacing: .16em; text-transform: uppercase;
+}
+.ig-live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: igPulse 1.6s ease-in-out infinite; }
+@keyframes igPulse { 50% { opacity: .35; } }
+.ig-clock { font-family: var(--font-display); font-size: calc(26px * var(--ui)); color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* Jeu en cours : jaquette + nom + temps */
+.ig-game { display: grid; grid-template-columns: calc(112px * var(--ui)) minmax(0, 1fr); gap: calc(18px * var(--ui)); align-items: end; }
+.ig-cover {
+  aspect-ratio: 0.71; border-radius: 10px;
+  background: var(--surface-0) center / cover no-repeat;
+  box-shadow: 0 14px 34px rgba(var(--shade-rgb), .35), 0 0 0 1px var(--line);
+}
+.ig-cover.none {
+  display: grid; place-items: center; padding: 8px; text-align: center;
+  font-family: var(--font-display); font-size: calc(15px * var(--ui)); color: var(--text-2);
+  background: linear-gradient(160deg, var(--accent-soft), var(--surface-0));
+}
+.ig-info { min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.ig-plat { font-size: calc(12px * var(--ui)); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); }
+.ig-info h2 {
+  margin: 0; font-family: var(--font-display); font-weight: 400; color: var(--fg);
+  font-size: calc(24px * var(--ui)); line-height: 1.15;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ig-stats { display: flex; gap: calc(22px * var(--ui)); margin: 6px 0 0; }
+.ig-stats div { display: flex; flex-direction: column; }
+.ig-stats dt { font-size: calc(11.5px * var(--ui)); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.ig-stats dd { margin: 0; font-size: calc(18px * var(--ui)); font-weight: 700; color: var(--fg); font-variant-numeric: tabular-nums; }
+
+/* Liste d'actions façon console */
+.ig-list { display: flex; flex-direction: column; gap: 4px; }
+.ig-list[hidden] { display: none; }
+.ig-item {
+  display: flex; align-items: center; gap: 14px;
+  min-height: calc(56px * var(--ui)); padding: 0 16px;
+  border: 0; border-radius: 12px; background: transparent; color: var(--fg);
+  font: 600 calc(16.5px * var(--ui)) / 1.2 var(--font-body); text-align: left; cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
+}
+.ig-item .ico { width: 22px; height: 22px; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; color: var(--text-3); transition: color var(--dur-fast); }
+.ig-item[data-ig="resume"] .ico { fill: currentColor; }
+.ig-label { flex: 1; min-width: 0; }
+.ig-meta { font-size: calc(12.5px * var(--ui)); font-weight: 600; color: var(--text-3); }
+.ig-key { display: none; }
+body.pad-mode .ig-key.is-a { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--sel-fg); color: var(--sel-bg); font-size: 13px; font-weight: 800; }
+.ig-item.primary { background: var(--accent-soft); }
+.ig-item.primary .ico { color: var(--accent-text); }
+.ig-item.danger { color: var(--err-fg); }
+.ig-item.danger .ico { color: var(--err-fg); }
+.ig-item:hover { background: rgba(var(--fg-rgb), .08); }
+.ig-item.is-focus, .ig-item:focus-visible { background: var(--sel-bg); color: var(--sel-fg); outline: 2px solid var(--accent); outline-offset: 2px; }
+.ig-item.is-focus .ico, .ig-item:focus-visible .ico, .ig-item.is-focus .ig-meta, .ig-item:focus-visible .ig-meta { color: inherit; }
+.ig-item:active { transform: scale(.98); }
+.ig-sep { height: 1px; margin: 6px 6px; background: var(--line); }
+
+.ig-foot { margin: auto 0 0; font-size: calc(13px * var(--ui)); color: var(--text-3); }
+.ig-foot kbd { padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line); border-bottom-width: 2px; background: rgba(var(--fg-rgb), .06); font: 700 12px var(--font-body); color: var(--text-2); }
+
+/* Réglages : aide du bouton Guide */
+.set-note.guide-help { margin: 4px 0 6px; padding: 10px 14px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--line); font-size: 13px; line-height: 1.5; color: var(--text-2); }
+#guideStatus { display: block; margin-top: 4px; font-weight: 600; color: var(--text-3); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ig-panel, #ingame.is-closing .ig-panel { animation: none; }
+  .ig-live .dot { animation: none; }
+  .ig-item { transition: none; }
+}
+@media (max-height: 760px) {
+  .ig-panel { gap: 12px; padding-top: 18px; }
+  .ig-game { grid-template-columns: 88px minmax(0, 1fr); }
+  .ig-item { min-height: 48px; }
+}

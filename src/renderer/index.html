@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="shell.css" />
   <link rel="stylesheet" href="boxopen.css" /><!-- BOXOPEN : ouverture de la boîte + page du jeu -->
   <link rel="stylesheet" href="theme.css" />
+  <link rel="stylesheet" href="guide.css" />
 </head>
 <body data-view="home">
   <!-- Fond -->
@@ -326,6 +327,10 @@
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14"/></svg>
         <span class="mi-label">Réduire en arrière-plan</span><kbd class="mi-key">Ctrl+Alt+L</kbd></button>
       <div class="menu-sep" role="separator"></div>
+      <!-- GUIDE : options d'alimentation du PC -->
+      <button class="menu-item" data-action="power" data-nav aria-haspopup="dialog">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
+        <span class="mi-label">Alimentation</span><span class="mi-meta">Veille · Redémarrer · Éteindre</span></button>
       <button class="menu-item danger" data-action="quit" data-nav>
         <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
         <span class="mi-label">Quitter RR Launcher</span><kbd class="mi-key">Ctrl+Q</kbd></button>
@@ -350,6 +355,13 @@
           <div><strong id="lbHide">Masquer le launcher pendant le jeu</strong><span class="dim">Il revient tout seul quand tu quittes le jeu</span></div>
           <button class="toggle" data-toggle="hideOnLaunch" role="switch" aria-labelledby="lbHide" data-nav></button>
         </div>
+        <!-- GUIDE : bouton Xbox / PS / Home -->
+        <h3 class="set-group">Bouton Guide de la manette</h3>
+        <div class="setting">
+          <div><strong id="lbGuide">Ouvrir le launcher avec le bouton Xbox / PS / Home</strong><span class="dim">Pendant un jeu, ouvre le menu en jeu : reprendre, quitter, changer de jeu, éteindre le PC. Aussi avec Ctrl+Alt+L.</span></div>
+          <button class="toggle" data-toggle="guideButton" role="switch" aria-labelledby="lbGuide" data-nav></button>
+        </div>
+        <p class="set-note guide-help">Si le bouton Xbox ouvre la Xbox Game Bar à la place : Paramètres Windows → Jeux → Xbox Game Bar → décoche « Ouvrir Xbox Game Bar avec ce bouton ». Steam peut aussi le prendre (Steam → Paramètres → Manette → « Bouton Guide »). <span id="guideStatus"></span></p>
         <h3 class="set-group">Fenêtre et démarrage</h3>
         <div class="setting">
           <div><strong id="lbTray">Rester en arrière-plan à la fermeture</strong><span class="dim">La croix ou Alt+F4 le range près de l’horloge Windows</span></div>
@@ -422,6 +434,60 @@
       <div class="panel-actions">
         <button class="btn primary" data-action="close" data-nav>Terminé</button>
       </div>
+    </div>
+  </div>
+
+  <!-- GUIDE : menu en jeu (bouton Xbox / PS / Home ou Ctrl+Alt+L pendant une partie) -->
+  <div class="overlay ingame" id="ingame" hidden role="dialog" aria-modal="true" aria-labelledby="igTitle">
+    <div class="ig-bg" id="igBg" aria-hidden="true"></div>
+    <div class="ig-panel">
+      <header class="ig-head">
+        <span class="ig-live"><i class="dot" aria-hidden="true"></i>En cours</span>
+        <time class="ig-clock" id="igClock"></time>
+      </header>
+      <div class="ig-game">
+        <div class="ig-cover" id="igCover" aria-hidden="true"></div>
+        <div class="ig-info">
+          <span class="ig-plat" id="igPlat"></span>
+          <h2 id="igTitle"></h2>
+          <dl class="ig-stats">
+            <div><dt>Session</dt><dd id="igSession">0:00</dd></div>
+            <div><dt>Temps total</dt><dd id="igTotal">—</dd></div>
+          </dl>
+        </div>
+      </div>
+      <div class="ig-list" id="igMain" role="menu" aria-label="Menu en jeu">
+        <button class="ig-item primary" data-ig="resume" role="menuitem" data-nav data-default>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+          <span class="ig-label">Reprendre le jeu</span><span class="ig-key" data-glyph="a" aria-hidden="true"></span></button>
+        <button class="ig-item" data-ig="switch" role="menuitem" data-nav>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg>
+          <span class="ig-label">Changer de jeu</span><span class="ig-meta">Le jeu continue</span></button>
+        <button class="ig-item danger" data-ig="quit" role="menuitem" data-nav>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="m9 9 6 6M15 9l-6 6"/></svg>
+          <span class="ig-label">Quitter le jeu</span></button>
+        <div class="ig-sep" role="separator"></div>
+        <button class="ig-item" data-ig="power" role="menuitem" aria-haspopup="menu" data-nav>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
+          <span class="ig-label">Alimentation</span>
+          <svg class="ico ig-chev" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></button>
+      </div>
+      <div class="ig-list" id="igPower" role="menu" aria-label="Alimentation" hidden>
+        <button class="ig-item" data-ig="back" role="menuitem" data-nav>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m15 6-6 6 6 6"/></svg>
+          <span class="ig-label">Retour</span></button>
+        <div class="ig-sep" role="separator"></div>
+        <button class="ig-item" data-ig="sleep" role="menuitem" data-nav data-default>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+          <span class="ig-label">Mettre en veille</span></button>
+        <button class="ig-item" data-ig="restart" role="menuitem" data-nav>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 3.5V8H16"/></svg>
+          <span class="ig-label">Redémarrer le PC</span></button>
+        <button class="ig-item danger" data-ig="shutdown" role="menuitem" data-nav>
+          <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
+          <span class="ig-label">Éteindre le PC</span></button>
+      </div>
+      <p class="ig-foot" id="igFoot">Bouton Guide ou <kbd>Échap</kbd> : retour au jeu</p>
     </div>
   </div>
 

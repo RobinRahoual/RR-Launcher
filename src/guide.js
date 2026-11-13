@@ -1,0 +1,282 @@
+// RR Launcher — bouton Guide de la manette (Xbox / PS / Home) détecté dans le processus principal.
+//
+// Pourquoi ici et pas dans le renderer : l'API Gamepad de Chromium ne reçoit rien quand la fenêtre
+// n'a pas le focus (launcher masqué pendant le jeu) et, sous Windows, n'expose pas le bouton Xbox.
+//
+// Sources :
+//  - XInput (manettes Xbox et la plupart des manettes PC) : XInputGetStateEx (native-win.js).
+//  - HID (DualShock 4, DualSense, Switch Pro) en USB/Bluetooth via node-hid, lecture passive des
+//    rapports d'entrée (aucune écriture vers la manette).
+//
+// Tout est optionnel : si un module natif ne charge pas, la source est simplement désactivée (log).
+// Les boutons sont ramenés au format XInput (masque 16 bits) pour un traitement unique.
+'use strict';
+
+// ---------------------------------------------------------------- Masques (format XInput)
+const BTN = {
+  UP: 0x0001, DOWN: 0x0002, LEFT: 0x0004, RIGHT: 0x0008,
+  START: 0x0010, BACK: 0x0020,
+  GUIDE: 0x0400,
+  A: 0x1000, B: 0x2000, X: 0x4000, Y: 0x8000,
+};
+// Boutons relayés au renderer quand le menu en jeu est ouvert mais que la fenêtre n'a pas le focus
+const REMOTE = [
+  [BTN.UP, 'up'], [BTN.DOWN, 'down'], [BTN.LEFT, 'left'], [BTN.RIGHT, 'right'],
+  [BTN.A, 'a'], [BTN.B, 'b'], [BTN.START, 'menu'],
+];
+
+// ---------------------------------------------------------------- Identification HID
+const SONY = 0x054c, NINTENDO = 0x057e;
+const HID_KINDS = {
+  [`${SONY}:${0x05c4}`]: 'ds4', // DualShock 4 v1
+  [`${SONY}:${0x09cc}`]: 'ds4', // DualShock 4 v2
+  [`${SONY}:${0x0ba0}`]: 'ds4', // adaptateur sans fil DS4
+  [`${SONY}:${0x0ce6}`]: 'dualsense',
+  [`${SONY}:${0x0df2}`]: 'dualsense', // DualSense Edge
+  [`${NINTENDO}:${0x2009}`]: 'switchpro',
+};
+function hidKind(vendorId, productId) {
+  return HID_KINDS[`${vendorId}:${productId}`] || null;
+}
+
+// Croix directionnelle « hat » (0 = haut, sens horaire, 8+ = relâchée) → masque
+const HAT = [BTN.UP, BTN.UP | BTN.RIGHT, BTN.RIGHT, BTN.DOWN | BTN.RIGHT, BTN.DOWN, BTN.DOWN | BTN.LEFT, BTN.LEFT, BTN.UP | BTN.LEFT];
+const hat = (v) => HAT[v & 0x0f] || 0;
+
+// Octet « boutons 1 » Sony (DS4 et DualSense) : bits 0-3 = hat, 0x10 carré, 0x20 croix, 0x40 rond, 0x80 triangle.
+// Croix = A (valider), rond = B (retour), comme sur PC / Xbox.
+function sonyFace(b) {
+  let m = hat(b);
+  if (b & 0x10) m |= BTN.X;
+  if (b & 0x20) m |= BTN.A;
+  if (b & 0x40) m |= BTN.B;
+  if (b & 0x80) m |= BTN.Y;
+  return m;
+}
+
+/*
+ * Décodage d'un rapport d'entrée HID → masque XInput, ou null si le rapport n'est pas reconnu.
+ * `data` commence par l'identifiant de rapport (node-hid le fournit pour les rapports numérotés).
+ *
+ * DualShock 4
+ *   USB  0x01 (64 o)          : [5] hat+face, [6] L1 R1 L2 R2 SHARE 0x10 OPTIONS 0x20, [7] bit0 = PS
+ *   BT   0x01 réduit (≈10 o)  : même disposition que l'USB (mode par défaut avant activation complète)
+ *   BT   0x11…0x19            : même disposition décalée de +2 → [7] face, [8] options, [9] bit0 = PS
+ * DualSense
+ *   USB  0x01 (64 o)          : [8] hat+face, [9] L1 R1 L2 R2 CREATE 0x10 OPTIONS 0x20, [10] bit0 = PS
+ *   BT   0x01 réduit (≈10 o)  : [5] hat+face, [6] options 0x20, [7] bit0 = PS
+ *   BT   0x31 (78 o)          : USB décalé de +1 → [9] face, [10] options, [11] bit0 = PS
+ * Switch Pro
+ *   0x30 complet (USB après poignée de main, BT) : [3] Y 0x01 X 0x02 B 0x04 A 0x08,
+ *                               [4] − 0x01 + 0x02 HOME 0x10, [5] bas 0x01 haut 0x02 droite 0x04 gauche 0x08
+ *   0x3F simple (BT par défaut) : [1] B 0x01 A 0x02 Y 0x04 X 0x08, [2] − 0x01 + 0x02 HOME 0x10, [3] hat
+ *   Disposition Nintendo : A (à droite) = valider, B (en bas) = retour.
+ *   En USB, la Switch Pro n'envoie rien tant qu'un programme (Steam…) n'a pas fait la poignée de
+ *   main : RR Launcher n'écrit jamais vers la manette, il lit seulement.
+ */
+function decodeHidReport(kind, data) {
+  if (!data || data.length < 4) return null;
+  const id = data[0];
+  const len = data.length;
+  if (kind === 'ds4' || kind === 'dualsense') {
+    let o; // index de l'octet « hat + face »
+    if (kind === 'ds4') {
+      if (id === 0x01 && len >= 8) o = 5;
+      else if (id >= 0x11 && id <= 0x19 && len >= 10) o = 7;
+    } else {
+      if (id === 0x01 && len > 12) o = 8; // USB complet
+      else if (id === 0x01 && len >= 8) o = 5; // BT réduit
+      else if (id === 0x31 && len >= 12) o = 9;
+    }
+    if (o == null) return null;
+    let m = sonyFace(data[o]);
+    if (data[o + 1] & 0x20) m |= BTN.START;
+    if (data[o + 1] & 0x10) m |= BTN.BACK;
+    if (data[o + 2] & 0x01) m |= BTN.GUIDE;
+    return m;
+  }
+  if (kind === 'switchpro') {
+    let m = 0, s;
+    if (id === 0x30 && len >= 6) {
+      const r = data[3], l = data[5];
+      s = data[4];
+      if (r & 0x08) m |= BTN.A;
+      if (r & 0x04) m |= BTN.B;
+      if (r & 0x02) m |= BTN.X;
+      if (r & 0x01) m |= BTN.Y;
+      if (l & 0x01) m |= BTN.DOWN;
+      if (l & 0x02) m |= BTN.UP;
+      if (l & 0x04) m |= BTN.RIGHT;
+      if (l & 0x08) m |= BTN.LEFT;
+    } else if (id === 0x3f && len >= 4) {
+      const f = data[1];
+      s = data[2];
+      m = hat(data[3]);
+      if (f & 0x02) m |= BTN.A;
+      if (f & 0x01) m |= BTN.B;
+      if (f & 0x08) m |= BTN.X;
+      if (f & 0x04) m |= BTN.Y;
+    } else return null;
+    if (s & 0x02) m |= BTN.START;
+    if (s & 0x01) m |= BTN.BACK;
+    if (s & 0x10) m |= BTN.GUIDE;
+    return m;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------- Anti-rebond
+// Détecteur de fronts par source : un appui = un événement, le maintien est ignoré.
+// Un nouvel appui du même bouton n'est accepté qu'après `minGapMs` depuis le précédent
+// (filtre les rebonds de contact et les rapports qui oscillent).
+function makeEdges({ minGapMs = 150 } = {}) {
+  const prev = new Map(); // source -> masque précédent
+  const lastDown = new Map(); // `${source}:${bit}` -> instant du dernier front montant accepté
+  return {
+    // Renvoie le masque des boutons qui viennent d'être enfoncés
+    feed(source, mask, now = Date.now()) {
+      const before = prev.get(source) || 0;
+      prev.set(source, mask);
+      let down = mask & ~before;
+      if (!down) return 0;
+      for (let bit = 1; bit <= 0x8000; bit <<= 1) {
+        if (!(down & bit)) continue;
+        const k = `${source}:${bit}`;
+        if (now - (lastDown.get(k) ?? -Infinity) < minGapMs) down &= ~bit;
+        else lastDown.set(k, now);
+      }
+      return down;
+    },
+    forget(source) { prev.delete(source); },
+    reset() { prev.clear(); lastDown.clear(); },
+  };
+}
+
+// ---------------------------------------------------------------- Surveillance
+/*
+ * createGuideWatcher({ log, onGuide, onRemote, wantRemote })
+ *   start() / stop() : sondage XInput (~66 ms) + ouverture des manettes HID (re-scan toutes les 3 s)
+ *   status()         : { xinput, hid, devices } pour l'aide des réglages
+ * Plusieurs sources peuvent voir le même appui (ex. DualSense lue en HID + exposée en XInput par
+ * Steam/DS4Windows) : on ne garde qu'un appui Guide toutes les 400 ms, toutes sources confondues.
+ */
+function createGuideWatcher({ log = () => {}, onGuide, onRemote, wantRemote = () => false, pollMs = 66, loadNative: loadNativeOpt, loadHid: loadHidOpt }) {
+  const edges = makeEdges();
+  let native = null, nativeErr = null, HID = null, hidErr = null;
+  let timer = null, scanTimer = null, running = false, lastGuide = 0;
+  const hidOpen = new Map(); // path -> device (null = ouverture impossible, ne pas réessayer)
+
+  function loadNative() {
+    if (native || nativeErr) return native;
+    try {
+      if (loadNativeOpt) native = loadNativeOpt();
+      else if (process.platform !== 'win32') throw new Error('Windows uniquement');
+      else native = require('./native-win');
+      if (!native.xinputOk) log(`guide : XInput indisponible (${native.xinputError || '?'})`);
+    } catch (e) { native = null; nativeErr = e.message; log(`guide : module natif indisponible (${e.message})`); }
+    return native;
+  }
+  function loadHid() {
+    if (HID || hidErr) return HID;
+    try { HID = loadHidOpt ? loadHidOpt() : require('node-hid'); }
+    catch (e) { hidErr = e.message; log(`guide : node-hid indisponible (${e.message})`); }
+    return HID;
+  }
+
+  function handle(source, mask) {
+    const down = edges.feed(source, mask);
+    if (!down) return;
+    if (down & BTN.GUIDE) {
+      const now = Date.now();
+      if (now - lastGuide < 400) return;
+      lastGuide = now;
+      try { onGuide?.(source); } catch (e) { log(`guide : ${e.message}`); }
+      return;
+    }
+    if (wantRemote()) for (const [bit, name] of REMOTE) if (down & bit) onRemote?.(name, source);
+  }
+
+  function pollXInput() {
+    if (!native?.xinputOk) return;
+    let states;
+    try { states = native.xinputButtons(); } catch (e) { log(`guide : XInput ${e.message}`); native.xinputOk = false; return; }
+    for (let i = 0; i < 4; i++) {
+      if (states[i] == null) edges.forget('xi' + i);
+      else handle('xi' + i, states[i]);
+    }
+  }
+
+  function closeHid(p) {
+    const dev = hidOpen.get(p);
+    hidOpen.delete(p);
+    edges.forget('hid:' + p);
+    try { dev?.removeAllListeners?.('data'); dev?.close(); } catch {}
+  }
+  let scanning = false;
+  async function scanHid() {
+    if (!HID || !running || scanning) return;
+    scanning = true;
+    try {
+      let list = [];
+      try { list = HID.devicesAsync ? await HID.devicesAsync() : HID.devices(); } catch (e) { log(`guide : HID ${e.message}`); return; }
+      for (const d of list) {
+        const kind = hidKind(d.vendorId, d.productId);
+        if (!kind || !d.path || hidOpen.has(d.path) || !running) continue;
+        // Interface « manette » uniquement (usage page 1, usage 4/5) quand l'info existe
+        if (d.usagePage && (d.usagePage !== 1 || (d.usage !== 4 && d.usage !== 5))) continue;
+        try {
+          const dev = HID.HIDAsync ? await HID.HIDAsync.open(d.path) : new HID.HID(d.path);
+          if (!running) { try { dev.close(); } catch {} return; }
+          const src = 'hid:' + d.path;
+          hidOpen.set(d.path, dev);
+          log(`guide : manette HID ouverte (${kind}, ${d.product || 'sans nom'})`);
+          dev.on('data', (buf) => {
+            const m = decodeHidReport(kind, buf);
+            if (m != null) handle(src, m);
+          });
+          dev.on('error', () => closeHid(d.path));
+        } catch (e) {
+          hidOpen.set(d.path, null);
+          log(`guide : ouverture HID impossible (${kind}) : ${e.message}`);
+        }
+      }
+      // Chemins disparus (manette débranchée) : on oublie, pour pouvoir la rouvrir plus tard
+      const present = new Set(list.map((d) => d.path));
+      for (const p of [...hidOpen.keys()]) if (!present.has(p)) closeHid(p);
+    } finally { scanning = false; }
+  }
+
+  return {
+    start() {
+      if (running) return;
+      running = true;
+      loadNative();
+      loadHid();
+      if (native?.xinputOk) timer = setInterval(pollXInput, pollMs);
+      if (HID) { scanHid(); scanTimer = setInterval(scanHid, 3000); }
+    },
+    stop() {
+      if (!running) return;
+      running = false;
+      clearInterval(timer); clearInterval(scanTimer);
+      timer = scanTimer = null;
+      for (const p of [...hidOpen.keys()]) closeHid(p);
+      edges.reset();
+    },
+    get running() { return running; },
+    // Pour les tests : injecter un masque comme s'il venait d'une source
+    _feed: handle,
+    status() {
+      loadNative(); loadHid();
+      return {
+        platform: process.platform,
+        xinput: !!native?.xinputOk,
+        hid: !!HID,
+        devices: [...hidOpen.values()].filter(Boolean).length,
+        error: nativeErr || native?.xinputError || hidErr || null,
+      };
+    },
+  };
+}
+
+module.exports = { BTN, hidKind, decodeHidReport, makeEdges, createGuideWatcher };

@@ -47,4 +47,13 @@ contextBridge.exposeInMainWorld('rr', {
   onScanProgress: on('scan:progress'),
   onVisible: on('win:visible'),
   onFullscreen: on('win:fullscreen'),
+  // GUIDE : bouton Xbox / PS / Home, menu en jeu, alimentation
+  resumeGame: call('game:resume'),
+  quitGame: call('game:quit'),
+  sessions: call('game:sessions'),
+  power: call('power:action'), // 'shutdown' | 'restart' | 'sleep'
+  guideStatus: call('guide:status'),
+  setIngame: call('guide:ingame'),
+  onGuide: on('guide:press'),
+  onPadRemote: on('pad:remote'),
 });
