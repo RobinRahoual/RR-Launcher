@@ -85,7 +85,10 @@ function toast(msg, error = false) {
   if (error) sfx('error');
 }
 
-// ---------------------------------------------------------------- Accueil (consoles)
+// ---------------------------------------------------------------- Roue des consoles (accueil)
+const WHEEL_STEP = 44; // degrés entre deux consoles sur la roue
+const LAY = { k: 0, edge: 0, anchor: 0, R: 400, cx: 0, cy: 0 }; // k : 0 = accueil, 1 = console ouverte
+
 function computeHome() {
   const g = S.lib.games;
   const by = new Map();
@@ -104,20 +107,22 @@ function computeHome() {
   S.home.sel = i >= 0 ? i : 0;
   S.home.selId = items[S.home.sel]?.id;
 }
-function cardHTML(it) {
-  if (it.id === 'add') return `<div class="c-glow"></div><div class="c-img"><div class="c-fallback add">+</div></div><div class="c-name">Ajouter</div>`;
-  if (it.id === 'all') return `<div class="c-glow"></div><div class="c-floor"></div><div class="c-img"><div class="c-fallback all">TOUS<br/>LES JEUX</div></div><div class="c-count">${it.n}</div><div class="c-name">Tous les jeux</div>`;
-  const p = plat(it.id);
-  const img = S.platImg[it.id];
-  const inner = img ? `<img src="${platUrl(img)}" alt="${esc(p.name)}" />`
-    : it.id === 'pc' ? `<img src="assets/pc.svg" alt="PC" />`
-    : S.platLogo[it.id] ? `<div class="c-fallback"><span class="c-logo" style="${logoCss(it.id)}" role="img" aria-label="${esc(p.name)}"></span></div>`
-    : `<div class="c-fallback">${esc(p.short)}</div>`;
-  const mask = img ? `style="--mask:url('${platUrl(img)}')"` : it.id === 'pc' ? `style="--mask:url('assets/pc.svg')"` : '';
-  return `<div class="c-glow"></div><div class="c-floor"></div><div class="c-img">${inner}</div><div class="sweep" ${mask}></div><div class="c-count">${it.n}</div><div class="c-name">${esc(p.name)}</div>`;
+function wheelItemHTML(it) {
+  let visual;
+  if (it.id === 'add') visual = `<div class="w-add">+</div>`;
+  else if (it.id === 'all') visual = `<div class="w-all">TOUS<br/>LES JEUX</div>`;
+  else {
+    const p = plat(it.id), img = S.platImg[it.id];
+    visual = img ? `<img src="${platUrl(img)}" alt="" />`
+      : it.id === 'pc' ? `<img src="assets/pc.svg" alt="" />`
+      : S.platLogo[it.id] ? `<span class="w-logo" style="${logoCss(it.id)}"></span>`
+      : `<div class="w-text">${esc(p.short)}</div>`;
+  }
+  const name = it.id === 'add' ? 'Ajouter' : it.id === 'all' ? 'Tous les jeux' : plat(it.id).name;
+  return `<div class="w-visual">${visual}<div class="sweep"></div></div><div class="w-label"><b>${esc(name)}</b>${it.n ? `<span>${it.n}</span>` : ''}</div>`;
 }
 function syncCards() {
-  const root = $('#consoles');
+  const root = $('#wheelItems');
   const ids = new Set(S.home.items.map((x) => x.id));
   for (const [id, el] of cards) if (!ids.has(id)) { el.remove(); cards.delete(id); }
   S.home.items.forEach((it) => {
@@ -125,19 +130,18 @@ function syncCards() {
     const sig = `${it.n}|${S.platImg[it.id] || ''}|${S.platLogo[it.id] || ''}`;
     if (!el) {
       el = document.createElement('div');
-      el.className = 'ccard';
-      el.addEventListener('click', () => onCardClick(it.id));
+      el.className = 'witem';
+      el.addEventListener('click', (e) => { e.stopPropagation(); onCardClick(it.id); });
       root.appendChild(el);
       cards.set(it.id, el);
     }
-    el.style.setProperty('--pc', it.id === 'all' || it.id === 'add' ? '#F43F5E' : plat(it.id).color);
-    if (el._sig !== sig) { el.innerHTML = cardHTML(it); el._sig = sig; }
-    if (it.id !== 'all' && it.id !== 'add' && it.id !== 'pc' && S.platImg[it.id] === undefined) loadPlatImage(it.id);
+    if (el._sig !== sig) { el.innerHTML = wheelItemHTML(it); el._sig = sig; }
+    if (!['all', 'add', 'pc'].includes(it.id) && S.platImg[it.id] === undefined) loadPlatImage(it.id);
     loadPlatLogo(it.id);
   });
 }
 async function loadPlatLogo(id) {
-  if (!id || id === 'pc' || id === 'all' || id === 'add' || S.platLogo[id] !== undefined) return;
+  if (!id || ['pc', 'all', 'add'].includes(id) || S.platLogo[id] !== undefined) return;
   S.platLogo[id] = null;
   const f = await rr.platformLogo(id).catch(() => null);
   if (f) {
@@ -152,8 +156,9 @@ async function loadPlatImage(id) {
   if (f) { S.platImg[id] = f; syncCards(); }
 }
 function onCardClick(id) {
-  if (S.mode !== 'main' || S.view !== 'home') return;
+  if (S.mode !== 'main') return;
   const i = S.home.items.findIndex((x) => x.id === id);
+  if (S.view === 'games') { goHome(); if (i !== S.home.sel) homeSelect(i); return; }
   if (i === S.home.sel) openHomeItem(); else homeSelect(i);
 }
 function homeSelect(i) {
@@ -162,6 +167,20 @@ function homeSelect(i) {
   S.home.sel = i;
   S.home.selId = S.home.items[i].id;
   sfx('tab');
+  setPreview();
+}
+function previewPlat() {
+  const it = S.home.items[S.home.sel];
+  return !it || it.id === 'add' ? '__none' : it.id;
+}
+// Jeux de la console survolée, affichés à droite de la roue
+function setPreview() {
+  S.plat = previewPlat();
+  S.tab = 'all';
+  S.flip = 0;
+  computeTabs(); computeItems();
+  S.sel = 0; S.pos = -1.4; S.vel = 0; S.selId = S.items[0]?.id || null;
+  renderTabs(); syncSlots();
   updateHomeChrome();
 }
 function openHomeItem() {
@@ -170,39 +189,43 @@ function openHomeItem() {
   if (it.id === 'add') return action('addHub');
   enterPlatform(it.id);
 }
+function setCapLogo(id) {
+  const el = $('#capLogo');
+  const has = id && S.platLogo[id];
+  el.hidden = !has;
+  el.style.cssText = has ? logoCss(id) : '';
+  $('#title').classList.toggle('sr-only', !!has);
+}
 function updateHomeChrome() {
   const it = S.home.items[S.home.sel];
+  updateBrand();
+  $('#counter').textContent = '';
   if (!it) return;
-  const cap = $('#homeCaption');
+  const cap = $('#caption');
+  cap.hidden = false;
   cap.classList.remove('swap'); void cap.offsetWidth; cap.classList.add('swap');
-  if (it.id === 'add' || it.id === 'all') setHomeLogo(null);
+  $('#title').dataset.id = '';
   if (it.id === 'add') {
-    $('#homeTitle').textContent = 'Ajouter des jeux';
-    $('#homeSub').textContent = 'Jeux PC, Steam, Epic, GOG, ROMs et émulateurs';
+    setCapLogo(null);
+    $('#title').textContent = 'Ajouter des jeux';
+    $('#subtitle').textContent = 'Jeux PC, Steam, Epic, GOG, ROMs et émulateurs';
     setBackground('', '#F43F5E');
   } else if (it.id === 'all') {
-    $('#homeTitle').textContent = 'Tous les jeux';
-    $('#homeSub').textContent = `${it.n} jeu${it.n > 1 ? 'x' : ''} · toutes consoles`;
+    setCapLogo(null);
+    $('#title').textContent = 'Tous les jeux';
+    $('#subtitle').textContent = `${it.n} jeu${it.n > 1 ? 'x' : ''} · toutes consoles`;
     const g = recentGame();
     setBackground(g ? heroOf(g) : '', '#F43F5E');
   } else {
     const p = plat(it.id);
-    $('#homeTitle').textContent = p.name;
-    setHomeLogo(it.id);
+    setCapLogo(it.id);
+    $('#title').textContent = p.name;
     const emu = p.id !== 'pc' && !S.lib.settings.emulators?.[p.id] && S.lib.games.some((x) => x.platform === p.id && x.kind === 'rom') ? ' · émulateur à configurer' : '';
-    $('#homeSub').textContent = [p.maker, p.year, `${it.n} jeu${it.n > 1 ? 'x' : ''}`].filter(Boolean).join(' · ') + emu;
+    $('#subtitle').textContent = [p.maker, p.year, `${it.n} jeu${it.n > 1 ? 'x' : ''}`].filter(Boolean).join(' · ') + emu;
     const g = recentGame(p.id);
     setBackground(g ? heroOf(g) : '', p.color);
   }
-  $('#counter').textContent = '';
   sweepCard();
-}
-function setHomeLogo(id) {
-  const el = $('#homeLogo');
-  const has = id && S.platLogo[id];
-  el.hidden = !has;
-  el.style.cssText = has ? logoCss(id) : '';
-  $('#homeTitle').classList.toggle('sr-only', !!has);
 }
 function recentGame(pid) {
   return [...S.lib.games].filter((g) => !pid || g.platform === pid).sort((a, b) => (b.lastPlayed || b.addedAt) - (a.lastPlayed || a.addedAt))[0];
@@ -219,18 +242,20 @@ function sweepCard() {
     const sw = el && $('.sweep', el);
     if (!sw) return;
     sw.classList.remove('go'); void sw.offsetWidth; sw.classList.add('go');
-  }, 260);
+  }, 280);
 }
 
 function enterPlatform(id) {
-  S.plat = id;
+  if (id && id !== previewPlat()) {
+    const i = S.home.items.findIndex((x) => x.id === id);
+    if (i >= 0) { S.home.sel = i; S.home.selId = id; }
+    setPreview();
+  }
+  if (!S.items.length) return;
   S.view = 'games';
   document.body.dataset.view = 'games';
-  S.tab = 'all';
-  S.flip = 0;
-  computeTabs(); computeItems();
-  S.sel = 0; S.pos = -3; S.vel = 0; S.selId = S.items[0]?.id || null;
-  renderTabs(); syncSlots(); updateChrome(true);
+  S.sel = 0; S.selId = S.items[0]?.id || null;
+  renderTabs(); updateChrome(true);
   $('#btnBack').hidden = false;
   sfx('open');
   renderHints();
@@ -241,18 +266,15 @@ function goHome() {
   S.view = 'home';
   document.body.dataset.view = 'home';
   $('#btnBack').hidden = true;
-  computeHome();
-  const i = S.home.items.findIndex((x) => x.id === S.plat);
-  if (i >= 0) { S.home.sel = i; S.home.selId = S.plat; }
-  syncCards();
-  updateBrand();
-  updateHomeChrome();
+  S.flip = 0;
+  if (S.tab !== 'all' || S.plat !== previewPlat()) setPreview();
+  else { S.sel = 0; S.selId = S.items[0]?.id || null; updateHomeChrome(); }
   sfx('back');
   renderHints();
 }
 
 // ---------------------------------------------------------------- Bibliothèque / filtres
-function inPlat(list) { return S.plat === 'all' ? list : list.filter((g) => g.platform === S.plat); }
+function inPlat(list) { return S.plat === 'all' ? list : S.plat === '__none' ? [] : list.filter((g) => g.platform === S.plat); }
 function sorted(list) {
   const s = S.lib.settings.sort || 'recent';
   const arr = [...list];
@@ -291,21 +313,25 @@ function computeItems() {
 }
 
 function refresh() {
-  if (S.view === 'games' && S.plat !== 'all' && !S.lib.games.some((g) => g.platform === S.plat)) { S.view = 'home'; document.body.dataset.view = 'home'; $('#btnBack').hidden = true; }
   computeHome();
   syncCards();
+  if (S.view === 'home') S.plat = previewPlat();
+  else if (S.plat !== 'all' && !S.lib.games.some((g) => g.platform === S.plat)) {
+    S.view = 'home'; document.body.dataset.view = 'home'; $('#btnBack').hidden = true; S.plat = previewPlat();
+  }
   computeTabs();
   computeItems();
   if (S.selId) {
     const i = S.items.findIndex((g) => g.id === S.selId);
     if (i >= 0) { const d = i - S.sel; S.sel = i; S.pos += d; }
   }
+  if (S.view === 'home') S.sel = 0;
   S.sel = clamp(S.sel, 0, Math.max(0, S.items.length - 1));
   S.selId = S.items[S.sel]?.id || null;
   renderTabs();
   syncSlots();
   $('#empty').hidden = S.lib.games.length > 0;
-  if (S.view === 'games') updateChrome(true); else { updateBrand(); updateHomeChrome(); }
+  if (S.view === 'games') updateChrome(true); else updateHomeChrome();
   if (S.mode === 'details') renderDetails();
   renderHints();
 }
@@ -368,8 +394,8 @@ function slotDims(g) {
   const H0 = S.dims.H;
   let W, H;
   if (c.ratio <= 0.8) { H = H0 * (c.style === 'small' ? 0.92 : 1); W = H * c.ratio; }
-  else if (c.ratio <= 1.05) { W = H0 * 0.74; H = W / c.ratio; }
-  else { W = H0 * 0.98; H = W / c.ratio; }
+  else if (c.ratio <= 1.05) { W = H0 * 0.8; H = W / c.ratio; }
+  else { W = H0 * 1.05; H = W / c.ratio; }
   return { W, H, D: H * (DEPTH[c.style] || 0.085) };
 }
 function syncSlots() {
@@ -401,7 +427,13 @@ function syncSlots() {
     }
     el._index = i;
   });
-  S.dims.Wref = Math.max(S.dims.H * 0.64, ...S.items.slice(0, 200).map((g) => slots.get(g.id)?._dims?.W || 0));
+  S.dims.Wref = S.dims.H * 0.66;
+  // Position gauche de chaque boîte : largeurs réelles + écart fixe
+  const gap = S.dims.H * 0.24;
+  S.cum = [];
+  let acc = 0;
+  S.items.forEach((g) => { S.cum.push(acc); acc += (slots.get(g.id)?._dims?.W || S.dims.Wref) + gap; });
+  S.cumStep = S.dims.Wref + gap;
   if (S.view === 'games') {
     $('#caption').hidden = S.items.length === 0;
     if (S.lib.games.length && !S.items.length) { $('#title').textContent = 'Aucun jeu dans cette catégorie'; $('#caption').hidden = false; $('#subtitle').textContent = ''; }
@@ -431,16 +463,15 @@ function scheduleSweep() {
 
 // ---------------------------------------------------------------- Dimensions
 function measure() {
-  const H = clamp(Math.min(innerHeight * 0.5, innerWidth * 0.42), 240, 640);
+  const H = clamp(innerHeight * 0.44, 220, 620);
   S.dims.H = H;
-  const CH = clamp(innerHeight * 0.44, 220, 520), CW = CH * 1.35;
-  S.dims.CH = CH; S.dims.CW = CW;
+  const R = innerHeight * 0.53;
   const r = document.documentElement.style;
   r.setProperty('--box-h', H + 'px');
   r.setProperty('--box-w', H * 0.64 + 'px');
   r.setProperty('--box-d', H * 0.085 + 'px');
-  r.setProperty('--ch', CH + 'px');
-  r.setProperty('--cw', CW + 'px');
+  r.setProperty('--R', R + 'px');
+  r.setProperty('--wi', R * 0.56 + 'px');
   if (S.lib.games.length) syncSlots();
 }
 addEventListener('resize', measure);
@@ -459,35 +490,73 @@ function frame(t) {
   const dt = Math.min(3, (t - last) / 16.667);
   last = t;
   pollPad(t);
-  if (S.view === 'games') frameGames(t, dt); else frameHome(t, dt);
+  spring(S.home, S.home.sel, dt);
+  const target = S.view === 'games' ? 1 : 0;
+  LAY.k += (target - LAY.k) * Math.min(1, (reduceMotion ? 1 : 0.1) * dt);
+  if (Math.abs(target - LAY.k) < 0.001) LAY.k = target;
+  layout();
+  frameWheel(t);
+  frameGames(t, dt);
   drawMotes(t);
   requestAnimationFrame(frame);
 }
-function frameHome(t, dt) {
-  const h = S.home;
-  spring(h, h.sel, dt);
-  const { CW } = S.dims;
-  h.items.forEach((it, i) => {
+// Géométrie : roue à gauche (bord à 28 % de l'écran sur l'accueil, 11,5 % une console ouverte)
+function layout() {
+  const W = innerWidth, H = innerHeight;
+  const R = H * 0.53;
+  const ease = LAY.k * LAY.k * (3 - 2 * LAY.k);
+  const edgeHome = clamp(W * 0.28, R * 0.62, R * 0.95);
+  const edgeGames = clamp(W * 0.115, 110, R * 0.45);
+  const edge = edgeHome + (edgeGames - edgeHome) * ease;
+  const gap = W * 0.17 * (1 - ease) + W * 0.06 * ease;
+  Object.assign(LAY, { R, edge, cx: edge - R, cy: H * 0.5, anchor: edge + gap, ease });
+  const r = document.documentElement.style;
+  r.setProperty('--edge', edge + 'px');
+  r.setProperty('--anchor', LAY.anchor + 'px');
+  r.setProperty('--glow-x', (LAY.anchor + W * 0.16) + 'px');
+}
+function frameWheel(t) {
+  const { R, cx, cy } = LAY;
+  const disc = $('#disc');
+  disc.style.transform = `translate3d(${cx - R}px, ${cy - R}px, 0)`;
+  $('#discTicks').style.transform = `rotate(${-S.home.pos * WHEEL_STEP}deg)`;
+  const rI = R * 0.6, size = R * 0.56;
+  S.home.items.forEach((it, i) => {
     const el = cards.get(it.id);
     if (!el) return;
-    const o = i - h.pos, a = Math.abs(o), sgn = Math.sign(o);
-    const x = a <= 1 ? o * CW * 0.92 : sgn * (CW * 0.92 + (a - 1) * CW * 0.62);
-    const z = -(Math.min(a, 1) * 260 + Math.max(a - 1, 0) * 120);
-    let ry = clamp(-o * 24, -30, 30);
-    if (!reduceMotion) ry += clamp(-h.vel * 60, -20, 20) + (a < 0.5 && S.device === 'mouse' ? S.mouse.x * 6 : 0);
-    const sc = 1 - Math.min(a, 1) * 0.28 - Math.max(a - 1, 0) * 0.06;
-    el.style.transform = `translate3d(${x}px, 0, ${z}px) rotateY(${ry}deg) scale(${sc})`;
-    el.style.opacity = a > 3.2 ? clamp(1 - (a - 3.2), 0, 1) : 1;
-    el.style.setProperty('--focus', clamp(1 - a, 0, 1).toFixed(3));
-    el.style.zIndex = String(100 - Math.round(a * 10));
+    const th = (i - S.home.pos) * WHEEL_STEP;
+    const a = Math.abs(th);
+    if (a > 120) { el.style.display = 'none'; return; }
+    el.style.display = '';
+    const rad = th * Math.PI / 180;
+    const x = cx + rI * Math.cos(rad), y = cy + rI * Math.sin(rad);
+    const focus = clamp(1 - a / WHEEL_STEP, 0, 1);
+    const sc = 0.58 + 0.42 * focus;
+    const float = !reduceMotion && focus > 0.5 ? Math.sin(t / 1600) * 4 * focus : 0;
+    el.style.transform = `translate3d(${x - size / 2}px, ${y - size / 2 + float}px, 0) scale(${sc})`;
+    el.style.opacity = clamp(1 - Math.max(0, a - 70) / 50, 0, 1);
+    el.style.setProperty('--focus', focus.toFixed(3));
+    el.style.zIndex = String(100 - Math.round(a));
   });
+}
+function cumAt(p) {
+  const c = S.cum || [];
+  if (!c.length) return p * (S.cumStep || 1);
+  if (p <= 0) return p * (S.cumStep || 1);
+  const n = c.length - 1;
+  if (p >= n) return c[n] + (p - n) * (S.cumStep || 1);
+  const f = Math.floor(p);
+  return c[f] + (p - f) * (c[f + 1] - c[f]);
 }
 function frameGames(t, dt) {
   spring(S, S.sel, dt);
   S.flipCur += (S.flip - S.flipCur) * Math.min(1, 0.13 * dt);
   const { H } = S.dims;
-  const W = S.dims.Wref || H * 0.64;
-  const lo = Math.floor(S.pos) - 6, hi = Math.ceil(S.pos) + 6;
+  const W = S.dims.Wref || H * 0.72;
+  const step = W * 1.32;
+  const games = S.view === 'games';
+  const half = innerWidth / 2, midY = innerHeight / 2;
+  const lo = Math.floor(S.pos) - 2, hi = Math.ceil(S.pos) + Math.ceil(innerWidth / step) + 1;
   const now = new Set();
   for (let i = Math.max(0, lo); i <= Math.min(S.items.length - 1, hi); i++) {
     const g = S.items[i];
@@ -496,33 +565,36 @@ function frameGames(t, dt) {
     now.add(el);
     if (el.style.display === 'none') el.style.display = '';
     if (!el._hydrated) hydrate(el);
-    const o = i - S.pos, a = Math.abs(o), sgn = Math.sign(o);
-    const x = a <= 1 ? o * W * 1.2 : sgn * (W * 1.2 + (a - 1) * W * 0.8);
-    const z = -(Math.min(a, 1) * H * 0.42 + Math.max(a - 1, 0) * H * 0.16);
-    let ry = clamp(o * 40, -44, 44);
-    let rx = 0, y = 0;
+    const o = i - S.pos, a = Math.abs(o);
+    const bw = el._dims?.W || W, bh = el._dims?.H || H;
+    const left = LAY.anchor + cumAt(i) - cumAt(S.pos);
+    const x = left + bw / 2 - half;
+    const sel = games && i === S.sel;
+    const selW = games ? clamp(1 - a, 0, 1) : 0; // poids « sélectionné » continu
+    let ry = 0, rx = 0, y = 0;
     if (!reduceMotion) {
-      ry += clamp(S.vel * 140, -38, 38);
+      ry += clamp(S.vel * 120, -30, 30);
       let sp = S.spin.get(i);
       if (sp) {
         ry -= sp;
         sp *= Math.pow(0.9, dt);
         if (sp < 0.4) S.spin.delete(i); else S.spin.set(i, sp);
       }
-      if (a < 0.5) {
-        const w = 1 - a * 2;
-        ry += Math.sin(t / 1500) * 6 * w + (S.device === 'mouse' ? S.mouse.x * 9 * w : 0);
-        rx = (S.device === 'mouse' ? -S.mouse.y * 5 : Math.sin(t / 2100) * 1.5) * w;
-        y = Math.sin(t / 1800) * 5 * w;
+      if (selW > 0) {
+        ry += Math.sin(t / 1500) * 5 * selW + (S.device === 'mouse' ? S.mouse.x * 7 * selW : 0);
+        rx = (S.device === 'mouse' ? -S.mouse.y * 4 : Math.sin(t / 2100) * 1.5) * selW;
+        y = Math.sin(t / 1800) * 5 * selW;
       }
     }
-    if (i === S.sel) ry += S.flipCur * 180;
-    const dy = (H - (el._dims?.H || H)) / 2; // aligne le bas des boîtes de tailles différentes
-    const sc = 1 - Math.min(a, 1) * 0.08 - Math.max(a - 1, 0) * 0.04;
+    if (sel) ry += S.flipCur * 180;
+    const dy = (H - bh) / 2;
+    const sc = 1 + 0.1 * selW;
+    const z = 50 * selW;
     el.style.transform = `translate3d(${x}px, ${y + dy}px, ${z}px) rotateY(${ry}deg) rotateX(${rx}deg) scale(${sc})`;
-    el.style.opacity = a > 4.2 ? clamp(1 - (a - 4.2) / 1.3, 0, 1) : 1;
-    el.style.setProperty('--dim', clamp(a * 0.32, 0, 0.6).toFixed(3));
-    el.classList.toggle('is-selected', i === S.sel);
+    // Les jeux déjà passés glissent sous la roue
+    el.style.opacity = o < 0 ? clamp(1 + o * 1.4, 0, 1) : 1;
+    el.style.setProperty('--dim', (games ? clamp(0.38 - selW * 0.38, 0, 0.6) : 0.12 + clamp(o * 0.05, 0, 0.25)).toFixed(3));
+    el.classList.toggle('is-selected', sel);
   }
   for (const el of visible) if (!now.has(el)) el.style.display = 'none';
   visible = now;
@@ -531,7 +603,7 @@ function frameGames(t, dt) {
 // ---------------------------------------------------------------- Fond
 let bgFlip = false, bgCurrent = null, bgTimer;
 function setBackground(url, tint) {
-  $('#bgTint').style.background = `radial-gradient(ellipse 80% 70% at 50% 45%, ${tint || 'transparent'}, transparent 75%)`;
+  $('#bgTint').style.background = `radial-gradient(ellipse 34% 48% at var(--glow-x, 50%) 50%, ${tint || 'transparent'}, transparent 100%)`;
   if (url === bgCurrent) return;
   bgCurrent = url;
   clearTimeout(bgTimer);
@@ -600,6 +672,7 @@ function updateChrome(force = false) {
   const g = S.items[S.sel];
   $('#counter').textContent = S.items.length ? `${S.sel + 1} / ${S.items.length}` : '';
   if (!g) { setBackground('', S.plat !== 'all' ? plat(S.plat).color : ''); return; }
+  setCapLogo(null);
   if (force || $('#title').dataset.id !== g.id) {
     const cap = $('#caption');
     cap.classList.remove('swap'); void cap.offsetWidth; cap.classList.add('swap');
@@ -1190,16 +1263,17 @@ const ICON = {
   kbd: '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>',
   mouse: '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg>',
   lr: '<svg viewBox="0 0 24 24"><path d="m9 6-6 6 6 6M15 6l6 6-6 6"/></svg>',
+  ud: '<svg viewBox="0 0 24 24"><path d="m6 9 6-6 6 6M6 15l6 6 6-6"/></svg>',
 };
 function glyph(btn) {
   if (S.device === 'pad') {
     const ps = S.padType === 'ps';
     const map = { a: ps ? ['✕', 'g-a'] : ['A', 'g-a'], b: ps ? ['○', 'g-b'] : ['B', 'g-b'], x: ps ? ['□', 'g-x'] : ['X', 'g-x'], y: ps ? ['△', 'g-y'] : ['Y', 'g-y'] };
     if (map[btn]) return `<span class="glyph round ${ps ? 'ps ' : ''}${map[btn][1]}">${map[btn][0]}</span>`;
-    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB', view: ps ? 'SHARE' : 'VIEW', menu: ps ? 'OPTIONS' : 'MENU', lr: ICON.lr }[btn];
+    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB', view: ps ? 'SHARE' : 'VIEW', menu: ps ? 'OPTIONS' : 'MENU', lr: ICON.lr, ud: ICON.ud }[btn];
     return `<span class="glyph pill">${pill}</span>`;
   }
-  const keys = { a: 'Entrée', b: S.mode === 'main' ? 'Échap' : 'Échap', x: 'I', y: 'Espace', lb: 'Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr };
+  const keys = { a: 'Entrée', b: S.mode === 'main' ? 'Échap' : 'Échap', x: 'I', y: 'Espace', lb: 'Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
   return keys[btn] ? `<span class="glyph">${keys[btn]}</span>` : '';
 }
 function renderHints() {
@@ -1208,7 +1282,7 @@ function renderHints() {
   if (S.mode !== 'main') { h(['a'], 'Valider', null); h(['b'], 'Retour', 'close'); }
   else if (!S.lib.games.length) { h(['a'], 'Importer', 'scanLaunchers'); h(['view'], 'Ajouter des jeux', 'addHub'); h(['menu'], 'Menu', 'menu'); }
   else if (S.view === 'home') {
-    h(['lr'], 'Naviguer', null);
+    h(['ud'], 'Consoles', null);
     h(['a'], 'Ouvrir', 'open');
     h(['view'], 'Ajouter des jeux', 'addHub');
     h(['menu'], 'Menu', 'menu');
@@ -1257,16 +1331,16 @@ addEventListener('keydown', (e) => {
   }
   if (S.view === 'home') {
     const m = {
-      ArrowRight: () => homeSelect(S.home.sel + 1), ArrowLeft: () => homeSelect(S.home.sel - 1),
+      ArrowDown: () => homeSelect(S.home.sel + 1), ArrowUp: () => homeSelect(S.home.sel - 1),
       Home: () => homeSelect(0), End: () => homeSelect(S.home.items.length - 1),
-      Enter: openHomeItem, ' ': openHomeItem, n: () => action('addHub'), N: () => action('addHub'),
+      Enter: openHomeItem, ' ': openHomeItem, ArrowRight: openHomeItem, n: () => action('addHub'), N: () => action('addHub'),
       s: () => action('settings'), S: () => action('settings'), Escape: () => action('menu'), m: () => action('menu'), M: () => action('menu'),
     };
     if (m[k]) { e.preventDefault(); m[k](); }
     return;
   }
   const map = {
-    ArrowRight: () => move(1), ArrowLeft: () => move(-1), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
+    ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
     PageDown: () => move(5), PageUp: () => move(-5), Enter: () => play(),
     ArrowUp: openDetails, i: openDetails, I: openDetails, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
     n: () => action('addHub'), N: () => action('addHub'), Insert: () => action('addOne'), s: () => action('settings'), S: () => action('settings'),
@@ -1295,12 +1369,15 @@ function onWheel(e) {
   wheelAcc += Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
   while (Math.abs(wheelAcc) >= 60) {
     const d = Math.sign(wheelAcc);
-    if (S.view === 'home') homeSelect(S.home.sel + d); else move(d);
+    if (S.view === 'home') homeSelect(S.home.sel + d);
+    else if (e.clientX < LAY.edge) { goHome(); wheelAcc = 0; break; }
+    else move(d);
     wheelAcc -= d * 60;
   }
 }
 $('#stage').addEventListener('wheel', onWheel, { passive: false });
 $('#home').addEventListener('wheel', onWheel, { passive: false });
+$('#disc').addEventListener('click', () => { if (S.mode === 'main' && S.view === 'games') goHome(); });
 $$('.overlay').forEach((o) => o.addEventListener('mousedown', (e) => { if (e.target === o && S.mode !== 'details' && S.mode !== 'scan') closeOverlay(); }));
 $('#details').addEventListener('mousedown', (e) => { if (e.target.closest('.details') === null || e.target.classList.contains('details')) closeOverlay(); });
 
@@ -1328,11 +1405,12 @@ function onPadDir(dir, repeat) {
   if (S.mode !== 'main') return spatial(dir);
   if (!S.lib.games.length) { if (!repeat) spatial(dir); return; }
   if (S.view === 'home') {
-    if (dir === 'left') homeSelect(S.home.sel - 1);
-    else if (dir === 'right') homeSelect(S.home.sel + 1);
+    if (dir === 'up') homeSelect(S.home.sel - 1);
+    else if (dir === 'down') homeSelect(S.home.sel + 1);
+    else if (dir === 'right' && !repeat) openHomeItem();
     return;
   }
-  if (dir === 'left') move(-1);
+  if (dir === 'left') { if (S.sel === 0) { if (!repeat) goHome(); } else move(-1); }
   else if (dir === 'right') move(1);
   else if (dir === 'up' && !repeat) openDetails();
 }

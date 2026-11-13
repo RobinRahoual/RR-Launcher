@@ -657,3 +657,66 @@ code { font-family: ui-monospace, 'Cascadia Code', monospace; }
 .back:has(.b-scan) { padding: 0; }
 .back > .gloss { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(112deg, rgba(255,255,255,.22), transparent 35%); }
 .box:not([data-style="card"]):not([data-style="jewel"]) .back { border-radius: calc(var(--box-h) * .024); background: var(--case); }
+
+/* =================================================================== Roue des consoles (1.3) */
+body[data-view="home"] #stage, body[data-view="home"] #caption { display: block; }
+body[data-view="games"] #home { display: block; }
+body[data-view="home"] #counter { visibility: hidden; }
+#stage { z-index: 2; perspective: 1700px; perspective-origin: 50% 50%; }
+.carousel { top: 50%; }
+#home { z-index: 4; pointer-events: none; perspective: none; }
+.disc {
+  position: absolute; left: 0; top: 0; width: calc(var(--R) * 2); height: calc(var(--R) * 2); border-radius: 50%;
+  background: radial-gradient(circle at 78% 50%, #f1f1f3 0%, #dcdce0 45%, #c9c9cf 100%);
+  box-shadow: 0 0 0 1px rgba(255,255,255,.35), 0 0 90px rgba(0,0,0,.65), inset -18px 0 40px rgba(0,0,0,.08);
+  pointer-events: auto; overflow: hidden; will-change: transform;
+}
+body[data-view="games"] .disc { cursor: pointer; }
+.disc-ticks {
+  position: absolute; inset: 0; border-radius: 50%;
+  background: repeating-conic-gradient(from 0deg, rgba(20,20,30,.28) 0deg .35deg, transparent .35deg 4deg);
+  -webkit-mask: radial-gradient(circle, transparent 92.5%, #000 93%, #000 96.5%, transparent 97%);
+          mask: radial-gradient(circle, transparent 92.5%, #000 93%, #000 96.5%, transparent 97%);
+}
+.disc-ring { position: absolute; inset: 9%; border-radius: 50%; border: 1px solid rgba(20,20,30,.08); }
+.disc::after { /* repère de sélection sur le bord droit */
+  content: ''; position: absolute; right: 1.2%; top: 50%; width: 6px; height: 9%; transform: translateY(-50%);
+  border-radius: 3px; background: var(--color-accent); box-shadow: 0 0 14px var(--color-accent);
+}
+.wheel-items { position: absolute; inset: 0; }
+.witem {
+  position: absolute; left: 0; top: 0; width: var(--wi); height: var(--wi); pointer-events: auto; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4%; will-change: transform, opacity;
+  transform-origin: center;
+}
+.w-visual { position: relative; width: 100%; height: 74%; display: grid; place-items: center; }
+.w-visual img { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 16px 18px rgba(0,0,0,.35)); }
+.w-visual .sweep { -webkit-mask: none; mask: none; border-radius: 12px; }
+.w-label { display: flex; align-items: center; gap: 8px; color: #17171d; font-weight: 700; font-size: clamp(11px, .95vw, 16px); letter-spacing: .12em; text-transform: uppercase; opacity: calc(.35 + var(--focus, 0) * .65); white-space: nowrap; }
+.w-label span { min-width: 24px; height: 22px; padding: 0 7px; border-radius: 999px; background: #17171d; color: #fff; display: grid; place-items: center; font-size: 11px; letter-spacing: 0; }
+.w-logo { display: block; width: 84%; height: 38%; background: #17171d; -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat; }
+.w-text { font-family: var(--font-display); font-size: calc(var(--wi) * .17); color: #17171d; }
+.w-all { width: 76%; aspect-ratio: 1.45; border-radius: 18px; display: grid; place-items: center; text-align: center; font-family: var(--font-display); font-size: calc(var(--wi) * .1); line-height: 1.05; color: #fff; background: linear-gradient(150deg, #ff4d6d, #7c3aed); box-shadow: 0 16px 30px rgba(0,0,0,.25); }
+.w-add { width: 46%; aspect-ratio: 1; border-radius: 50%; border: 3px dashed rgba(23,23,29,.35); display: grid; place-items: center; color: var(--color-accent); font-size: calc(var(--wi) * .28); line-height: 1; }
+
+/* Légende alignée sur la rangée de jeux */
+.caption { left: var(--anchor, 46vw); right: 4vw; top: calc(50% + var(--box-h) / 2 + 4.5vh); text-align: left; padding: 0; }
+.caption h1 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-logo { height: clamp(36px, 5.6vh, 66px); width: min(460px, 46vw); margin-bottom: 10px; background: #fff; -webkit-mask: var(--logo) left center / contain no-repeat; mask: var(--logo) left center / contain no-repeat; filter: drop-shadow(0 4px 16px rgba(0,0,0,.5)); }
+.caption.swap .cap-logo { animation: captionIn var(--dur-med) var(--ease-out); }
+
+/* Barre du haut décalée à droite de la roue */
+.topbar { padding-left: calc(var(--edge, 30vw) + 3vw); }
+.empty { left: var(--edge, 30vw); }
+
+/* Fond : halo de couleur derrière la rangée */
+.bg-layer { filter: brightness(.3) saturate(1.1) blur(2px); }
+.bg-tint { opacity: .85; mix-blend-mode: screen; }
+.bg-shade { background: linear-gradient(to bottom, rgba(4,4,10,.5) 0%, transparent 20%, transparent 70%, rgba(4,4,10,.9) 100%); }
+.slot .halo { display: none; }
+/* Onglets au-dessus de la rangée, alignés sur le premier jeu */
+.tabs { position: fixed; left: var(--anchor); top: calc(50% - var(--box-h) / 2 - 76px); max-width: calc(100vw - var(--anchor) - 4vw); z-index: 6; }
+.topbar { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.status { grid-column: 2; }
+.clock { white-space: nowrap; }
+.status-row { flex-wrap: nowrap; }

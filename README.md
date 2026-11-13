@@ -8,7 +8,7 @@ Télécharge `RR-Launcher-Setup-x.y.z.exe` depuis la [dernière release](https:/
 
 ## Consoles & émulation
 
-L'accueil affiche une carte par console présente dans ta bibliothèque. La photo et le logo officiel de chaque console sont téléchargés depuis Wikipédia/Wikimedia sur le PC au premier affichage (ils ne font pas partie du dépôt) ; tu peux les remplacer dans **Réglages → Consoles & émulateurs → Image / Logo**. Le logo s'affiche sur le bandeau et la tranche des boîtes, sur l'accueil et en en-tête. Les boîtes reprennent le format de chaque support : DVD (PC, PS2, Xbox, Wii…), Blu-ray (PS3), petits boîtiers (Switch, PSP, DS, GameCube), boîtier CD (PlayStation, Dreamcast) ou carton (NES, SNES, N64, Game Boy).
+L'accueil est une roue à gauche qui tourne verticalement (↑ ↓, molette, stick) : la console sélectionnée est au bord de la roue et ses jeux s'affichent à droite. En ouvrant une console, la roue glisse à gauche et laisse la place à la rangée de jeux ; ← sur le premier jeu, B/Échap ou un clic sur la roue y reviennent. La photo et le logo officiel de chaque console sont téléchargés depuis Wikipédia/Wikimedia sur le PC au premier affichage (ils ne font pas partie du dépôt) ; tu peux les remplacer dans **Réglages → Consoles & émulateurs → Image / Logo**. Le logo s'affiche sur le bandeau et la tranche des boîtes, sur l'accueil et en en-tête. Les boîtes reprennent le format de chaque support : DVD (PC, PS2, Xbox, Wii…), Blu-ray (PS3), petits boîtiers (Switch, PSP, DS, GameCube), boîtier CD (PlayStation, Dreamcast) ou carton (NES, SNES, N64, Game Boy).
 
 Consoles gérées : Switch, Wii U, Wii, GameCube, N64, SNES, NES, Game Boy / Color, GBA, DS, 3DS, PlayStation 1/2/3, PSP, PS Vita, Xbox, Xbox 360, Dreamcast, Mega Drive.
 
@@ -34,7 +34,8 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 
 | Action | Manette | Clavier | Souris |
 |---|---|---|---|
-| Naviguer | Stick / croix ◀▶ | ← → | Molette, clic |
+| Changer de console (accueil) | Stick / croix ▲▼ | ↑ ↓ | Molette, clic |
+| Naviguer dans les jeux | Stick / croix ◀▶ | ← → | Molette, clic |
 | Jouer | A / ✕ | Entrée | Double-clic |
 | Détails | X / □ ou ▲ | I ou ↑ | Clic sur la boîte sélectionnée |
 | Retourner la boîte | Y / △ | Espace | |
