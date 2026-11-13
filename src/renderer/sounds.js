@@ -105,6 +105,23 @@ const Sfx = (() => {
     flip: (t) => { air(t, 0.32, 600, 3200, 0.035, 1.1); tick(t + 0.12, 0.9); },
     error: (t) => { tone(196, t, 0.16, 0.05, 'triangle', 0.3); tone(185, t + 0.14, 0.2, 0.05, 'triangle', 0.3); },
     toggle: (t) => { tone(1568, t, 0.06, 0.025, 'sine', 0.3); tone(2093, t + 0.04, 0.08, 0.02, 'sine', 0.35); },
+    boxopen: (t) => { // BOXOPEN : loquet du boîtier, couvercle, disque qui prend de la vitesse
+      air(t, 0.05, 6000, 3000, 0.03, 3);
+      tone(2600, t, 0.04, 0.025, 'triangle', 0.2);
+      tone(1700, t + 0.03, 0.05, 0.02, 'triangle', 0.25);
+      air(t + 0.24, 0.42, 500, 2600, 0.03, 1);
+      tone(220, t + 0.6, 0.75, 0.012, 'sine', 0.5, 6);
+      tone(440, t + 0.62, 0.7, 0.008, 'sine', 0.6, 4);
+      tone(659.25, t + 1.0, 0.7, 0.02, 'sine', 0.7);
+      tone(987.77, t + 1.06, 0.8, 0.016, 'sine', 0.75);
+    },
+    boxclose: (t) => { // BOXOPEN : le couvercle se referme (clac feutré)
+      air(t, 0.24, 2400, 500, 0.022, 1.2);
+      tone(1046.5, t, 0.12, 0.022, 'sine', 0.4);
+      air(t + 0.3, 0.04, 5200, 2600, 0.035, 3);
+      tone(1500, t + 0.3, 0.05, 0.03, 'triangle', 0.2);
+      tone(620, t + 0.31, 0.08, 0.025, 'triangle', 0.25);
+    },
     start: (t) => { // ouverture du launcher
       air(t, 1.6, 150, 1800, 0.035, 0.6);
       [196, 293.66, 392, 587.33].forEach((f, i) => tone(f, t + 0.1 + i * 0.12, 2.2, 0.022, 'sine', 0.85));
