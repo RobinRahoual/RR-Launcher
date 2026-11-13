@@ -14,7 +14,7 @@ const guide = require('./guide'); // GUIDE : bouton Xbox / PS / Home (natif opti
 const padwake = require('./padwake'); // WAKE : manette allumée → launcher au premier plan
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'rr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: 'rr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }, // MEDIA : stream = lecture vidéo / audio via rr:
 ]);
 
 if (process.env.RR_DATA) app.setPath('userData', process.env.RR_DATA);

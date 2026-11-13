@@ -2184,6 +2184,7 @@ function pollPad(t) {
 }
 function onPadDir(dir, repeat) {
   RR.emit('input', 'pad', dir);
+  if (window.ssActive && ssWake()) return; // MEDIA : économiseur d'écran actif → la manette le quitte sans autre action
   if (LD.active) return; // LOADING
   if (shellSplashActive()) return endSplash(); // SHELL
   if (BO.kind === 'open' || BO.kind === 'cancel') return; // BOXOPEN
@@ -2209,6 +2210,7 @@ function onPadDir(dir, repeat) {
 }
 function onPadBtn(btn) {
   RR.emit('input', 'pad', btn);
+  if (window.ssActive && ssWake(btn)) return; // MEDIA : économiseur d'écran actif → A = aller au jeu affiché, sinon simple réveil
   if (LD.active) { if (btn === 'b') ldCancel(); return; } // LOADING
   if (shellSplashActive()) return endSplash(); // SHELL
   if (BO.kind === 'open') { if (btn === 'a') boSkip(); else if (btn === 'b') boCancel(); return; } // BOXOPEN

@@ -1,1 +1,96 @@
-/* Module media */
+/* Module MEDIA : vidéo de fond (écran jeux), économiseur d'écran, tuiles Vidéo / Musique du menu Images */
+
+/* ---------------------------------------------------------------- Vidéo de présentation (dans #bg, sous les voiles .bg-shade) */
+#bg .bg-video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: cover; object-position: center 22%;
+  opacity: 0; transition: opacity 400ms var(--ease-out);
+  filter: brightness(.94) saturate(1.06);
+  pointer-events: none;
+}
+body[data-view="games"] #bg .bg-video.on { opacity: 1; }
+[data-theme="dark"] body[data-view="games"] #bg .bg-video { filter: brightness(.86) saturate(1.06); }
+
+/* ---------------------------------------------------------------- Économiseur d'écran (toujours sombre : data-theme="dark" posé sur l'élément) */
+#screensaver {
+  position: fixed; inset: 0; z-index: 9000;
+  background: var(--surface-0); color: var(--fg);
+  opacity: 0; transition: opacity 900ms ease;
+  cursor: none; overflow: hidden;
+  --ss-cx: 0vw; --ss-cy: 0vh;
+}
+#screensaver.on { opacity: 1; }
+#screensaver[hidden] { display: none; }
+.ss-slide, .ss-video {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  opacity: 0; transition: opacity 1400ms ease;
+  will-change: opacity, transform;
+}
+.ss-slide { background: center / cover no-repeat; transform: scale(1.06); }
+.ss-video { object-fit: cover; }
+.ss-slide.on, .ss-video.on { opacity: 1; }
+/* Ken Burns lent : zoom + léger déplacement, trajectoire tirée au hasard par diapositive */
+.ss-slide.kb { animation: ss-kb 12s linear both; }
+@keyframes ss-kb {
+  from { transform: scale(1.04) translate(var(--kb-x0, 0), var(--kb-y0, 0)); }
+  to   { transform: scale(1.14) translate(var(--kb-x1, 0), var(--kb-y1, 0)); }
+}
+.ss-veil {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    linear-gradient(0deg, rgba(var(--shade-rgb), .78) 0%, rgba(var(--shade-rgb), .3) 26%, transparent 46%),
+    linear-gradient(90deg, rgba(var(--shade-rgb), .5) 0%, transparent 45%),
+    linear-gradient(180deg, rgba(var(--shade-rgb), .45) 0%, transparent 18%);
+}
+.ss-clock {
+  position: absolute; top: clamp(20px, 4.4vh, 48px); right: clamp(24px, 3.4vw, 64px);
+  display: flex; flex-direction: column; align-items: flex-end; gap: 2px;
+  text-shadow: 0 2px 14px rgba(var(--shade-rgb), .6);
+  transition: transform 1.6s ease;
+}
+.ss-time { font-family: var(--font-display); font-size: clamp(28px, 4.2vh, 46px); line-height: 1; color: var(--fg); letter-spacing: .02em; }
+.ss-date { font-size: clamp(12px, 1.5vh, 16px); font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-2); }
+.ss-info {
+  position: absolute; left: clamp(28px, 4.2vw, 80px); bottom: clamp(28px, 6vh, 72px);
+  display: flex; flex-direction: column; align-items: flex-start; gap: 10px;
+  max-width: 42vw; opacity: 0; transform: translateY(8px);
+  transition: opacity 900ms ease, transform 900ms var(--ease-out);
+}
+.ss-info.in { opacity: 1; transform: none; }
+.ss-logo { max-width: min(32vw, 520px); max-height: 15vh; object-fit: contain; object-position: left bottom; filter: drop-shadow(0 4px 18px rgba(var(--shade-rgb), .65)); }
+.ss-name { font-family: var(--font-display); font-weight: 400; font-size: clamp(28px, 4.6vh, 54px); line-height: 1.05; color: var(--fg); text-shadow: 0 3px 20px rgba(var(--shade-rgb), .7); }
+.ss-plat { font-size: clamp(12px, 1.6vh, 17px); font-weight: 700; letter-spacing: .22em; text-transform: uppercase; color: var(--text-2); text-shadow: 0 2px 10px rgba(var(--shade-rgb), .7); }
+.ss-plat:empty { display: none; }
+.ss-hint {
+  position: absolute; right: clamp(24px, 3.4vw, 64px); bottom: clamp(28px, 6vh, 72px);
+  display: none; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600; color: var(--text-3);
+}
+#screensaver.has-game .ss-hint { display: flex; }
+.ss-go:empty { display: none; }
+/* Mode « Noir » : seulement l'heure, qui se déplace un peu chaque minute (anti-marquage) */
+#screensaver.is-black { background: var(--surface-0); }
+#screensaver.is-black .ss-veil, #screensaver.is-black .ss-hint, #screensaver.is-black .ss-info { display: none; }
+#screensaver.is-black .ss-clock {
+  top: 50%; right: 50%; align-items: center;
+  transform: translate(calc(50% + var(--ss-cx)), calc(-50% + var(--ss-cy)));
+  opacity: .55;
+}
+#screensaver.is-black .ss-time { font-size: clamp(40px, 8vh, 96px); }
+
+/* ---------------------------------------------------------------- Menu Images : tuiles Vidéo / Musique */
+.m-tile .m-prev { display: flex; flex-direction: column; gap: 4px; background: var(--surface-0); }
+.m-tile .m-prev svg { width: 26px; height: 26px; fill: none; stroke: var(--accent-text, var(--accent)); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.m-tile .m-prev em { font-style: normal; font-size: 11.5px; font-weight: 600; color: var(--text-3); }
+.m-tile.is-busy { opacity: .6; }
+.m-note { margin: 2px 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--text-3); }
+#set-media .m-dir { max-width: 46ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  #bg .bg-video { transition: opacity 120ms linear; }
+  #screensaver { transition: opacity 200ms linear; }
+  .ss-slide, .ss-video { transition: opacity 300ms linear; }
+  .ss-slide.kb { animation: none; transform: none; }
+  .ss-info, .ss-clock { transition: none; transform: none; }
+  #screensaver.is-black .ss-clock { transform: translate(50%, -50%); }
+}
