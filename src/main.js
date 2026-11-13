@@ -220,6 +220,7 @@ app.whenReady().then(() => {
   });
   createWindow();
   loadFeatures();
+  scheduleHeroUpgrade(25000);
   createTray();
   setupUpdater();
   // Raccourci global pour faire revenir le launcher depuis n'importe où
@@ -806,6 +807,7 @@ ipcMain.handle('settings:set', (_e, patch) => {
   if ('openAtLogin' in patch) applyLoginItem();
   if ('guideButton' in patch) updateGuideWatch();
   if ('wakeOnPad' in patch) updatePadWake(); // WAKE
+  if ('sgdbKey' in patch || 'tgdbKey' in patch) scheduleHeroUpgrade(3000, true); // fonds HD
   commit();
   return store.data.settings;
 });
@@ -1037,4 +1039,47 @@ function loadFeatures() {
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) {
     try { require(path.join(dir, f)).init?.(ctx); } catch (e) { meta.log(`module ${f} : ${e.stack || e.message}`); }
   }
+}
+
+// ---------------------------------------------------------------- Fonds en haute définition
+// Remplace en arrière-plan les images de fond trop petites (captures rétro 240×160 agrandies = pixelisées)
+// par des visuels HD de SteamGridDB / TheGamesDB (clé gratuite). Un essai par jeu tous les 7 jours.
+let heroTimer = null, heroBusy = false;
+function scheduleHeroUpgrade(delay = 25000, force = false) {
+  clearTimeout(heroTimer);
+  heroTimer = setTimeout(() => upgradeHeroes(force).catch((e) => meta.log(`fonds HD : ${e.message}`)), delay);
+}
+function heroWidth(g) {
+  const f = g.media?.hero;
+  if (!f) return 0;
+  try { const im = nativeImage.createFromPath(path.join(MEDIA, g.id, f)); return im.isEmpty() ? 0 : im.getSize().width; } catch { return 0; }
+}
+async function upgradeHeroes(force) {
+  const s = store.data.settings;
+  if (heroBusy || (!s.sgdbKey && !s.tgdbKey)) return;
+  heroBusy = true;
+  try {
+    const WEEK = 7 * 864e5;
+    for (const g of [...games()]) {
+      if (running.size) break; // jamais pendant une partie
+      if (!force && g.heroTry && Date.now() - g.heroTry < WEEK) continue;
+      if (g.heroWv !== (g.mediaVersion || 0) || g.heroW == null) { g.heroW = heroWidth(g); g.heroWv = g.mediaVersion || 0; }
+      if (g.heroW >= 1280) continue;
+      g.heroTry = Date.now();
+      const dir = path.join(MEDIA, g.id);
+      const file = await meta.upgradeHero(g, dir, s, BY_ID[g.platform]?.tgdb).catch(() => null);
+      if (!file) { store.save(); continue; }
+      const w = (() => { try { return nativeImage.createFromPath(path.join(dir, file)).getSize().width; } catch { return 0; } })();
+      if (w > (g.heroW || 0)) {
+        const old = g.media?.hero;
+        g.media = { ...(g.media || {}), hero: file };
+        g.heroW = w;
+        g.mediaVersion = Date.now(); g.heroWv = g.mediaVersion;
+        if (old && old !== file) fs.rmSync(path.join(dir, old), { force: true });
+        meta.log(`fond HD : ${g.name} → ${w}px`);
+        commit();
+      } else fs.rmSync(path.join(dir, file), { force: true });
+      await new Promise((r) => setTimeout(r, 400));
+    }
+  } finally { heroBusy = false; }
 }

@@ -93,3 +93,10 @@ html, body { background: var(--bg); color: var(--fg); }
 /* Mode sombre : logos de console clairs gardés tels quels, pas d'assombrissement */
 [data-theme="dark"] .h-logo-img.is-light { filter: drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .5)); }
 [data-theme="dark"] .h-pbg { filter: grayscale(1) contrast(.9) brightness(.7); }
+
+/* Fonds en basse définition (captures rétro) : flou d'ambiance plutôt qu'un agrandissement pixelisé */
+.bg-layer.is-lowres, .h-bg.is-lowres, #dBg.is-lowres, #launching .ld-bg.is-lowres, #igBg.is-lowres {
+  filter: blur(clamp(10px, 1.6vw, 34px)) saturate(1.15) !important; transform: scale(1.08); image-rendering: auto;
+}
+.h-pbg.is-lowres { filter: grayscale(1) contrast(.85) brightness(1.08) blur(clamp(8px, 1.2vw, 26px)); transform: scale(1.06); }
+[data-theme="dark"] .bg-layer.is-lowres, [data-theme="dark"] #dBg.is-lowres { filter: blur(clamp(10px, 1.6vw, 34px)) saturate(1.1) brightness(.8) !important; }

@@ -50,6 +50,34 @@ async function downloadFirst(urls, dir, baseName) {
   return null;
 }
 
+// Image de fond : on veut de la HD. Essaie les sources dans l'ordre et garde la première assez large
+// (≥ minWidth px), sinon la plus large trouvée — une capture rétro 240×160 n'est qu'un dernier recours.
+async function downloadBest(urls, dir, baseName, { minWidth = 1600, maxTries = 8 } = {}) {
+  let best = null;
+  let tries = 0;
+  for (const url of [...new Set(urls.filter(Boolean))]) {
+    if (tries++ >= maxTries) break;
+    try {
+      const res = await net.fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
+      if (!res.ok) { log(`image ${res.status} ${url}`); continue; }
+      const type = (res.headers.get('content-type') || '').split(';')[0].trim();
+      if (!type.startsWith('image/')) continue;
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.length < 1500) continue;
+      const img = nativeImage.createFromBuffer(buf);
+      const width = img.isEmpty() ? 0 : img.getSize().width;
+      if (!best || width > best.width) best = { buf, type, url, width };
+      if (width >= minWidth) break;
+    } catch (e) { log(`image erreur ${e.message} ${url}`); }
+  }
+  if (!best) return null;
+  const ext = EXT_BY_TYPE[best.type] || path.extname(new URL(best.url).pathname) || '.jpg';
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, baseName + ext), best.buf);
+  log(`${baseName} : ${best.width}px ← ${best.url}`);
+  return baseName + ext;
+}
+
 // ---------- Utilitaires texte ----------
 function decodeEntities(s = '') {
   return s
@@ -157,12 +185,13 @@ async function tgdbBoxart(name, platformId, key) {
   if (!games.length) { log(`tgdb « ${name} » : aucun résultat`); return {}; }
   const n = normalize(name);
   const game = games.find((g) => normalize(g.game_title) === n) || games.find((g) => normalize(g.game_title).startsWith(n)) || games[0];
-  const img = await getJson(`${TGDB}/v1/Games/Images?apikey=${encodeURIComponent(key)}&games_id=${game.id}&filter%5Btype%5D=boxart`);
+  const img = await getJson(`${TGDB}/v1/Games/Images?apikey=${encodeURIComponent(key)}&games_id=${game.id}&filter%5Btype%5D=boxart,fanart,screenshot`);
   const base = img?.data?.base_url?.original || 'https://cdn.thegamesdb.net/images/original/';
   const list = img?.data?.images?.[game.id] || img?.data?.images?.[String(game.id)] || [];
   const url = (side) => list.filter((i) => i.side === side).map((i) => base + i.filename);
   log(`tgdb « ${name} » → ${game.game_title} (#${game.id}) front=${url('front').length} back=${url('back').length}`);
-  return { front: url('front'), back: url('back') };
+  const typ = (t) => list.filter((i) => i.type === t).map((i) => base + i.filename);
+  return { front: url('front'), back: url('back'), fanart: typ('fanart'), screenshots: typ('screenshot') };
 }
 
 // ---------- Wikipédia (description de secours) ----------
@@ -453,6 +482,7 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   // ---- Jeux console (ROM, dump, portage recompilé) ----
   const plat = ctx.platform;
   let wikiCover = null;
+  const lowHero = []; // captures rétro (basse définition) : en dernier
   if (plat && plat.id !== 'pc') {
     if (plat.libretro && ctx.romPath) {
       progress('Jaquette (libretro)…');
@@ -462,7 +492,7 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
       const base = `https://raw.githubusercontent.com/libretro-thumbnails/${plat.libretro}/master`;
       for (const v of variants) {
         urls.cover.push(`${base}/Named_Boxarts/${encodeURIComponent(v)}.png`);
-        urls.hero.push(`${base}/Named_Snaps/${encodeURIComponent(v)}.png`, `${base}/Named_Titles/${encodeURIComponent(v)}.png`);
+        lowHero.push(`${base}/Named_Snaps/${encodeURIComponent(v)}.png`, `${base}/Named_Titles/${encodeURIComponent(v)}.png`);
       }
     }
     try {
@@ -517,13 +547,15 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
       const t = await tgdbBoxart(out.name || match.name, plat?.tgdb || 1, settings.tgdbKey);
       if (plat && plat.id !== 'pc') urls.cover.push(...(t.front || []));
       urls.back.push(...(t.back || []));
+      urls.hero.push(...(t.fanart || []));
+      lowHero.push(...(t.screenshots || []));
     } catch (e) { log(`tgdb : ${e.message}`); }
   }
   if (wikiCover) urls.cover.push(wikiCover);
   progress('Téléchargement des visuels…');
   const [cover, hero, logo, header, back] = await Promise.all([
     downloadFirst(urls.cover, dir, 'cover'),
-    downloadFirst(urls.hero, dir, 'hero'),
+    downloadBest([...urls.hero, ...lowHero], dir, 'hero'),
     downloadFirst(urls.logo, dir, 'logo'),
     downloadFirst(urls.header, dir, 'header'),
     downloadFirst(urls.back, dir, 'back'),
@@ -547,4 +579,22 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   return out;
 }
 
-module.exports = { search, fetchAll, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };
+// Amélioration d'un fond existant en basse définition (clé SteamGridDB et/ou TheGamesDB nécessaire).
+async function upgradeHero(game, dir, settings, platformTgdb) {
+  const urls = [];
+  if (settings.sgdbKey) {
+    try {
+      let id = game.sgdbId;
+      if (!id && game.appid) id = (await sgdb(`/games/steam/${game.appid}`, settings.sgdbKey))?.id;
+      if (!id) id = (await sgdbSearch(game.name, settings.sgdbKey))[0]?.sgdbId;
+      if (id) urls.push(...(await sgdbImages(id, settings.sgdbKey)).hero);
+    } catch (e) { log(`hero sgdb ${game.name} : ${e.message}`); }
+  }
+  if (settings.tgdbKey) {
+    try { urls.push(...((await tgdbBoxart(game.name, platformTgdb, settings.tgdbKey)).fanart || [])); } catch (e) { log(`hero tgdb ${game.name} : ${e.message}`); }
+  }
+  if (!urls.length) return null;
+  return downloadBest(urls, dir, `hero-hd-${Date.now().toString(36)}`, { minWidth: 1280 });
+}
+
+module.exports = { search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };

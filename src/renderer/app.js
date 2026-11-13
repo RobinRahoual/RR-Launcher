@@ -370,6 +370,7 @@ function setHomeArt(id) {
       const el = document.createElement('div');
       el.className = c + cls;
       el.style.cssText = style;
+      markLowRes(el, url);
       root.appendChild(el);
       old.forEach((o) => { o.classList.add('out'); setTimeout(() => o.remove(), HOME_FADE + 60); });
       if (HOME_FADE) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: HOME_FADE, easing: 'ease-out' });
@@ -846,6 +847,19 @@ function frameGames(t, dt) {
 
 // ---------------------------------------------------------------- Fond
 let bgFlip = false, bgCurrent = null, bgTimer;
+// Images de fond en basse définition (captures natives des consoles rétro : 240×160 en GBA…) : au lieu d'un
+// agrandissement pixelisé, on les floute en fond d'ambiance (classe .is-lowres). Mesure mise en cache par URL.
+const LOWRES_W = 960;
+const imgWidthCache = new Map();
+function markLowRes(el, url) {
+  if (!el) return;
+  if (!url) return el.classList.remove('is-lowres');
+  const set = (w) => { el.classList.toggle('is-lowres', w > 0 && w < LOWRES_W); };
+  if (imgWidthCache.has(url)) return set(imgWidthCache.get(url));
+  const im = new Image();
+  im.onload = () => { imgWidthCache.set(url, im.naturalWidth); set(im.naturalWidth); };
+  im.src = url;
+}
 function setBackground(url, tint) {
   $('#bgTint').style.background = `radial-gradient(ellipse 34% 48% at var(--glow-x, 50%) 50%, ${tint || 'transparent'}, transparent 100%)`;
   if (url === bgCurrent) return;
@@ -855,7 +869,7 @@ function setBackground(url, tint) {
     const next = bgFlip ? $('#bgA') : $('#bgB');
     const prev = bgFlip ? $('#bgB') : $('#bgA');
     bgFlip = !bgFlip;
-    const apply = () => { next.style.backgroundImage = url ? `url("${url}")` : 'none'; next.classList.add('on'); prev.classList.remove('on'); };
+    const apply = () => { next.style.backgroundImage = url ? `url("${url}")` : 'none'; markLowRes(next, url); next.classList.add('on'); prev.classList.remove('on'); };
     if (!url) return apply();
     const img = new Image();
     img.onload = apply; img.onerror = apply;
@@ -1122,6 +1136,7 @@ function ldShow(g) {
     if (!url) return show();
     // bannière décodée avant le fondu (évite un fond noir qui « saute »), 300 ms au plus
     $('.ld-bg', el).style.backgroundImage = `url("${url}")`;
+    markLowRes($('.ld-bg', el), url);
     const im = new Image(); im.src = url;
     Promise.race([im.decode().catch(() => {}), new Promise((r) => setTimeout(r, 300))]).then(show);
   });
@@ -1278,6 +1293,7 @@ function renderDetails() {
   if (!g) return closeAll();
   const p = plat(g.platform);
   $('#dBg').style.backgroundImage = heroOf(g) ? `url("${heroOf(g)}")` : 'none';
+  markLowRes($('#dBg'), heroOf(g));
   $('#dPlatform').innerHTML = `<i style="background:${p.color}"></i>${esc(p.name)}${g.kind === 'steam' ? ' · Steam' : g.kind === 'epic' ? ' · Epic Games' : g.source === 'gog' ? ' · GOG' : g.kind === 'rom' ? ' · Émulation' : ''}`;
   const logo = $('#dLogo');
   if (g.media?.logo) { logo.src = mediaUrl(g, g.media.logo); logo.alt = g.name; logo.hidden = false; $('#dTitle').hidden = true; }
@@ -2576,6 +2592,7 @@ function igRender(g) {
   const p = plat(g.platform);
   const hero = heroOf(g);
   $('#igBg').style.backgroundImage = hero ? `url("${hero}")` : 'none';
+  markLowRes($('#igBg'), hero);
   const cover = g.media?.cover ? mediaUrl(g, g.media.cover) : '';
   const cv = $('#igCover');
   cv.style.backgroundImage = cover ? `url("${cover}")` : 'none';
