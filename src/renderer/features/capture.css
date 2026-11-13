@@ -1,1 +1,120 @@
-/* Module capture */
+/* RR Launcher — CAPTURE : menu en jeu (entrées, REC, légende), galerie de la page du jeu, visionneuse, réglages.
+   Couleurs : tokens de theme.css uniquement. */
+
+/* ---------------------------------------------------------------- Menu en jeu */
+.cap-rec {
+  display: inline-flex; align-items: center; gap: 7px; margin-left: auto; margin-right: 10px;
+  padding: 5px 11px; border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--err-fg) 14%, transparent); color: var(--err-fg);
+  font-size: calc(12px * var(--ui)); font-weight: 700; letter-spacing: .12em;
+}
+.cap-rec[hidden] { display: none; }
+.cap-rec b { font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+.cap-rec-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--err-fg); animation: capBlink 1.2s ease-in-out infinite; }
+@keyframes capBlink { 50% { opacity: .25; } }
+.ig-item.cap-ig .cap-k { margin-left: auto; font-variant-numeric: tabular-nums; }
+.ig-item.cap-ig.is-rec { color: var(--err-fg); }
+.ig-item.cap-ig.is-rec .ico { color: var(--err-fg); }
+.ig-item.cap-ig.is-rec.is-focus, .ig-item.cap-ig.is-rec:focus-visible { color: var(--sel-fg); }
+.ig-item.cap-ig.is-rec.is-focus .ico, .ig-item.cap-ig.is-rec:focus-visible .ico { color: inherit; }
+
+.cap-legend { margin-top: auto; padding-top: calc(10px * var(--ui)); border-top: 1px solid var(--line); }
+.cap-legend:empty { display: none; }
+.cap-legend + .ig-foot { margin-top: 0; }
+.cap-legend-t { margin: 0 0 6px; font-size: calc(11px * var(--ui)); font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--text-3); }
+.cap-legend ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 4px 14px; }
+.cap-legend li { display: flex; align-items: center; gap: 8px; font-size: calc(12.5px * var(--ui)); color: var(--text-2); min-width: 0; }
+.cap-legend li span { white-space: nowrap; }
+.cap-legend em { font-style: normal; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cap-legend kbd { padding: 1px 6px; border-radius: 6px; border: 1px solid var(--line); border-bottom-width: 2px; background: rgba(var(--fg-rgb), .06); font: 700 11.5px var(--font-body); color: var(--text-2); }
+
+/* ---------------------------------------------------------------- Galerie de la page du jeu */
+/* Panneau à droite, au-dessus de la bande de captures officielles (la colonne de gauche garde sa hauteur) */
+#details .cap-row {
+  position: absolute; z-index: 2; right: 5vw; width: min(calc(560px * var(--ui)), 34vw);
+  bottom: calc(var(--bottom-h, 72px) + clamp(16px, 3vh, 36px) + clamp(84px, 15vh, 180px) + clamp(18px, 3.2vh, 40px));
+  padding: 14px 16px 16px; border-radius: 16px; box-sizing: border-box;
+  background: rgba(var(--bg-rgb), .72); backdrop-filter: blur(14px); box-shadow: 0 0 0 1px var(--line), 0 18px 50px rgba(var(--shade-rgb), .18);
+  animation: capIn 260ms var(--ease-out);
+}
+#details .cap-row[hidden] { display: none; }
+.cap-row-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.cap-row-head h3 { margin: 0; font: 400 15px var(--font-display); letter-spacing: .04em; color: var(--fg); }
+.cap-count { min-width: 22px; padding: 1px 8px; border-radius: var(--radius-pill); background: var(--accent-soft); color: var(--accent-text); font-size: 12px; font-weight: 700; text-align: center; }
+.cap-row-head .cap-folder { margin-left: auto; min-height: 34px; padding: 0 10px; font-size: 13px; }
+.cap-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.cap-thumb {
+  position: relative; width: 100%; aspect-ratio: 16 / 9; padding: 0; overflow: hidden;
+  border: 0; border-radius: 10px; background: var(--surface-0); cursor: pointer;
+  box-shadow: 0 8px 22px rgba(var(--shade-rgb), .25), 0 0 0 1px var(--line);
+  transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast);
+}
+.cap-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.cap-thumb.no-thumb img { visibility: hidden; }
+.cap-thumb.no-thumb.is-video { background: linear-gradient(135deg, var(--accent-deep), var(--surface-0)); }
+.cap-thumb:hover { transform: translateY(-2px); }
+.cap-thumb.is-focus, .cap-thumb:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; transform: translateY(-2px); }
+.cap-badge {
+  position: absolute; left: 6px; bottom: 6px; display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px 2px 5px; border-radius: var(--radius-pill); background: rgba(var(--bg-rgb), .86); color: var(--fg);
+  font-size: 11px; font-weight: 700;
+}
+.cap-badge .ico { width: 12px; height: 12px; fill: currentColor; stroke: none; }
+.cap-more { display: grid; place-items: center; font: 700 16px var(--font-body); color: var(--text-2); }
+
+/* ---------------------------------------------------------------- Visionneuse */
+#capView.cap-view { z-index: 20; display: block; padding: 0; background: rgba(var(--bg-rgb), .97); backdrop-filter: none; }
+#capView[hidden] { display: none; }
+.cap-v-stage {
+  position: absolute; inset: calc(86px * var(--ui)) 5vw calc(var(--bottom-h, 72px) + 16px);
+  display: flex; align-items: center; justify-content: center; min-height: 0;
+}
+.cap-v-stage img, .cap-v-stage video {
+  max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; object-fit: contain; border-radius: 12px; background: var(--surface-0);
+  box-shadow: 0 24px 70px rgba(var(--shade-rgb), .35), 0 0 0 1px var(--line);
+  animation: capIn 200ms var(--ease-out);
+}
+@keyframes capIn { from { opacity: 0; transform: scale(.985); } }
+.cap-v-top {
+  position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; gap: 20px;
+  padding: calc(20px * var(--ui)) 5vw 0;
+}
+.cap-v-top h2 { margin: 0; font: 400 calc(22px * var(--ui)) var(--font-display); color: var(--fg); }
+.cap-v-meta { font-size: calc(13px * var(--ui)); color: var(--text-3); font-variant-numeric: tabular-nums; }
+.cap-v-tools { display: flex; gap: 4px; }
+.cap-v-tools .tool.danger { margin-left: 0; }
+.cap-v-nav {
+  position: absolute; top: 50%; width: 52px; height: 52px; margin-top: -26px; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 50%; background: rgba(var(--bg-rgb), .8); color: var(--fg); cursor: pointer;
+  transition: background var(--dur-fast);
+}
+.cap-v-nav .ico { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cap-v-nav:hover { background: var(--accent-soft); }
+.cap-v-nav:disabled { display: none; }
+.cap-v-nav.prev { left: 1.5vw; }
+.cap-v-nav.next { right: 1.5vw; }
+
+/* ---------------------------------------------------------------- Réglages */
+#set-capture .cap-dir { direction: rtl; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 52ch; display: block; }
+#set-capture .cap-dir-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+#set-capture .cap-dir-actions [hidden] { display: none; }
+
+/* Petites fenêtres */
+@media (max-height: 760px) {
+  #details .cap-row { bottom: calc(var(--bottom-h, 72px) + clamp(16px, 3vh, 36px) + 78px + 14px); padding: 10px 12px 12px; }
+  .cap-row-head { margin-bottom: 4px; }
+  .cap-legend ul { gap: 2px 10px; }
+}
+@media (max-width: 1360px) { #details .cap-row { width: min(calc(420px * var(--ui)), 25vw); } #details .cap-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } #details .cap-row-head .cap-folder span { display: none; } }
+@media (prefers-reduced-motion: reduce) {
+  #details .cap-row { animation: none; }
+  .cap-rec-dot { animation: none; }
+  .cap-v-stage img, .cap-v-stage video { animation: none; }
+  .cap-thumb, .cap-thumb:hover { transition: none; transform: none; }
+}
+/* Menu en jeu sur petite hauteur : la légende remplace la ligne « retour au jeu » (déjà dans la barre du bas) */
+@media (max-height: 760px) {
+  .cap-legend:not(:empty) + .ig-foot { display: none; }
+  .cap-legend-t { display: none; }
+  .cap-legend { padding-top: 8px; }
+}

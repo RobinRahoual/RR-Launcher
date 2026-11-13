@@ -17,7 +17,9 @@ const { createPresence, createWakeGate, xinputKeys, hidPadKeys } = require('./pa
 const BTN = {
   UP: 0x0001, DOWN: 0x0002, LEFT: 0x0004, RIGHT: 0x0008,
   START: 0x0010, BACK: 0x0020,
+  LB: 0x0100, RB: 0x0200, // CAPTURE : gâchettes hautes (XInput LEFT/RIGHT_SHOULDER)
   GUIDE: 0x0400,
+  SHARE: 0x0800, // CAPTURE : bit libre d'XInput, pseudo-bouton « Share / Create / Capture » (manettes HID)
   A: 0x1000, B: 0x2000, X: 0x4000, Y: 0x8000,
 };
 // Boutons relayés au renderer quand le menu en jeu est ouvert mais que la fenêtre n'a pas le focus
@@ -59,6 +61,11 @@ function sonyFace(b) {
  * Décodage d'un rapport d'entrée HID → masque XInput, ou null si le rapport n'est pas reconnu.
  * `data` commence par l'identifiant de rapport (node-hid le fournit pour les rapports numérotés).
  *
+ * CAPTURE : octet « boutons 2 » Sony (o+1) = L1 0x01, R1 0x02, L2 0x04, R2 0x08, SHARE/CREATE 0x10,
+ *   OPTIONS 0x20, L3 0x40, R3 0x80 → L1 = LB, R1 = RB, SHARE/CREATE = BACK + SHARE.
+ *   Switch Pro : 0x30 [3] R 0x40, [5] L 0x40, [4] CAPTURE 0x20 ; 0x3F [1] L 0x10 R 0x20, [2] CAPTURE 0x20.
+ *   Le bouton « − » de la Switch reste BACK (pas SHARE) : seul le bouton Capture fait une capture.
+ *
  * DualShock 4
  *   USB  0x01 (64 o)          : [5] hat+face, [6] L1 R1 L2 R2 SHARE 0x10 OPTIONS 0x20, [7] bit0 = PS
  *   BT   0x01 réduit (≈10 o)  : même disposition que l'USB (mode par défaut avant activation complète)
@@ -92,7 +99,9 @@ function decodeHidReport(kind, data) {
     if (o == null) return null;
     let m = sonyFace(data[o]);
     if (data[o + 1] & 0x20) m |= BTN.START;
-    if (data[o + 1] & 0x10) m |= BTN.BACK;
+    if (data[o + 1] & 0x10) m |= BTN.BACK | BTN.SHARE; // CAPTURE : Share (DS4) / Create (DualSense)
+    if (data[o + 1] & 0x01) m |= BTN.LB; // CAPTURE : L1
+    if (data[o + 1] & 0x02) m |= BTN.RB; // CAPTURE : R1
     if (data[o + 2] & 0x01) m |= BTN.GUIDE;
     return m;
   }
@@ -109,6 +118,8 @@ function decodeHidReport(kind, data) {
       if (l & 0x02) m |= BTN.UP;
       if (l & 0x04) m |= BTN.RIGHT;
       if (l & 0x08) m |= BTN.LEFT;
+      if (r & 0x40) m |= BTN.RB; // CAPTURE : R
+      if (l & 0x40) m |= BTN.LB; // CAPTURE : L
     } else if (id === 0x3f && len >= 4) {
       const f = data[1];
       s = data[2];
@@ -117,10 +128,13 @@ function decodeHidReport(kind, data) {
       if (f & 0x01) m |= BTN.B;
       if (f & 0x08) m |= BTN.X;
       if (f & 0x04) m |= BTN.Y;
+      if (f & 0x10) m |= BTN.LB; // CAPTURE : L
+      if (f & 0x20) m |= BTN.RB; // CAPTURE : R
     } else return null;
     if (s & 0x02) m |= BTN.START;
     if (s & 0x01) m |= BTN.BACK;
     if (s & 0x10) m |= BTN.GUIDE;
+    if (s & 0x20) m |= BTN.SHARE; // CAPTURE : bouton Capture
     return m;
   }
   return null;
@@ -153,6 +167,58 @@ function makeEdges({ minGapMs = 150 } = {}) {
   };
 }
 
+// ---------------------------------------------------------------- CAPTURE : combinaisons avec le bouton Guide
+/*
+ * Machine à états pure (une par source), alimentée avec le masque complet à chaque rapport :
+ *   Guide appuyé            → « maintien » (rien n'est émis tout de suite)
+ *   + RB / LB / B pendant   → 'capture' / 'clip' / 'quit' (plusieurs possibles pendant un même maintien)
+ *   maintien ≥ longMs       → 'power' (une fois, via feed ou tick ; aussi au relâchement si aucun tick)
+ *   relâché < longMs seul   → 'guide' (comportement historique : menu en jeu)
+ *   SHARE seul (hors maintien) → 'share'
+ * Une combinaison n'émet jamais 'guide' : le menu en jeu ne s'ouvre pas en plus de la capture.
+ * Anti-rebond : un front montant d'un même bouton n'est accepté que `minGapMs` après le précédent,
+ * et un nouvel appui Guide moins de `guideCooldownMs` après un relâchement est ignoré.
+ */
+const COMBOS = [[BTN.RB, 'capture'], [BTN.LB, 'clip'], [BTN.B, 'quit']];
+function createComboMachine({ longMs = 1000, minGapMs = 150, guideCooldownMs = 120 } = {}) {
+  let prev = 0, held = false, t0 = 0, used = false, lastRelease = -Infinity;
+  const lastDown = new Map();
+  function rising(mask, now) {
+    let down = mask & ~prev;
+    for (let bit = 1; bit <= 0x8000; bit <<= 1) {
+      if (!(down & bit)) continue;
+      if (now - (lastDown.get(bit) ?? -Infinity) < minGapMs) down &= ~bit;
+      else lastDown.set(bit, now);
+    }
+    return down;
+  }
+  return {
+    feed(mask, now = Date.now()) {
+      const ev = [];
+      const down = rising(mask, now);
+      prev = mask;
+      if (held) {
+        for (const [bit, name] of COMBOS) if (down & bit) { ev.push(name); used = true; }
+        if (!(mask & BTN.GUIDE)) {
+          held = false;
+          lastRelease = now;
+          if (!used) ev.push(now - t0 >= longMs ? 'power' : 'guide');
+        } else if (!used && now - t0 >= longMs) { used = true; ev.push('power'); }
+      } else if ((down & BTN.GUIDE) && now - lastRelease >= guideCooldownMs) {
+        held = true; t0 = now; used = false;
+      } else if (down & BTN.SHARE) ev.push('share');
+      return ev;
+    },
+    // À appeler pendant un maintien sans nouveau rapport (Switch Pro 0x3F : rapports sur changement seulement)
+    tick(now = Date.now()) {
+      if (held && !used && now - t0 >= longMs) { used = true; return ['power']; }
+      return [];
+    },
+    get holding() { return held; },
+    reset() { prev = 0; held = false; used = false; lastDown.clear(); },
+  };
+}
+
 // ---------------------------------------------------------------- Surveillance
 /*
  * createGuideWatcher({ log, onGuide, onRemote, wantRemote, onConnect })
@@ -161,11 +227,15 @@ function makeEdges({ minGapMs = 150 } = {}) {
  *                        XInput sondé ~1 s si le mode Guide est arrêté, HID par devices() toutes les ~2 s
  *                        SANS ouvrir les périphériques. Les deux modes partagent les mêmes boucles.
  *   status()           : { xinput, hid, devices } pour l'aide des réglages
+ * CAPTURE : options onCombo(nom, source) et combos() → bool. Quand combos() est vrai (pendant un jeu,
+ * launcher non actif), le Guide passe par createComboMachine : 'guide' (appui court, relâché) → onGuide,
+ * 'capture' | 'clip' | 'quit' | 'power' | 'share' → onCombo. Sinon : comportement historique (onGuide à l'appui).
  * Plusieurs sources peuvent voir le même appui (ex. DualSense lue en HID + exposée en XInput par
  * Steam/DS4Windows) : on ne garde qu'un appui Guide toutes les 400 ms, toutes sources confondues.
  */
 function createGuideWatcher({
   log = () => {}, onGuide, onRemote, wantRemote = () => false, onConnect,
+  onCombo, combos = () => true, longMs = 1000, // CAPTURE
   pollMs = 66, connectPollMs = 1000, hidScanMs = 2000, wakeCooldownMs = 10000,
   loadNative: loadNativeOpt, loadHid: loadHidOpt,
 }) {
@@ -194,8 +264,46 @@ function createGuideWatcher({
     return HID;
   }
 
+  // CAPTURE : une machine à états par source, minuterie d'appui long, dédoublonnage entre sources
+  const machines = new Map(), holdTimers = new Map(), lastCombo = new Map();
+  function emitCombo(name, source) {
+    const now = Date.now();
+    if (name === 'guide') {
+      if (now - lastGuide < 400) return;
+      lastGuide = now;
+      try { onGuide?.(source); } catch (e) { log(`guide : ${e.message}`); }
+      return;
+    }
+    if (now - (lastCombo.get(name) ?? -Infinity) < 400) return;
+    lastCombo.set(name, now);
+    try { onCombo?.(name, source); } catch (e) { log(`guide : combinaison ${name} : ${e.message}`); }
+  }
+  function comboHandle(source, mask, down) {
+    if (source.startsWith('xi') && (mask & BTN.BACK)) mask |= BTN.SHARE; // XInput : View = Share
+    let m = machines.get(source);
+    if (!m) machines.set(source, (m = createComboMachine({ longMs })));
+    const was = m.holding;
+    const ev = m.feed(mask, Date.now());
+    for (const n of ev) emitCombo(n, source);
+    if (m.holding && !was) {
+      clearTimeout(holdTimers.get(source));
+      holdTimers.set(source, setTimeout(() => { holdTimers.delete(source); for (const n of m.tick(Date.now())) emitCombo(n, source); }, longMs + 20));
+    }
+    if (!m.holding) { clearTimeout(holdTimers.get(source)); holdTimers.delete(source); }
+    if (m.holding || was || ev.length || !down) return; // consommé par la machine
+    if (wantRemote()) for (const [bit, name] of REMOTE) if (down & bit) onRemote?.(name, source);
+  }
+  function comboReset() {
+    for (const t of holdTimers.values()) clearTimeout(t);
+    holdTimers.clear(); machines.clear();
+  }
+
   function handle(source, mask) {
     const down = edges.feed(source, mask);
+    let combo = false;
+    try { combo = !!onCombo && !!combos(); } catch { combo = false; }
+    if (combo) return comboHandle(source, mask, down); // CAPTURE
+    if (machines.size) comboReset();
     if (!down) return;
     if (down & BTN.GUIDE) {
       const now = Date.now();
@@ -223,7 +331,7 @@ function createGuideWatcher({
     try { states = native.xinputButtons(); } catch (e) { log(`guide : XInput ${e.message}`); native.xinputOk = false; return; }
     if (guideOn) {
       for (let i = 0; i < 4; i++) {
-        if (states[i] == null) edges.forget('xi' + i);
+        if (states[i] == null) { edges.forget('xi' + i); machines.delete('xi' + i); } // CAPTURE
         else handle('xi' + i, states[i]);
       }
     }
@@ -234,6 +342,7 @@ function createGuideWatcher({
     const dev = hidOpen.get(p);
     hidOpen.delete(p);
     edges.forget('hid:' + p);
+    machines.delete('hid:' + p); // CAPTURE
     try { dev?.removeAllListeners?.('data'); dev?.close(); } catch {}
   }
   let scanning = false;
@@ -282,7 +391,7 @@ function createGuideWatcher({
     }
     if (active && HID && !scanTimer) { scanTimer = setInterval(scanHid, hidScanMs); scanHid(); }
     if (!active && scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-    if (!guideOn) { for (const p of [...hidOpen.keys()]) closeHid(p); edges.reset(); }
+    if (!guideOn) { for (const p of [...hidOpen.keys()]) closeHid(p); edges.reset(); comboReset(); }
     if (!connectOn) presence.reset();
   }
 
@@ -316,4 +425,4 @@ function createGuideWatcher({
   };
 }
 
-module.exports = { BTN, hidKind, decodeHidReport, makeEdges, createGuideWatcher };
+module.exports = { BTN, hidKind, decodeHidReport, makeEdges, createComboMachine, createGuideWatcher };
