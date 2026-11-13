@@ -48,7 +48,7 @@ body[data-view="games"] #home * { pointer-events: none !important; }
   width: 94%; height: 74%; max-width: 100%; max-height: 100%; object-fit: contain; /* agrandi : ≈ 30 % de la largeur (réf. ES-DE) */
   filter: drop-shadow(0 .7vh 1.1vh rgba(0, 0, 0, .32)) drop-shadow(0 0 .2vh rgba(0, 0, 0, .15));
 }
-.h-logo-img.is-light { filter: brightness(0) opacity(.86) drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .25)); }
+.h-logo-img.is-light:not([data-tone="multi"]):not([data-tone="opaque"]) { filter: brightness(0) opacity(.86) drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .25)); }
 .h-name {
   font-family: var(--font-display); font-size: calc(9.6vw * var(--fit, 1)); line-height: .92; text-align: center;
   text-transform: uppercase; color: var(--fg); white-space: nowrap;
@@ -87,8 +87,15 @@ body[data-view="games"] #home * { pointer-events: none !important; }
 .t-logo {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
   max-width: 80%; max-height: 36%; object-fit: contain;
-  filter: brightness(0) invert(1) drop-shadow(0 .3vh .8vh rgba(0, 0, 0, .55));
+  filter: drop-shadow(0 .3vh .8vh rgba(0, 0, 0, .55));
 }
+/* silhouette blanche seulement pour les logos d'une couleur ; sinon couleurs d'origine sur une plaque claire */
+.t-logo[data-tone="mono"] { filter: brightness(0) invert(1) drop-shadow(0 .3vh .8vh rgba(0, 0, 0, .55)); }
+.t-logo[data-tone="multi"], .t-logo[data-tone="opaque"] {
+  max-width: 76%; max-height: 32%; padding: .9vh 1.2vh; border-radius: 1.2vh;
+  background: rgba(255, 255, 255, .9); box-shadow: 0 .6vh 1.6vh rgba(0, 0, 0, .35); filter: none;
+}
+.t-logo[data-tone="multi-light"] { filter: drop-shadow(0 .3vh .8vh rgba(0, 0, 0, .6)); }
 .t-name {
   position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 0 6%;
   font-family: var(--font-display); font-weight: 400; color: #fff; line-height: 1;

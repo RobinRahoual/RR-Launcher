@@ -197,7 +197,7 @@ function tileHTML(it) {
   }
   const a = homeArt(it.id);
   const logo = S.platLogo[it.id];
-  const mark = logo ? `<img class="t-logo" src="${platUrl(logo)}" alt="" />`
+  const mark = logo ? `<img class="t-logo" crossorigin="anonymous" src="${platUrl(logo)}" alt="" />`
     : `<b class="t-name" style="--fit:${Math.min(1, 6 / Math.max(3, (p.short || p.name).length)).toFixed(2)}">${esc(p.short || p.name)}</b>`;
   return `<div class="t-in" style="--pc:${p.color || '#3C91E6'}">${a.tile ? `<img class="t-art" src="${a.tile}" alt="" decoding="async" />` : ''}`
     + `<div class="t-tint"></div><div class="t-shade"></div>${mark}</div>`;
@@ -215,6 +215,54 @@ function checkLogoTone(img) {
     img.classList.toggle('is-light', n > 0 && sum / n > 205);
   } catch { /* image non lisible (origine) : on garde le rendu d'origine */ }
 }
+// Logos de console : forcer un logo en silhouette (blanc sur les tuiles, noir sur la barre claire) n'a de sens
+// que pour un logo d'UNE couleur. Un logo multicolore (lettres blanches cernées, dégradés…) devient un pavé
+// illisible : on le garde en couleurs, sur une petite plaque claire si le fond est sombre.
+// → data-tone = 'mono' | 'multi' (plaque claire) | 'multi-light' (logo surtout clair : plaque sombre) | 'opaque' sur les <img> .t-logo / .brand-plat-logo / .h-logo-img
+const logoToneCache = new Map();
+function logoTone(img) {
+  const key = img.currentSrc || img.src;
+  if (logoToneCache.has(key)) return logoToneCache.get(key);
+  let tone = 'multi';
+  try {
+    const c = document.createElement('canvas'), w = 120, h = 60;
+    c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, w, h);
+    const d = x.getImageData(0, 0, w, h).data;
+    let n = 0, opaque = 0, light = 0, dark = 0, sum = 0, sum2 = 0, sat = 0;
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] > 245) opaque++;
+      if (d[i + 3] < 110) continue;
+      const r = d[i], g = d[i + 1], b = d[i + 2];
+      const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      n++; sum += l; sum2 += l * l;
+      if (l > 200) light++; else if (l < 70) dark++;
+      sat += Math.max(r, g, b) - Math.min(r, g, b);
+    }
+    if (opaque / (w * h) > 0.96) tone = 'opaque'; // pas de transparence : c'est une image, pas un tracé
+    else if (n) {
+      const std = Math.sqrt(Math.max(0, sum2 / n - (sum / n) ** 2));
+      // une seule teinte : peu d'écart de luminosité, et pas de mélange clair + foncé
+      const mixed = light / n > 0.12 && dark / n > 0.12;
+      tone = !mixed && std < 48 ? 'mono' : sum / n > 165 ? 'multi-light' : 'multi';
+    }
+  } catch { tone = 'multi'; }
+  logoToneCache.set(key, tone);
+  return tone;
+}
+// (l'évènement load d'une image ne passe pas par window : écoute sur document + rattrapage des images déjà chargées)
+function toneLogos(root = document) {
+  for (const img of root.querySelectorAll('img.t-logo:not([data-tone]), img.brand-plat-logo:not([data-tone]), img.h-logo-img:not([data-tone])')) {
+    if (img.complete && img.naturalWidth) img.dataset.tone = logoTone(img);
+  }
+}
+document.addEventListener('load', (e) => {
+  const img = e.target;
+  if (img instanceof HTMLImageElement && img.matches('.t-logo, .brand-plat-logo, .h-logo-img')) img.dataset.tone = logoTone(img);
+}, true);
+new MutationObserver(() => toneLogos()).observe(document.documentElement, { childList: true, subtree: true });
+
 function syncCards() {
   const root = $('#homeRow');
   $('#home').classList.toggle('no-games', !S.lib.games.length);
@@ -354,7 +402,7 @@ function homeLogoHTML(id) {
   };
   if (id === 'all' || id === 'add') return big('<span class="brand-rr">RR</span> Launcher', id === 'all' ? 'Tous les jeux' : 'Ajouter');
   const p = plat(id);
-  if (S.platLogo[id]) return `<img class="h-logo-img" src="${platUrl(S.platLogo[id])}" alt="${esc(p.name)}" />`;
+  if (S.platLogo[id]) return `<img class="h-logo-img" crossorigin="anonymous" src="${platUrl(S.platLogo[id])}" alt="${esc(p.name)}" />`;
   const m = p.name.match(/^(Nintendo|Sony|Sega|Microsoft|Atari|NEC|SNK|Bandai|Valve)\s+(.+)$/i);
   return m ? big(esc(m[1]), m[2]) : big('', p.name);
 }
@@ -856,7 +904,7 @@ function updateBrand() {
   const p = S.plat === 'all' ? null : plat(S.plat);
   t.className = 'brand-title platform';
   t.innerHTML = !p ? '<span class="brand-name">Tous les jeux</span>'
-    : (S.platLogo[p.id] ? `<img class="brand-plat-logo" src="${platUrl(S.platLogo[p.id])}" alt="" aria-hidden="true" />` : '')
+    : (S.platLogo[p.id] ? `<img class="brand-plat-logo" crossorigin="anonymous" src="${platUrl(S.platLogo[p.id])}" alt="" aria-hidden="true" />` : '')
       + `<span class="brand-name">${esc(p.name)}</span>`;
 }
 function updateChrome(force = false) {

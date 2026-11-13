@@ -210,6 +210,12 @@ app.whenReady().then(() => {
     const [id, file] = (ach ? [parts[0], parts[2]] : parts).map((p) => path.basename(p));
     const full = ach ? path.join(MEDIA, id, 'ach', file) : path.join(MEDIA, id, file);
     if (!fs.existsSync(full)) return new Response('Not found', { status: 404 });
+    if (id === '_platforms') {
+      // logos de console : lisibles par un <canvas> (crossorigin) pour analyser leurs couleurs
+      return net.fetch(pathToFileURL(full).toString()).then((r) => new Response(r.body, {
+        status: r.status, headers: { 'Content-Type': r.headers.get('content-type') || 'image/png', 'Access-Control-Allow-Origin': '*' },
+      }));
+    }
     return net.fetch(pathToFileURL(full).toString());
   });
   createWindow();

@@ -32,7 +32,12 @@
 .brand-mark { font-family: var(--font-display); font-size: calc(var(--sys) * .6); letter-spacing: .02em; color: var(--color-accent); }
 .brand-plat-logo {
   flex: 0 0 auto; display: block; height: calc(var(--sys) * .6); width: auto; max-width: calc(var(--sys) * 4.2); object-fit: contain;
-  filter: brightness(0) invert(1) drop-shadow(0 2px 10px rgba(0, 0, 0, .5));
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, .35));
+}
+.brand-plat-logo[data-tone="mono"] { filter: brightness(0) invert(1) drop-shadow(0 2px 10px rgba(0, 0, 0, .5)); }
+.brand-plat-logo[data-tone="multi"], .brand-plat-logo[data-tone="opaque"] {
+  padding: calc(var(--sys) * .08) calc(var(--sys) * .16); border-radius: calc(var(--sys) * .14);
+  background: rgba(255, 255, 255, .9); box-shadow: 0 2px 10px rgba(0, 0, 0, .18); filter: none; box-sizing: content-box;
 }
 .brand-name {
   font-weight: 600; font-size: clamp(15px, 1.75vh, 30px); letter-spacing: .06em; text-transform: uppercase;
@@ -280,7 +285,13 @@ body[data-view="home"]:not(.has-overlay) {
 /* LOOK : bande du bas de l'accueil sans dégradé sur les tuiles (réf. ES-DE : tuiles nettes jusqu'en bas) */
 body[data-view="home"]:not(.has-overlay) .hints::before { height: calc(var(--bottom-h) * .18); }
 /* Logo de console de la barre du haut lisible en thème clair (logo blanc → foncé) */
-[data-theme="light"] .brand-plat-logo { filter: brightness(0) opacity(.86); }
+[data-theme="light"] .brand-plat-logo[data-tone="mono"] { filter: brightness(0) opacity(.86); }
+[data-theme="light"] .brand-plat-logo[data-tone="multi"], [data-theme="light"] .brand-plat-logo[data-tone="opaque"] { background: transparent; box-shadow: none; padding: 0; }
+/* logo multicolore surtout clair : sans plaque sur fond sombre, plaque sombre sur la barre claire */
+[data-theme="light"] .brand-plat-logo[data-tone="multi-light"] {
+  padding: calc(var(--sys) * .08) calc(var(--sys) * .16); border-radius: calc(var(--sys) * .14); box-sizing: content-box;
+  background: rgba(16, 16, 16, .82); filter: none;
+}
 /* LOOK : le texte d'info se tronque, jamais les commandes */
 .foot-info { flex: 1 1 auto; }
 .hint-list { flex: 0 0 auto; }
