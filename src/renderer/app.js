@@ -34,6 +34,7 @@ const S = {
   dims: { W: 300, H: 470, D: 40, CW: 420, CH: 320 },
   mouse: { x: 0, y: 0 },
   update: null,
+  topFocus: -1, // SHELL : index de l'icône focalisée dans la barre du haut (-1 = aucune)
 };
 const slots = new Map();
 const cards = new Map();
@@ -773,24 +774,16 @@ function drawMotes(t) {
 // ---------------------------------------------------------------- Chrome
 function updateBrand() {
   const t = $('#brandTitle');
-  const n = S.lib.games.length;
   if (S.view === 'home') {
-    t.className = 'brand-title';
-    t.innerHTML = '<span class="brand-rr">RR</span> LAUNCHER';
-    $('#brandSub').textContent = `Choisis ta console · ${n} jeu${n > 1 ? 'x' : ''}`;
-    $('#brandSort').textContent = '';
+    t.className = 'brand-title is-home';
+    t.innerHTML = '<span class="brand-mark" role="img" aria-label="RR Launcher">RR</span>';
     return;
   }
   const p = S.plat === 'all' ? null : plat(S.plat);
   t.className = 'brand-title platform';
-  const col = ['#2b2b2b', '#4d4d55', '#9aa0a6', '#1a1a1a'].includes(p?.color) ? '#fff' : p?.color;
-  t.innerHTML = !p ? '<span class="brand-rr">TOUS</span> LES JEUX'
-    : S.platLogo[p.id] ? `<span class="brand-logo" style="${logoCss(p.id)};--c:${col}" role="img" aria-label="${esc(p.name)}"></span>`
-    : `<span style="color:${col}">${esc(p.name.toUpperCase())}</span>`;
-  const count = inPlat(S.lib.games).length;
-  const tabLabel = S.tabs.find((x) => x.id === S.tab)?.label || 'Tous';
-  $('#brandSub').textContent = [p?.maker, p?.year, `${count} jeu${count > 1 ? 'x' : ''}`, tabLabel].filter(Boolean).join(' · ');
-  $('#brandSort').textContent = { recent: 'Tri : récents', name: 'Tri : A → Z', added: 'Tri : ajout', playtime: 'Tri : temps de jeu' }[S.lib.settings.sort || 'recent'];
+  t.innerHTML = !p ? '<span class="brand-name">Tous les jeux</span>'
+    : (S.platLogo[p.id] ? `<img class="brand-plat-logo" src="${platUrl(S.platLogo[p.id])}" alt="" aria-hidden="true" />` : '')
+      + `<span class="brand-name">${esc(p.name)}</span>`;
 }
 function updateChrome(force = false) {
   updateBrand();
@@ -1539,55 +1532,58 @@ function glyph(btn) {
   const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
   return keys[btn] ? `<span class="glyph">${keys[btn]}</span>` : '';
 }
+// Barre du bas façon console : commandes alignées à droite, la plus importante (A) tout à droite
 function renderHints() {
   const H = [];
   const h = (btns, label, act) => H.push({ btns, label, act });
   if (S.mode !== 'main') {
+    const sub = S.mode === 'details' && !$('#dSub').hidden;
+    h(['b'], sub ? 'Fermer les images' : S.mode === 'menu' ? 'Fermer' : 'Retour', sub ? 'closeSub' : 'close');
+    if (S.mode === 'settings') h(S.device === 'pad' ? ['lb', 'rb'] : ['tab'], 'Sections', 'setNext');
+    if (S.mode === 'details') h(['y'], 'Jouer', 'play');
     h(['ud'], 'Se déplacer', null);
     h(['a'], S.mode === 'scan' && !$('#scanResults').hidden ? 'Cocher / valider' : 'Valider', null);
-    if (S.mode === 'details') { h(['y'], 'Jouer', 'play'); if (!$('#dSub').hidden) { h(['b'], 'Fermer les images', 'closeSub'); } }
-    if (S.mode === 'settings') h(S.device === 'pad' ? ['lb', 'rb'] : ['tab'], 'Sections', 'setNext');
-    if (!(S.mode === 'details' && !$('#dSub').hidden)) h(['b'], S.mode === 'menu' ? 'Fermer' : 'Retour', 'close');
   }
-  else if (!S.lib.games.length) { h(['a'], 'Importer', 'scanLaunchers'); h(['view'], 'Ajouter des jeux', 'addHub'); h(['menu'], 'Menu', 'menu'); }
+  else if (!S.lib.games.length) { h(['menu'], 'Menu', 'menu'); h(['view'], 'Ajouter des jeux', 'addHub'); h(['a'], 'Importer', 'scanLaunchers'); }
+  else if (S.topFocus >= 0) { h(['b'], 'Retour', null); h(['lr'], 'Choisir', null); h(['a'], 'Ouvrir', null); }
   else if (S.view === 'home') {
-    h(['ud'], 'Consoles', null);
-    h(['a'], 'Ouvrir', 'open');
-    h(['view'], 'Ajouter des jeux', 'addHub');
     h(['menu'], 'Menu', 'menu');
+    h(['view'], 'Ajouter', 'addHub');
+    h(['lr'], 'Consoles', null);
+    h(['a'], 'Ouvrir', 'open');
   } else {
+    h(['menu'], 'Menu', 'menu');
+    h(['b'], 'Consoles', 'home');
     if (S.items.length) {
+      if (S.tabs.length > 1) h(S.device === 'pad' ? ['lb', 'rb'] : ['lb'], 'Catégories', 'tabNext');
+      h(['y'], 'Retourner', 'flip');
+      h(['x'], 'Détails', 'details');
       h(['lr'], 'Naviguer', null);
       h(['a'], 'Jouer', 'play');
-      h(['x'], 'Détails', 'details');
-      h(['y'], 'Retourner', 'flip');
-      if (S.tabs.length > 1) h(S.device === 'pad' ? ['lb', 'rb'] : ['lb'], 'Catégories', 'tabNext');
     }
-    h(['b'], 'Consoles', 'home');
-    h(['menu'], 'Menu', 'menu');
   }
-  $('#hints').innerHTML = H.map((x, i) => `<button class="hint" data-hint="${i}" ${x.act ? '' : 'tabindex="-1"'}>${x.btns.map(glyph).join('')}${esc(x.label)}</button>`).join('');
+  $('#hintList').innerHTML = H.map((x, i) => `<button class="hint" data-hint="${i}" ${x.act ? '' : 'tabindex="-1"'}>${x.btns.map(glyph).join('')}<span class="hint-label">${esc(x.label)}</span></button>`).join('');
   $$('#hints .hint').forEach((b) => b.addEventListener('click', () => { const a = H[+b.dataset.hint].act; if (a) action(a); }));
   $$('[data-glyph]').forEach((el) => {
     const k = ['menu', 'a', 'lb', 'rb'].includes(el.dataset.glyph) ? el.dataset.glyph : 'a';
     el.innerHTML = S.device === 'pad' ? glyph(k).replace(/<\/?span[^>]*>/g, '') : '';
     el.classList.toggle('is-a', S.device === 'pad' && k === 'a');
   });
-  const dev = S.device === 'pad' ? 'pad' : S.device === 'mouse' ? 'mouse' : 'kbd';
-  $('#inputInd').innerHTML = ICON[dev];
-  $('#inputInd').title = { pad: 'Manette active', mouse: 'Souris active', kbd: 'Clavier actif' }[dev];
+  renderStatus();
 }
 function setDevice(d) {
   if (S.device === d) return;
   S.device = d;
   document.body.classList.toggle('pad-mode', d === 'pad');
-  if (d === 'mouse') $$('.is-focus').forEach((x) => x.classList.remove('is-focus'));
+  if (d === 'mouse') { $$('.is-focus').forEach((x) => x.classList.remove('is-focus')); if (S.topFocus >= 0) { S.topFocus = -1; document.body.classList.remove('top-focus'); } }
   renderHints();
 }
 
 // ---------------------------------------------------------------- Clavier
 addEventListener('keydown', (e) => {
   setDevice('kbd');
+  if (S.topFocus >= 0 && SHELL_KEYS[e.key] && !e.ctrlKey && !e.altKey) { if (shellTopInput(SHELL_KEYS[e.key])) { e.preventDefault(); return; } } // SHELL : barre du haut
+  else if (S.topFocus >= 0) shellTopInput(e.key === 'Tab' ? 'tab' : 'other'); // SHELL : autre touche → rend la main
   const inInput = !!e.target.matches?.('input, select');
   if (e.key === 'F11') { e.preventDefault(); action('fullscreen'); return; }
   if (e.ctrlKey && (e.key === 'q' || e.key === 'Q')) { e.preventDefault(); rr.quit(); return; }
@@ -1687,6 +1683,8 @@ function pollPad(t) {
   pad.prev = b;
 }
 function onPadDir(dir, repeat) {
+  if (shellSplashActive()) return endSplash(); // SHELL
+  if (S.topFocus >= 0 && shellTopInput(dir)) return; // SHELL : barre du haut
   if (S.mode !== 'main') return spatial(dir);
   if (!S.lib.games.length) { if (!repeat) spatial(dir); return; }
   if (S.view === 'home') {
@@ -1699,6 +1697,8 @@ function onPadDir(dir, repeat) {
   else if (dir === 'up' && !repeat) openDetails();
 }
 function onPadBtn(btn) {
+  if (shellSplashActive()) return endSplash(); // SHELL
+  if (S.topFocus >= 0 && shellTopInput(btn === 'a' || btn === 'b' ? btn : 'other')) return; // SHELL : barre du haut
   if (S.mode === 'main' && !S.lib.games.length) {
     if (btn === 'a') { const el = document.activeElement; if (el?.matches?.('[data-nav]')) el.click(); else action('scanLaunchers'); }
     else if (btn === 'menu') action('menu');
@@ -1731,12 +1731,162 @@ function uiScale() {
 addEventListener('resize', uiScale);
 uiScale();
 
-// ---------------------------------------------------------------- Horloge
+// ---------------------------------------------------------------- SHELL : horloge, statut, barres système
 function tick() {
   const d = new Date();
   $('#date').textContent = d.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'short' });
-  $('#time').textContent = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+  const hm = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  $('#time').textContent = hm;
+  $('#time').dateTime = hm;
 }
+// Mise à jour alignée sur le changement de minute (pas de rafraîchissement inutile chaque seconde)
+let clockT;
+function startClock() {
+  clearTimeout(clockT); clearInterval(clockT);
+  tick();
+  const d = new Date();
+  clockT = setTimeout(() => { tick(); clockT = setInterval(tick, 60000); }, 60000 - (d.getSeconds() * 1000 + d.getMilliseconds()) + 30);
+}
+// Texte d'info à gauche de la barre du bas (appelé par l'accueil et l'écran jeux)
+function setFootInfo(text = '') {
+  const el = $('#footInfo');
+  if (el && el.textContent !== String(text)) el.textContent = text;
+}
+
+const SICON = {
+  wifi: '<svg viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 20 0"/><path d="M5 12.6a10 10 0 0 1 14 0"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M12 20h.01"/></svg>',
+  wifiOff: '<svg viewBox="0 0 24 24"><path d="M2 8.8a15 15 0 0 1 4.2-2.7M10.7 5.1A15 15 0 0 1 22 8.8"/><path d="M5 12.6a10 10 0 0 1 5.2-2.7M16.8 11a10 10 0 0 1 2.2 1.6"/><path d="M8.5 16.4a5 5 0 0 1 7 0"/><path d="M12 20h.01"/><path d="m3 3 18 18"/></svg>',
+};
+// Manette connectée (même si le périphérique actif est le clavier) : icône allumée + type
+function padInfo() {
+  const gp = [...(navigator.getGamepads?.() || [])].find((g) => g && g.connected);
+  if (!gp) return null;
+  return /054c|dualsense|dualshock|wireless controller|playstation/i.test(gp.id) ? 'ps' : 'xbox';
+}
+let battery = null;
+function renderStatus() {
+  const dev = S.device === 'pad' ? 'pad' : S.device === 'mouse' ? 'mouse' : 'kbd';
+  const pt = padInfo();
+  const padEl = $('#padInd');
+  padEl.hidden = !pt && dev !== 'pad';
+  if (!padEl.hidden) {
+    const type = (pt || S.padType) === 'ps' ? 'PS' : 'Xbox';
+    padEl.innerHTML = `${ICON.pad}<b>${type}</b>`;
+    padEl.classList.toggle('is-active', dev === 'pad');
+    padEl.title = `Manette ${type} ${dev === 'pad' ? 'active' : 'connectée'}`; padEl.setAttribute('aria-label', padEl.title);
+  }
+  const ind = $('#inputInd');
+  ind.hidden = dev === 'pad';
+  ind.innerHTML = ICON[dev];
+  ind.title = { pad: 'Manette active', mouse: 'Souris active', kbd: 'Clavier actif' }[dev]; ind.setAttribute('aria-label', ind.title);
+  const on = navigator.onLine !== false;
+  const net = $('#netInd');
+  net.innerHTML = on ? SICON.wifi : SICON.wifiOff;
+  net.classList.toggle('off', !on);
+  net.title = on ? 'Connecté à Internet' : 'Hors ligne'; net.setAttribute('aria-label', net.title);
+  renderBattery(battery);
+}
+// Batterie : uniquement sur un PC portable (un PC fixe rapporte « 100 %, en charge, durée infinie »)
+function renderBattery(b) {
+  const el = $('#batInd');
+  const none = !b || (b.charging && b.level >= 1 && b.chargingTime === 0 && b.dischargingTime === Infinity);
+  el.hidden = none;
+  if (none) return;
+  const pct = Math.round(b.level * 100);
+  const low = !b.charging && pct <= 15;
+  el.classList.toggle('low', low);
+  el.innerHTML = `<span class="bat-pct">${pct}%</span><svg viewBox="0 0 28 14"><rect x="1" y="1" width="23" height="12" rx="3"/><path d="M26.5 5v4"/><rect class="bat-fill" x="3" y="3" width="${(19 * b.level).toFixed(1)}" height="8" rx="1.5"/>${b.charging ? '<path class="bat-bolt" d="M13.5 2.5 10 7.5h4l-2 4"/>' : ''}</svg>`;
+  el.title = `Batterie ${pct} %${b.charging ? ' · en charge' : ''}`; el.setAttribute('aria-label', el.title);
+}
+navigator.getBattery?.().then((b) => {
+  battery = b;
+  ['levelchange', 'chargingchange', 'chargingtimechange', 'dischargingtimechange'].forEach((ev) => b.addEventListener(ev, () => renderBattery(b)));
+  renderBattery(b);
+}).catch(() => {});
+addEventListener('online', renderStatus);
+addEventListener('offline', renderStatus);
+addEventListener('gamepadconnected', renderStatus);
+addEventListener('gamepaddisconnected', () => setTimeout(renderStatus, 50));
+
+// Barre du haut à la manette / au clavier : ↑ depuis la ligne la plus haute de l'écran → shellFocusTop()
+const topBtns = () => $$('.topbar .sys-btn').filter((b) => b.offsetParent !== null && !b.hidden);
+function shellTopSet(i) {
+  const list = topBtns();
+  if (!list.length) return shellLeaveTop();
+  S.topFocus = clamp(i, 0, list.length - 1);
+  $$('.is-focus').forEach((x) => x.classList.remove('is-focus'));
+  const el = list[S.topFocus];
+  el.focus({ preventScroll: true });
+  if (S.device !== 'mouse') el.classList.add('is-focus');
+}
+function shellFocusTop() {
+  if (S.mode !== 'main') return false;
+  const list = topBtns();
+  if (!list.length) return false;
+  // Sur l'écran jeux, on arrive sur la 1re icône système (pas sur « retour »)
+  const first = list.findIndex((b) => !b.classList.contains('back-btn'));
+  document.body.classList.add('top-focus');
+  shellTopSet(first < 0 ? 0 : first);
+  sfx('move');
+  renderHints();
+  return true;
+}
+function shellLeaveTop(silent = false) {
+  if (S.topFocus < 0) return;
+  S.topFocus = -1;
+  document.body.classList.remove('top-focus');
+  $$('.topbar .is-focus').forEach((x) => x.classList.remove('is-focus'));
+  if (document.activeElement?.closest?.('.topbar')) document.activeElement.blur();
+  if (!silent) sfx('back');
+  renderHints();
+  typeof onShellLeave === 'function' && onShellLeave();
+}
+function shellTopActivate() {
+  const el = topBtns()[S.topFocus];
+  shellLeaveTop(true);
+  el?.click();
+}
+// Entrées pendant que la barre du haut a le focus. Retourne true si l'entrée est consommée.
+function shellTopInput(k) {
+  if (S.topFocus < 0) return false;
+  if (S.mode !== 'main') { shellLeaveTop(true); return false; }
+  const n = topBtns().length;
+  switch (k) {
+    case 'left': if (S.topFocus > 0) { shellTopSet(S.topFocus - 1); sfx('move'); } return true;
+    case 'right': if (S.topFocus < n - 1) { shellTopSet(S.topFocus + 1); sfx('move'); } return true;
+    case 'up': return true;
+    case 'down': case 'b': shellLeaveTop(); return true;
+    case 'a': shellTopActivate(); return true;
+    default: shellLeaveTop(true); return false; // autre touche : on rend la main à l'écran et on la laisse passer
+  }
+}
+const SHELL_KEYS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'up', ArrowDown: 'down', Escape: 'b', Backspace: 'b', Enter: 'a', ' ': 'a' };
+
+// Écran de démarrage : ≤ 1,2 s, sautable par n'importe quelle touche / clic / bouton, absent si reduceMotion
+let splashT = null;
+const shellSplashActive = () => !!splashT;
+function shellSplash() {
+  const el = $('#splash');
+  if (!el) return;
+  if (reduceMotion) { el.remove(); return; }
+  el.hidden = false; el.classList.remove('out'); void el.offsetWidth; el.classList.add('play');
+  clearTimeout(splashT);
+  splashT = setTimeout(endSplash, 850);
+}
+function endSplash() {
+  const el = $('#splash');
+  clearTimeout(splashT); splashT = null;
+  if (!el || el.hidden) return;
+  el.classList.add('out');
+  setTimeout(() => { el.hidden = true; el.classList.remove('play', 'out'); }, reduceMotion ? 0 : 320);
+}
+function skipSplash(e) {
+  if (!shellSplashActive()) return;
+  e?.preventDefault?.(); e?.stopImmediatePropagation?.();
+  endSplash();
+}
+addEventListener('keydown', skipSplash, true);
+addEventListener('mousedown', skipSplash, true);
 
 // ---------------------------------------------------------------- Mises à jour
 function renderUpdate(u) {
@@ -1784,12 +1934,12 @@ rr.onProgress(({ id, msg, done }) => {
 rr.onRunning(({ running, name }) => {
   if (!running) toast(name ? `Session de ${name} terminée` : 'Session terminée');
 });
-rr.onVisible((v) => { if (v) { tick(); sfx('open'); } });
+rr.onVisible((v) => { if (v) { startClock(); sfx('open'); } });
 
 // ---------------------------------------------------------------- Démarrage
 (async function init() {
   initMotes();
-  tick(); setInterval(tick, 10000);
+  shellSplash(); startClock();
   measure();
   applyLib(await rr.getLibrary());
   measure();
