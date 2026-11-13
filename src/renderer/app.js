@@ -163,6 +163,7 @@ function bannerOf(g) {
 }
 // Visuels tirés au hasard une fois par lancement (S.home.art) : même image en revenant sur une console
 function homeArt(id) {
+  if (typeof fixesHomeArt === 'function') return fixesHomeArt(id); // FIXES : images nettes seulement (features/fixes.js)
   S.home.art ||= {};
   const games = id === 'all' ? S.lib.games : S.lib.games.filter((g) => g.platform === id);
   const ids = new Set(games.map((g) => g.id));
@@ -199,7 +200,7 @@ function tileHTML(it) {
   const logo = S.platLogo[it.id];
   const mark = logo ? `<img class="t-logo" crossorigin="anonymous" src="${platUrl(logo)}" alt="" />`
     : `<b class="t-name" style="--fit:${Math.min(1, 6 / Math.max(3, (p.short || p.name).length)).toFixed(2)}">${esc(p.short || p.name)}</b>`;
-  return `<div class="t-in" style="--pc:${p.color || '#3C91E6'}">${a.tile ? `<img class="t-art" src="${a.tile}" alt="" decoding="async" />` : ''}`
+  return `<div class="t-in" style="--pc:${p.color || '#3C91E6'}">${a.tile ? `<img class="t-art${a.tileCls ? ' ' + a.tileCls : ''}" src="${a.tile}" alt="" decoding="async" />` : ''}` // FIXES : tileCls
     + `<div class="t-tint"></div><div class="t-shade"></div>${mark}</div>`;
 }
 // Logo très clair (blanc sur transparent) : illisible sur le panneau clair → on le fonce
@@ -356,21 +357,23 @@ function setCapLogo(id) {
 // Fond + panneau : préchargement puis fondu enchaîné ; la dernière demande gagne
 let homeArtTok = 0, homeArtCur = null;
 function setHomeArt(id) {
-  const url = id === 'add' ? '' : homeArt(id).bg;
-  const key = url || (id === 'add' ? '#add' : '#none');
+  const art = id === 'add' ? null : homeArt(id); // FIXES : art.decorate (photo de console / mosaïque) + art.key
+  const url = art ? art.bg : '';
+  const deco = art && art.decorate;
+  const key = (art && art.key) || url || (id === 'add' ? '#add' : '#none');
   if (key === homeArtCur) return;
   homeArtCur = key;
   const tok = ++homeArtTok;
   const apply = () => {
     if (tok !== homeArtTok) return;
-    const style = url ? `background-image:url("${url}")` : '';
-    const cls = url ? '' : ' is-brand';
+    const style = url && !deco ? `background-image:url("${url}")` : '';
+    const cls = url || deco ? '' : ' is-brand';
     for (const [root, c] of [[$('#homeScene'), 'h-bg'], [$('#homePanel'), 'h-pbg']]) {
       const old = $$(`.${c}`, root);
       const el = document.createElement('div');
       el.className = c + cls;
       el.style.cssText = style;
-      markLowRes(el, url);
+      if (deco) deco(el, c === 'h-pbg'); else markLowRes(el, url); // FIXES
       root.appendChild(el);
       old.forEach((o) => { o.classList.add('out'); setTimeout(() => o.remove(), HOME_FADE + 60); });
       if (HOME_FADE) el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: HOME_FADE, easing: 'ease-out' });
@@ -1216,6 +1219,8 @@ async function toggleFav(id = S.items[S.sel]?.id) {
 }
 
 // ---------------------------------------------------------------- Overlays & focus spatial
+// IMPORTER : libellés des launchers importés
+const SRC_LABEL = { xbox: 'Xbox', ea: 'EA app', ubisoft: 'Ubisoft Connect', battlenet: 'Battle.net', amazon: 'Amazon Games', itch: 'itch.io' };
 const OVERLAYS = { details: '#details', add: '#addDialog', hub: '#addHub', scan: '#scan', menu: '#menu', settings: '#settings', prompt: '#prompt', ingame: '#ingame' };
 // Affichage / masquage des overlays avec une courte sortie animée (plus rapide que l'entrée)
 function showOverlayEl(el) {
@@ -1319,7 +1324,7 @@ function renderDetails() {
   const p = plat(g.platform);
   $('#dBg').style.backgroundImage = heroOf(g) ? `url("${heroOf(g)}")` : 'none';
   markLowRes($('#dBg'), heroOf(g));
-  $('#dPlatform').innerHTML = `<i style="background:${p.color}"></i>${esc(p.name)}${g.kind === 'steam' ? ' · Steam' : g.kind === 'epic' ? ' · Epic Games' : g.source === 'gog' ? ' · GOG' : g.kind === 'rom' ? ' · Émulation' : ''}`;
+  $('#dPlatform').innerHTML = `<i style="background:${p.color}"></i>${esc(p.name)}${g.kind === 'steam' ? ' · Steam' : g.kind === 'epic' ? ' · Epic Games' : g.source === 'gog' ? ' · GOG' : SRC_LABEL[g.source] ? ' · ' + SRC_LABEL[g.source] : g.kind === 'rom' ? ' · Émulation' : ''}`;
   const logo = $('#dLogo');
   if (g.media?.logo) { logo.src = mediaUrl(g, g.media.logo); logo.alt = g.name; logo.hidden = false; $('#dTitle').hidden = true; }
   else { logo.hidden = true; $('#dTitle').hidden = false; }
@@ -1852,7 +1857,7 @@ async function runScan(mode) {
     if (!folders?.length) return;
   }
   closeAll();
-  $('#scanTitle').textContent = { launchers: 'Import Steam, Epic & GOG', folders: 'Scan des dossiers', pc: 'Scan de tout le PC' }[mode];
+  $('#scanTitle').textContent = { launchers: 'Import des launchers installés', folders: 'Scan des dossiers', pc: 'Scan de tout le PC' }[mode];
   $('#scanRunning').hidden = false;
   $('#scanResults').hidden = true;
   $('#scanFound').textContent = '0'; $('#scanDirs').textContent = '0'; $('#scanPath').textContent = 'Préparation…';
@@ -1893,7 +1898,7 @@ function renderScanResults(res) {
     if (!groups.has(it.platform)) groups.set(it.platform, []);
     groups.get(it.platform).push(it);
   }
-  const src = (it) => ({ steam: 'STEAM', epic: 'EPIC', gog: 'GOG', scan: 'DOSSIER' }[it.source] || (it.kind === 'rom' ? 'ROM' : 'EXE'));
+  const src = (it) => ({ steam: 'STEAM', epic: 'EPIC', gog: 'GOG', scan: 'DOSSIER', xbox: 'XBOX', ea: 'EA', ubisoft: 'UBISOFT', battlenet: 'BATTLE.NET', amazon: 'AMAZON', itch: 'ITCH.IO' }[it.source] || (it.kind === 'rom' ? 'ROM' : 'EXE'));
   $('#scanList').innerHTML = [...groups.entries()].map(([pid, list]) => `
     <div class="scan-group"><i style="background:${plat(pid).color}"></i>${esc(plat(pid).name)} · ${list.length}</div>
     ${list.map((it) => `

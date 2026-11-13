@@ -1,0 +1,85 @@
+/* Module PROFILES — avatars, barre du haut, « Qui joue ? », édition, réglages. Couleurs d'interface : tokens de theme.css ;
+   --pf-c = couleur choisie par l'utilisateur pour son profil (donnée, pas une couleur d'interface). */
+.pf-av { display: inline-grid; place-items: center; flex: none; width: 1em; height: 1em; border-radius: 50%; overflow: hidden; background: var(--pf-c, var(--accent)); }
+.pf-av .pf-svg, .pf-av img { width: 100%; height: 100%; display: block; object-fit: cover; }
+
+/* Barre du haut : avatar rond tout à gauche */
+.topbar .sys-btn.pf-top { padding: 0; overflow: visible; background: transparent; box-shadow: none; border: 0; }
+.topbar .sys-btn.pf-top .pf-av { width: 100%; height: 100%; font-size: inherit; box-shadow: 0 0 0 2px rgba(var(--bg-rgb), .85), 0 4px 12px rgba(0, 0, 0, .25); transition: box-shadow var(--dur-fast); }
+.topbar .sys-btn.pf-top:hover .pf-av { box-shadow: 0 0 0 3px var(--accent); }
+.topbar .sys-btn.pf-top.is-focus, .topbar .sys-btn.pf-top:focus-visible { background: transparent; }
+.topbar .sys-btn.pf-top.is-focus .pf-av, .topbar .sys-btn.pf-top:focus-visible .pf-av { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--accent); }
+body[data-view="home"] .topbar .sys-btn.pf-top { background: transparent; backdrop-filter: none; }
+
+/* Menu */
+.menu-item .pf-av.pf-mi { font-size: 26px; }
+.menu-item .pf-mi-name { margin-left: auto; color: var(--text-2); font-size: .85em; max-width: 12em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* « Qui joue ? » */
+.overlay.pf-who { display: grid; place-items: center; background: rgba(var(--bg-rgb), .94); padding: calc(var(--top-h, 80px)) 40px calc(var(--bottom-h, 70px) + 20px); }
+.pf-who-in { display: flex; flex-direction: column; align-items: center; gap: clamp(24px, 5vh, 56px); max-width: 100%; animation: pfIn 260ms var(--ease-out, ease-out); }
+.pf-who h2 { font-family: var(--font-display); font-weight: 400; font-size: clamp(26px, 4vh, 52px); color: var(--fg); margin: 0; letter-spacing: .01em; }
+.pf-row { display: flex; flex-wrap: wrap; justify-content: center; gap: clamp(16px, 2.6vw, 48px); max-width: 90vw; }
+.pf-tile { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 12px; background: none; border: 0; border-radius: 20px; color: var(--fg); cursor: pointer; font: inherit; transition: transform var(--dur-fast); }
+.pf-tile .pf-big { font-size: clamp(96px, 15vh, 190px); box-shadow: 0 10px 28px rgba(0, 0, 0, .22); transition: box-shadow var(--dur-fast), transform var(--dur-fast); }
+.pf-tile .pf-name { font-family: var(--font-display); font-size: clamp(16px, 2vh, 26px); max-width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pf-tile .pf-sub { font-size: clamp(12px, 1.4vh, 17px); color: var(--text-2); }
+.pf-tile.is-focus, .pf-tile:focus-visible, .pf-tile:focus { box-shadow: none !important; outline: none !important; }
+.pf-tile:hover .pf-big, .pf-tile.is-focus .pf-big, .pf-tile:focus-visible .pf-big { box-shadow: 0 0 0 5px var(--bg), 0 0 0 10px var(--accent), 0 14px 34px rgba(0, 0, 0, .28); transform: scale(1.05); }
+.pf-tile.is-focus .pf-name, .pf-tile:focus-visible .pf-name { color: var(--accent-text); }
+.pf-tile.is-cur .pf-sub::after { content: ' · actif'; }
+.pf-add .pf-plus { background: rgba(var(--fg-rgb), .06); border: 3px dashed rgba(var(--fg-rgb), .35); box-shadow: none; }
+.pf-add .pf-plus svg { width: 40%; height: 40%; stroke: var(--fg); fill: none; stroke-width: 2; stroke-linecap: round; }
+.pf-who-foot { display: flex; gap: 12px; }
+@keyframes pfIn { from { opacity: 0; transform: scale(.97); } to { opacity: 1; transform: none; } }
+
+/* Édition */
+.pf-panel { width: min(760px, 92vw); }
+.pf-ed-head { display: flex; align-items: center; gap: 22px; margin-bottom: 8px; }
+.pf-ed-head .pf-big { font-size: 96px; box-shadow: 0 8px 22px rgba(0, 0, 0, .2); }
+.pf-ed-hd { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.pf-ed-hd h2 { margin: 0; }
+.pf-field { display: flex; flex-direction: column; gap: 4px; }
+.pf-field input { font: inherit; font-size: 18px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface-1); color: var(--fg); }
+.pf-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 10px; }
+.pf-pick { aspect-ratio: 1; border-radius: 50%; border: 0; padding: 0; background: none; cursor: pointer; display: grid; place-items: center; position: relative; color: var(--fg); transition: transform var(--dur-fast), box-shadow var(--dur-fast); }
+.pf-pick .pf-svg, .pf-pick img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.pf-pick.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--accent); }
+.pf-pick:hover { transform: scale(1.06); }
+.pf-img { background: rgba(var(--fg-rgb), .07); border: 2px dashed rgba(var(--fg-rgb), .3); font-size: 11px; }
+.pf-img svg { width: 38%; height: 38%; stroke: currentColor; fill: none; stroke-width: 1.8; margin-top: -12px; }
+.pf-img span { position: absolute; bottom: 9px; }
+.pf-img.on span, .pf-img img + span { display: none; }
+.pf-colors { display: flex; flex-wrap: wrap; gap: 12px; }
+.pf-col { width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--pf-c); cursor: pointer; transition: transform var(--dur-fast); }
+.pf-col.on { box-shadow: 0 0 0 3px var(--bg), 0 0 0 6px var(--fg); }
+.pf-col:hover { transform: scale(1.08); }
+.pf-actions { display: flex; align-items: center; gap: 10px; margin-top: 18px; }
+.pf-sp { flex: 1; }
+
+/* Réglages */
+.pf-set-row { display: flex; align-items: center; gap: 14px; }
+.pf-set-row > div:not(.pf-set-act) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pf-set-row .pf-sm { font-size: 40px; }
+.pf-set-act { display: flex; gap: 8px; }
+.pf-tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--accent-soft, rgba(var(--fg-rgb), .1)); color: var(--accent-text); font-size: 12px; font-weight: 600; vertical-align: middle; }
+
+/* Menu en jeu */
+.pf-ig { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; margin-right: 14px; color: var(--fg); font-weight: 600; font-size: calc(15px * var(--ui, 1)); }
+.pf-ig .pf-av { font-size: calc(32px * var(--ui, 1)); }
+
+/* Page du jeu : total tous profils */
+#dStats .pf-total b { color: var(--text-2); }
+
+/* Statistiques : pastille profil / tous */
+#stats .pf-st { width: auto; display: inline-flex; align-items: center; gap: 8px; padding: 0 12px 0 4px; border-radius: 999px; font: inherit; font-size: 14px; white-space: nowrap; }
+#stats .pf-st[hidden] { display: none; }
+#stats .pf-st .pf-av { font-size: 26px; }
+#stats .pf-st-all { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: rgba(var(--fg-rgb), .1); }
+#stats .pf-st-all svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pf-who-in { animation: none; }
+  .pf-tile .pf-big, .pf-pick, .pf-col { transition: none; }
+  .pf-tile.is-focus .pf-big, .pf-tile:hover .pf-big, .pf-pick:hover, .pf-col:hover { transform: none; }
+}

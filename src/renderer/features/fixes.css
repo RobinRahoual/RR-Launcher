@@ -1,0 +1,33 @@
+/* Module FIXES — fonds de l'accueil sans image de jeu assez grande (voir features/fixes.js).
+   --fx-pc = couleur de la console (donnée de plateforme, pas une couleur d'interface). */
+
+/* ---------- Photo de la console, nette, sur sa couleur ---------- */
+.h-bg.fx-plat, .h-pbg.fx-plat {
+  background:
+    radial-gradient(ellipse 60% 75% at 66% 42%, rgba(var(--fg-rgb), .10), transparent 70%),
+    linear-gradient(135deg, color-mix(in srgb, var(--fx-pc, var(--accent)) 78%, var(--accent-deep)), color-mix(in srgb, var(--fx-pc, var(--accent)) 30%, #000));
+}
+.fx-plat-img {
+  position: absolute; left: 64%; top: 49%; transform: translate(-50%, -50%);
+  width: var(--fx-w); height: var(--fx-h);
+  max-width: 54vw; max-height: 66%; object-fit: contain;
+  filter: drop-shadow(0 2.4vh 3vh rgba(0, 0, 0, .45));
+}
+/* photo opaque (non détourée) : encadrée, coins arrondis */
+.fx-photo .fx-plat-img { border-radius: max(6px, .6vw); box-shadow: 0 2.4vh 5vh rgba(0, 0, 0, .45); filter: none; width: auto; height: auto; max-width: min(var(--fx-w), 54vw); max-height: min(var(--fx-h), 66%); }
+/* dans le panneau en biais, la photo reste à la même place (même géométrie que le fond) */
+.h-pbg.fx-plat .fx-plat-img { opacity: .9; }
+
+/* ---------- Mosaïque inclinée des jaquettes ---------- */
+.h-bg.fx-mosaic, .h-pbg.fx-mosaic { background: color-mix(in srgb, var(--fx-pc, var(--accent-deep)) 40%, #0b0b10); overflow: hidden; }
+.fx-mos-grid {
+  position: absolute; left: 50%; top: 50%; width: 150vw;
+  display: grid; grid-template-columns: repeat(9, 1fr); gap: 1.1vw;
+  transform: translate(-50%, -50%) rotate(-12deg);
+}
+.fx-mos-grid img { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; border-radius: max(4px, .4vw); box-shadow: 0 1vh 2vh rgba(0, 0, 0, .35); }
+.h-bg.fx-mosaic::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--fx-pc, var(--accent-deep)) 35%, transparent)); }
+
+/* ---------- Tuiles ---------- */
+.t-art.fx-cover { object-position: center 22%; }
+.t-art.fx-contain { object-fit: contain; padding: 14%; filter: drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .4)); }

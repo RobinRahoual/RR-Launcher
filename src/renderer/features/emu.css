@@ -1,0 +1,74 @@
+/* Module EMU — assistant émulateurs, options de lancement, sauvegardes d'état (tokens de theme.css uniquement) */
+.emu-wiz, .emu-lo, .emu-keys { width: min(980px, 100%); display: flex; flex-direction: column; max-height: calc(100vh / var(--ui, 1) - 120px); }
+.emu-lo { width: min(760px, 100%); }
+.ew-list, .elo-list, .ek-table { overflow: auto; margin: 4px -6px 0; padding: 4px 6px; flex: 1 1 auto; min-height: 0; }
+.ew-row { display: grid; grid-template-columns: 210px 1fr auto; gap: 16px; align-items: start; padding: 14px 4px; border-top: 1px solid var(--line); }
+.ew-row:first-child { border-top: 0; }
+.ew-name { display: flex; gap: 10px; align-items: flex-start; }
+.ew-name > i { width: 10px; height: 10px; border-radius: 50%; margin-top: 6px; flex: 0 0 auto; }
+.ew-name b { display: block; font-family: 'Russo One', sans-serif; font-weight: 400; font-size: 15px; }
+.ew-name .dim { font-size: 13px; }
+.ew-body { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.ew-st { font-size: 14px; font-weight: 600; display: inline-flex; align-items: center; gap: 8px; }
+.ew-st.ok { color: var(--fg); }
+.ew-st.ok .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.ew-st.none { color: var(--text-2); }
+.ew-note { margin: 0; font-size: 13px; }
+.ew-opts { display: flex; flex-wrap: wrap; gap: 6px; }
+.ew-opt { border: 1px solid var(--line-strong); background: transparent; color: var(--text-2); border-radius: 999px; min-height: 32px; padding: 0 12px; font: inherit; font-size: 13px; font-weight: 600; }
+.ew-opt small { font-size: 11px; color: var(--accent-text); margin-left: 4px; }
+.ew-opt[aria-checked="true"] { background: var(--sel-bg); color: var(--sel-fg); border-color: var(--sel-bg); }
+.ew-opt[aria-checked="true"] small { color: inherit; }
+.ew-act { display: flex; flex-direction: column; gap: 6px; align-items: stretch; min-width: 170px; }
+.ew-prog { display: flex; flex-direction: column; gap: 5px; }
+.ew-bar { height: 8px; border-radius: 999px; background: var(--surface-3); overflow: hidden; position: relative; }
+.ew-bar i { position: absolute; inset: 0; background: var(--accent); transform-origin: left center; transition: transform .2s linear; }
+.ew-prog.is-indet .ew-bar i { transform: scaleX(.3) !important; animation: ewIndet 1.2s ease-in-out infinite; }
+@keyframes ewIndet { from { transform: translateX(-35%) scaleX(.3); } to { transform: translateX(110%) scaleX(.3); } }
+.ew-prog.is-err .ew-bar i { background: var(--err-fg); transform: scaleX(1) !important; opacity: .5; }
+.ew-pl { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; color: var(--text-2); }
+.ew-pl .ew-mo { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ew-prog.is-err .ew-pl { color: var(--fg); }
+.ew-bios { display: grid; grid-template-columns: 20px 1fr auto; gap: 8px; align-items: start; font-size: 13px; padding: 8px 10px; border-radius: 10px; background: var(--surface-2); color: var(--text-2); }
+.ew-bios .ico { width: 18px; height: 18px; margin-top: 1px; }
+.ew-bios.ok .ico { color: var(--accent-text); }
+.ew-bios.warn { background: var(--accent-soft); color: var(--fg); }
+.ew-bios.warn .ico { color: var(--accent-text); }
+.ew-bios b { color: var(--fg); font-weight: 600; }
+.ew-bios code, .elo-path, .elo-prev code { font-size: 12px; word-break: break-all; }
+.ew-bios:not(.warn):not(.opt) { grid-template-columns: 20px 1fr; }
+.ew-foot { display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; margin-top: 8px; border-top: 1px solid var(--line); }
+.emu-intro-act { margin: -4px 0 14px; }
+.emu-intro-act .btn, #emuWizBtn { display: inline-flex; align-items: center; gap: 8px; }
+.emu-intro-act .ico { width: 18px; height: 18px; }
+/* Écran jeux : bouton Configurer, badge cliquable */
+.emu-cap .ico { width: 20px; height: 20px; }
+#capBadges .badge.warn { cursor: pointer; }
+/* Options de lancement */
+.elo-list .setting { padding: 12px 0; }
+.elo-list input, .elo-list textarea { width: 100%; font: inherit; font-size: 14px; }
+.elo-list textarea { resize: vertical; min-height: 56px; font-family: ui-monospace, Consolas, monospace; }
+.elo-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.elo-path { display: block; color: var(--text-2); }
+.elo-prev { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 10px; background: var(--surface-2); margin-top: 6px; }
+.elo-prev .dim { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; }
+.emu-seg button { min-height: 34px; }
+.d-tools .tool.is-set { color: var(--accent-text); }
+/* Menu en jeu */
+.emu-slot { cursor: default; }
+.emu-slot .ig-label { flex: 1 1 auto; }
+.emu-slot b { min-width: 2ch; text-align: center; font-variant-numeric: tabular-nums; font-size: 17px; }
+.emu-slot-b { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line-strong); background: transparent; color: inherit; display: inline-grid; place-items: center; padding: 0; }
+.emu-slot-b svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.emu-slot-b.is-focus, .emu-slot-b:focus-visible { background: var(--sel-bg); color: var(--sel-fg); border-color: var(--sel-bg); outline: none; }
+.emu-autosave { display: flex; gap: 8px; align-items: center; font-size: 14px; margin: 10px 0 0; color: var(--fg); }
+.emu-autosave .ico { width: 18px; height: 18px; color: var(--accent-text); flex: 0 0 auto; }
+/* Raccourcis */
+.ek-h, .ek-r { display: grid; grid-template-columns: 1.3fr repeat(4, 1fr); gap: 8px; align-items: center; padding: 6px 0; }
+.ek-h { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); border-bottom: 1px solid var(--line); }
+.ek-r { border-bottom: 1px solid var(--line); font-size: 14px; }
+.ek-r input { width: 100%; min-width: 0; font: inherit; font-size: 13px; }
+.ew-row .ico, .ew-bios .ico, .emu-slot .ico { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ew-list { container-type: inline-size; }
+@container (max-width: 820px) { .ew-row { grid-template-columns: 160px 1fr; } .ew-act { grid-column: 2; flex-direction: row; flex-wrap: wrap; min-width: 0; } }
+@media (prefers-reduced-motion: reduce) { .ew-bar i { transition: none; } .ew-prog.is-indet .ew-bar i { animation: none; transform: scaleX(1) !important; opacity: .45; } }

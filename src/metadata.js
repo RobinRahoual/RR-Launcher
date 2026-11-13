@@ -103,6 +103,13 @@ async function steamSearch(term) {
     .map((i) => ({ source: 'steam', appid: i.id, name: i.name, thumb: i.tiny_image }));
 }
 
+// HOME2 : catégories Steam (ids 24 / 37 / 39 = écran partagé, coop / JcJ en écran partagé) → g.categories, g.localMulti, g.players
+function coopInfo(steam) {
+  const cats = steam.categories || [];
+  const local = cats.some((c) => [24, 37, 39].includes(c.id) || /shared\/split|split.?screen|local (co-?op|multi)|écran (partagé|divisé)/i.test(c.description || ''));
+  return { categories: cats.map((c) => c.description).filter(Boolean).slice(0, 12), localMulti: local, players: local ? 2 : 1 };
+}
+
 async function steamDetails(appid) {
   // Certaines fiches échouent avec un pays/langue donné : on réessaie sans.
   const variants = [`l=french&cc=FR`, `l=french`, `l=english&cc=US`];
@@ -285,14 +292,17 @@ function removeWhiteBackground(file, outFile) {
   return true;
 }
 
-async function platformImage(wikiTitle, dir, id) {
+async function platformImage(wikiTitle, dir, id, opts = { minWidth: 1280 }) {
   const media = await getJson(`https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(wikiTitle)}`);
   const items = (media?.items || []).filter((it) => it.type === 'image' && it.srcset?.length && !/\.svg/i.test(it.title || '')
     && !/logo|wordmark|icon|map|chart|sales|controller|manette|comparison|motherboard|screenshot|diagram|box art/i.test(it.title || ''));
   for (const it of items.slice(0, 4)) {
     const best = [...it.srcset].sort((a, b) => parseFloat(b.scale) - parseFloat(a.scale))[0];
     const url = best.src.startsWith('//') ? 'https:' + best.src : best.src;
-    const raw = await downloadFirst([url], dir, `${id}-raw`);
+    // FIXES : miniature Wikimedia plus grande d'abord (…/640px-X.jpg → …/1280px-X.jpg), sinon celle proposée
+    const big = opts.minWidth && /\/(\d+)px-[^/]+$/.test(url) && Number(url.match(/\/(\d+)px-[^/]+$/)[1]) < opts.minWidth
+      ? url.replace(/\/(\d+)px-([^/]+)$/, `/${opts.minWidth}px-$2`) : null;
+    const raw = await downloadFirst(big ? [big, url] : [url], dir, `${id}-raw`);
     if (!raw) continue;
     const out = `${id}.png`;
     try {
@@ -521,6 +531,7 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
     out.genres = (steam.genres || []).map((g) => g.description).slice(0, 4);
     out.metacritic = steam.metacritic?.score || null;
     out.screenshotUrls = (steam.screenshots || []).slice(0, 4).map((s) => s.path_full);
+    Object.assign(out, coopInfo(steam)); // HOME2 : catégories Steam → multijoueur local
   }
 
   // SteamGridDB en complément (ou en source principale pour les jeux hors Steam)
@@ -597,4 +608,4 @@ async function upgradeHero(game, dir, settings, platformTgdb) {
   return downloadBest(urls, dir, `hero-hd-${Date.now().toString(36)}`, { minWidth: 1280 });
 }
 
-module.exports = { search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };
+module.exports = { steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };

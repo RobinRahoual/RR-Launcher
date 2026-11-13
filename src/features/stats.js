@@ -266,12 +266,13 @@ function init(ctx) {
 
   hub.on('session:end', (id, s) => {
     if (!s || !(s.seconds >= MIN_SECONDS)) return;
-    db.sessions.push({ id, start: s.start, end: s.end, seconds: s.seconds });
+    db.sessions.push({ id, start: s.start, end: s.end, seconds: s.seconds, ...(ctx.profiles ? { profile: ctx.profiles.active() } : {}) }); // PROFILES : profil de la session
     save();
     ctx.send('x:stats:changed', {});
   });
-  ipcMain.handle('x:stats:get', (_e, o = {}) => aggregate(db.sessions, { period: o.period, offset: o.offset, gameInfo: info }));
-  ipcMain.handle('x:stats:game', (_e, id) => gameActivity(db.sessions, String(id)));
+  const scoped = () => (ctx.profiles ? ctx.profiles.filterSessions(db.sessions) : db.sessions); // PROFILES : profil actif ou « Tous les profils »
+  ipcMain.handle('x:stats:get', (_e, o = {}) => aggregate(scoped(), { period: o.period, offset: o.offset, gameInfo: info }));
+  ipcMain.handle('x:stats:game', (_e, id) => gameActivity(scoped(), String(id)));
   ipcMain.handle('x:stats:clear', () => { db.sessions = []; db.migrated = true; save(); ctx.send('x:stats:changed', {}); return true; });
   ipcMain.handle('x:stats:export', async () => {
     const { dialog } = require('electron');

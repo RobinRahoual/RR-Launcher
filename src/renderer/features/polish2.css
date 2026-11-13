@@ -1,0 +1,11 @@
+/* Module polish2 — batterie de la manette (barre du haut) */
+.status-ind .pad-bat { display: inline-flex; align-items: center; gap: 6px; color: rgba(var(--fg-rgb), .86); }
+.status-ind .pad-bat[hidden] { display: none; }
+.status-ind .pad-bat { text-shadow: 0 1px 6px rgba(0, 0, 0, .45); }
+.status-ind .pad-bat svg { filter: drop-shadow(0 1px 4px rgba(0, 0, 0, .45)); }
+.status-ind .pad-bat svg { width: calc(var(--sys) * .62); height: calc(var(--sys) * .31); display: block; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.status-ind .pad-bat .pb-cell { fill: rgba(var(--fg-rgb), .2); stroke: none; }
+.status-ind .pad-bat .pb-cell.on { fill: currentColor; }
+.status-ind .pad-bat b { font-size: clamp(11px, 1.2vh, 20px); font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .02em; white-space: nowrap; }
+.status-ind .pad-bat.low { color: var(--warn-fg); }
+.status-ind .pad-bat.critical { color: var(--err-fg); }

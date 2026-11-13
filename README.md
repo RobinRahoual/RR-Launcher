@@ -14,6 +14,12 @@ Consoles gérées : Switch, Wii U, Wii, GameCube, N64, SNES, NES, Game Boy / Col
 
 Pour chaque console, choisis l'exécutable de l'émulateur (Réglages → Consoles & émulateurs, ou au premier lancement d'un jeu). Les arguments sont préremplis pour RPCS3, PCSX2, DuckStation, Dolphin, Cemu, Ryujinx, Eden/Citron, PPSSPP, xemu, Xenia, Azahar/Citra, melonDS, mGBA, Mesen, Snes9x, Project64, simple64, ares, Flycast, BlastEm, Vita3K et RetroArch ; `{rom}` est remplacé par le chemin du jeu.
 
+**Configuration automatique** : **Réglages → Fonctions → Émulateurs → Configurer…** (ou « Installer automatiquement » quand tu lances un jeu sans émulateur, ou le bouton « Configurer » de l'écran jeux) installe l'émulateur conseillé dans `%LOCALAPPDATA%\RR Launcher\emulators\` : RetroArch stable + le cœur adapté (NES, SNES, Game Boy, GBA, N64, Mega Drive, PlayStation, Dreamcast), PCSX2, DuckStation, RPCS3, Azahar, melonDS, Cemu, xemu, Xenia Canary, Vita3K (dernière release GitHub). Dolphin, PPSSPP, Eden, Citron et Ryujinx : lien vers le site officiel. Progression en Mo, annulation, reprise du téléchargement, contrôle de taille / SHA-256 / archive, « Mettre à jour ». Les **BIOS** ne sont jamais téléchargés : l'assistant indique ceux qui manquent et le dossier où les mettre.
+
+**Sauvegardes d'état** : dans le menu en jeu, « Sauvegarde rapide », « Charger la sauvegarde » et l'emplacement (− / +). RetroArch passe par ses commandes réseau (UDP 55355, activées dans `retroarch.cfg`), les autres émulateurs par leurs raccourcis clavier par défaut (modifiables : Réglages → Fonctions → Raccourcis de sauvegarde). Options : sauvegarde automatique avant « Quitter le jeu », **Guide + ↑ / ↓** à la manette (désactivé par défaut).
+
+**Options de lancement** (page du jeu) : émulateur propre au jeu (ex. un autre cœur RetroArch), arguments supplémentaires, variables d'environnement, plein écran (émulateurs qui ont une option en ligne de commande), résolution interne (Dolphin), lancement en administrateur (UAC ; pas de variables d'environnement ni de raccourcis de sauvegarde dans ce cas).
+
 Les portages recompilés (.exe) peuvent être rangés sous leur console d'origine : ajoute l'exe et choisis la console.
 
 ## Ajouter un jeu
@@ -21,7 +27,8 @@ Les portages recompilés (.exe) peuvent être rangés sous leur console d'origin
 `N` (clavier), bouton **View/Share** (manette) ou **Menu → Ajouter des jeux** :
 
 - **Un jeu ou une ROM** : `.exe`, `.lnk`, ROM, ISO/CHD/CUE, `EBOOT.BIN` (PS3)… ou glisser-déposer sur la fenêtre. La console est devinée d'après l'extension et le dossier (`PS2`, `GameCube`…).
-- **Steam, Epic & GOG** : importe tous les jeux installés (lancés via leur launcher).
+- **Launchers installés** : Steam, Epic, GOG, Xbox / Game Pass, EA app, Ubisoft Connect, Battle.net, Amazon Games et itch.io, en lecture locale (aucun compte). Fiabilité : haute pour Xbox, Ubisoft, Amazon, itch.io (SQLite lu en JS pur) ; moyenne pour Battle.net (`product.db` protobuf décodé par heuristique, produits connus seulement) et EA app (`__Installer\installerdata.xml` dans les dossiers usuels, la base chiffrée d'EA n'est pas lue).
+- **Nettoyer la bibliothèque** (menu ou Réglages → Fonctions) : doublons à fusionner, jeux désinstallés, visuels manquants, métadonnées en échec ; confirmation avant retrait.
 - **Scanner des dossiers** / **tout le PC** : trouve les jeux PC (un exe par dossier de jeu), les ROMs, les dumps PS3 (titre lu dans `PARAM.SFO`) et les émulateurs, qui sont configurés automatiquement. Tu coches ce que tu veux ajouter.
 
 Le scan vérifie chaque fichier par son **contenu** (en-tête de la ROM) et pas seulement son extension : un `README.md`, un `.wad` de Doom ou un `.iso` d'installation Windows ne sont pas proposés. Pour les **.exe**, seuls les dossiers qui contiennent des indices de jeu (moteur Unity / Unreal / Godot / Ren'Py / RPG Maker, `steam_api`, GOG Galaxy, Epic Online Services, Bink, FMOD…) sont retenus ; les logiciels (Electron, Qt, Python, Adobe, Microsoft, Blender…) sont ignorés. Un exe sans indice rangé dans un dossier *Jeux* / *Games* est proposé **non coché** (« À VÉRIFIER »). Les images `.chd` / `.cue` sans console reconnaissable sont classées d'après le nom du dossier (`PS1`, `PS2`, `Dreamcast`…).
@@ -74,6 +81,16 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 - **Statistiques** : temps de jeu par semaine / mois / année, séries, top 10, carte annuelle ; activité sur la page du jeu.
 - **Succès** Steam (clé Web API + profil public) et RetroAchievements (utilisateur + clé) ; état des **mises à jour** Steam / Epic sur les boîtes.
 - **Confort** : vibrations, notifications, taille de l'interface (TV).
+
+## Accueil, profils, amis (1.9)
+
+- **Continuer** : le dernier jeu joué en grande tuile au démarrage — A pour le relancer (ou le reprendre s'il tourne).
+- **Profils joueurs** : avatar en haut à gauche, écran « Qui joue ? » ; favoris, temps de jeu, statut, note, collections et statistiques propres à chaque profil.
+- **Amis** (icône Amis, menu, touche A) : amis Steam (clé + SteamID de la section Succès) et membres de ton serveur Discord via ton bot (Réglages → Fonctions → Amis : guide pas à pas). Discord ne permet à aucune application de lire ta liste d'amis : seuls les membres des serveurs où le bot est invité sont visibles.
+- **Multijoueur local** : onglet automatique (catégories Steam) + marquage manuel pour les ROMs ; nombre de manettes connectées en haut.
+- **Couleur d'accent** qui suit la jaquette du jeu sélectionné (ou bleu fixe), thème **Horaire** (clair le jour, sombre le soir), batterie de la manette dans la barre du haut.
+- **Émulateurs** : Réglages → Fonctions → *Configurer…* installe RetroArch + le bon cœur et les émulateurs dédiés (PCSX2, DuckStation, RPCS3, Azahar, melonDS, Cemu, xemu, Xenia, Vita3K), vérifie les BIOS (jamais téléchargés). Menu en jeu : **sauvegarde rapide / charger / emplacement**. Page du jeu : **Options de lancement** (émulateur ou cœur propre au jeu, arguments, variables, plein écran, administrateur).
+- **Import** de Xbox / Game Pass, EA app, Ubisoft Connect, Battle.net, Amazon Games et itch.io (« Launchers installés »). **Nettoyer la bibliothèque** : doublons, jeux désinstallés, images manquantes, jeux sans infos.
 
 ## Discord
 

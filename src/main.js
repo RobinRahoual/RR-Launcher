@@ -12,10 +12,15 @@ const { BY_ID, platformForFile, detectEmulator, publicPlatforms, romExtensions }
 const { autoUpdater } = require('electron-updater');
 const guide = require('./guide'); // GUIDE : bouton Xbox / PS / Home (natif optionnel)
 const padwake = require('./padwake'); // WAKE : manette allumée → launcher au premier plan
+const emuLaunch = require('./features/emu/launch'); // EMU : profil de lancement par jeu (g.launch)
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'rr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }, // MEDIA : stream = lecture vidéo / audio via rr:
 ]);
+
+// FIXES : vidéos de présentation et musique d'ambiance démarrent sans clic préalable
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+const fixesMedia = require('./features/fixes'); // FIXES : serveFile (Range) pour l'audio / la vidéo via rr://
 
 if (process.env.RR_DATA) app.setPath('userData', process.env.RR_DATA);
 if (!app.requestSingleInstanceLock()) app.quit();
@@ -216,6 +221,7 @@ app.whenReady().then(() => {
         status: r.status, headers: { 'Content-Type': r.headers.get('content-type') || 'image/png', 'Access-Control-Allow-Origin': '*' },
       }));
     }
+    if (fixesMedia.isStream(full)) return fixesMedia.serveFile(req, full); // FIXES : Range / 206 (boucle, recherche)
     return net.fetch(pathToFileURL(full).toString());
   });
   createWindow();
@@ -615,8 +621,9 @@ ipcMain.handle('scan:run', async (_e, { mode, folders }) => {
     else if (mode === 'epic') res = await scanner.scanEpic();
     else if (mode === 'gog') res = await scanner.scanGog();
     else if (mode === 'launchers') {
-      const all = await Promise.all([scanner.scanSteam(), scanner.scanEpic(), scanner.scanGog()]);
-      res = { ok: all.some((a) => a.ok), items: all.flatMap((a) => a.items || []), error: all.every((a) => !a.ok) ? 'Aucun launcher trouvé (Steam, Epic, GOG).' : null };
+      // IMPORTER : + Xbox, EA app, Ubisoft Connect, Battle.net, Amazon Games, itch.io (src/features/importer/sources.js)
+      const all = await Promise.all([scanner.scanSteam(), scanner.scanEpic(), scanner.scanGog(), ...require('./features/importer/sources').scanAll()]);
+      res = { ok: all.some((a) => a.ok), items: all.flatMap((a) => a.items || []), error: all.every((a) => !a.ok) ? 'Aucun launcher trouvé (Steam, Epic, GOG, Xbox, EA, Ubisoft, Battle.net, Amazon, itch.io).' : null };
     } else {
       const roots = mode === 'pc' ? await scanner.listDrives() : folders || [];
       res = await scanner.scanFolders(roots, { wholePc: mode === 'pc', onProgress: progress, isCancelled: () => scanCancel });
@@ -732,9 +739,10 @@ async function launchGame(id) {
   };
 
   // Steam / Epic : via le protocole du launcher, puis surveillance du dossier d'installation
-  if (g.kind === 'steam' || g.kind === 'epic') {
+  // IMPORTER : kind 'uri' = jeu d'un autre launcher (Xbox, EA, Ubisoft, Battle.net, Amazon), lancé par son lien
+  if (g.kind === 'steam' || g.kind === 'epic' || g.kind === 'uri') {
     const uri = g.kind === 'steam' ? `steam://rungameid/${g.appid}` : g.launchUri;
-    try { await shell.openExternal(uri); } catch (e) { return { ok: false, error: 'Impossible d’ouvrir ' + (g.kind === 'steam' ? 'Steam' : 'Epic Games') }; }
+    try { await (g.kind === 'uri' ? require('./features/importer/sources').openLaunchUri(uri, shell) : shell.openExternal(uri)); } catch (e) { return { ok: false, error: 'Impossible d’ouvrir ' + (g.kind === 'steam' ? 'Steam' : g.kind === 'uri' ? 'le launcher du jeu' : 'Epic Games') }; }
     begin();
     watchDir(id, g.installDir);
     return { ok: true };
@@ -742,12 +750,12 @@ async function launchGame(id) {
 
   // ROM : via l'émulateur configuré pour la plateforme
   if (g.kind === 'rom') {
-    const emu = store.data.settings.emulators[g.platform];
+    const emu = emuLaunch.emulatorFor(g, store.data.settings); // EMU : émulateur propre au jeu, sinon celui de la console
     if (!emu?.path) return { ok: false, error: 'NO_EMULATOR', platform: g.platform };
     if (!fs.existsSync(emu.path)) return { ok: false, error: 'Émulateur introuvable : ' + emu.path };
     if (!fs.existsSync(g.romPath)) return { ok: false, error: 'ROM introuvable : ' + g.romPath };
-    const args = splitArgs(emu.args || '"{rom}"').map((a) => a.replace('{rom}', g.romPath).replace('{romdir}', path.dirname(g.romPath)));
-    return spawnTracked(id, emu.path, args, path.dirname(emu.path), begin);
+    const c = emuLaunch.command(g, emu, { splitArgs }); // EMU : plein écran, résolution, arguments, env, admin
+    return spawnTracked(id, c.file, c.args, c.cwd, begin, c.admin ? c.followDir : undefined, c.spawn);
   }
 
   // Exécutable
@@ -760,16 +768,15 @@ async function launchGame(id) {
     watchDir(id, g.installDir || path.dirname(g.exePath), { graceMs: 60000, exe: g.exePath });
     return { ok: true };
   }
-  const cwd = path.dirname(g.exePath);
-  if (ext === '.bat' || ext === '.cmd') return spawnTracked(id, 'cmd.exe', ['/c', g.exePath, ...splitArgs(g.args)], cwd, begin);
-  return spawnTracked(id, g.exePath, splitArgs(g.args), cwd, begin, g.installDir || cwd);
+  const c = emuLaunch.command(g, null, { splitArgs }); // EMU : arguments supplémentaires, env, admin (sinon identique)
+  return spawnTracked(id, c.file, c.args, c.cwd, begin, c.followDir, c.spawn);
 }
 
-function spawnTracked(id, file, args, cwd, begin, followDir) {
+function spawnTracked(id, file, args, cwd, begin, followDir, opts = {}) { // EMU : opts (env…)
   return new Promise((resolve) => {
     let child;
     try {
-      child = spawn(file, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false });
+      child = spawn(file, args, { cwd, detached: true, stdio: 'ignore', windowsHide: false, ...opts });
     } catch (e) {
       return resolve({ ok: false, error: String(e.message || e) });
     }
@@ -914,7 +921,7 @@ function gameDir(g) {
   if (!g) return '';
   let d = '';
   if (g.kind === 'steam' || g.kind === 'epic') d = g.installDir;
-  else if (g.kind === 'rom') d = path.dirname(store.data.settings.emulators[g.platform]?.path || '');
+  else if (g.kind === 'rom') d = path.dirname(emuLaunch.emulatorFor(g, store.data.settings)?.path || ''); // EMU
   else d = g.installDir || (g.exePath ? path.dirname(g.exePath) : '');
   d = (d || '').replace(/[\\/]+$/, '');
   const parts = d.split(/[\\/]/).filter(Boolean);
@@ -978,6 +985,8 @@ async function resumeGame(id) {
 async function quitGame(id) {
   const r = running.get(id);
   if (!r) return { ok: false, error: 'Ce jeu n’est plus en cours.' };
+  for (const f of hub.listeners('emu:beforeQuit')) { try { await f(id); } catch (e) { meta.log(`emu : ${e.message}`); } } // EMU : sauvegarde auto
+  if (!running.has(id)) return { ok: true, killed: 0 };
   const pids = await gamePids(id);
   if (process.platform === 'win32') {
     if (pids.length) {

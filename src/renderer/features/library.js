@@ -275,7 +275,7 @@
   function validate() {
     if (Q.mode === 'name') {
       const v = Q.value.trim();
-      if (!v) return toast('Donne un nom à la collection', true);
+      if (!v) return toast(Q.empty || 'Donne un nom à la collection', true);
       const cb = Q.onSubmit;
       closeOverlay(true);
       cb?.(v);
@@ -293,11 +293,12 @@
     if (c === 'back') backKey(); else if (c === 'clear') clearKey(); else if (c === 'ok') validate(); else typeKey(c, true);
   });
   function openKeyboard(o = {}) {
-    Object.assign(Q, { mode: o.mode || 'search', value: o.value || '', title: o.title || '', ph: o.ph || (o.mode === 'name' ? 'Nom' : 'Rechercher un jeu, un studio, un genre…'), max: o.max || 60, onSubmit: o.onSubmit || null });
+    Object.assign(Q, { mode: o.mode || 'search', value: o.value || '', title: o.title || '', ph: o.ph || (o.mode === 'name' ? 'Nom' : 'Rechercher un jeu, un studio, un genre…'), max: o.max || 60, onSubmit: o.onSubmit || null, empty: o.empty || '' }); // PROFILES : empty = message si nom vide
     renderField(); renderResults();
     $('#lsKbd', elS).classList.toggle('is-name', Q.mode === 'name');
     openOverlay('search');
   }
+  window.rrKeyboard = openKeyboard; // PROFILES : clavier virtuel réutilisé (mode 'name')
   function openSearch() {
     if (!S.lib.games.length || LD.active || BO.busy || shellSplashActive()) return;
     if (S.mode === 'search') return;

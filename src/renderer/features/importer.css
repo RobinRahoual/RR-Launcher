@@ -1,0 +1,18 @@
+/* Module IMPORTER — écran « Nettoyer la bibliothèque » (réutilise .scan-item / .scan-group / .scan-tools) */
+.xi-panel .xi-list { max-height: 54vh; gap: 10px; }
+.xi-sec { display: flex; flex-direction: column; gap: 6px; }
+.xi-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-top: 8px; }
+.xi-title { margin: 6px 0 0; color: var(--fg); }
+.xi-head .scan-sub { margin: 2px 0 0; }
+.xi-row { display: flex; gap: 8px; align-items: stretch; }
+.xi-row .scan-item { flex: 1; min-width: 0; }
+.xi-row .scan-item .si-path { direction: ltr; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.xi-cycle { flex: 0 0 auto; align-self: center; }
+.xi-progress { margin: 4px 0 10px; }
+.xi-progress i { display: block; height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width .2s ease-out; }
+.xi-summary, .xi-confirm { margin: 6px 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 8px; font-size: 15px; }
+.xi-summary li::marker, .xi-confirm li::marker { color: var(--accent-text); }
+.xi-again { margin-top: 10px; }
+@media (prefers-reduced-motion: reduce) { .xi-progress i { transition: none; } }
+.xi-panel .scan-item .chk { border-color: var(--text-3); }
+.xi-panel .scan-item[aria-checked="true"] .chk { border-color: var(--accent); }

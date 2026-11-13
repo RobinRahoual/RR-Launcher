@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<DiPManifest version="4.0">
+  <gameTitles><gameTitle locale="fr_FR">Titanfall™ 2 FR</gameTitle><gameTitle locale="en_US">Titanfall&#8482; 2</gameTitle></gameTitles>
+  <contentIDs><contentID>1015756</contentID><contentID>Origin.OFR.50.0001234</contentID></contentIDs>
+  <runtime>
+    <launcher><name>EAC</name><filePath>[HKEY_LOCAL_MACHINE\SOFTWARE\Respawn\Titanfall2\Install Dir]EasyAntiCheat_launcher.exe</filePath></launcher>
+    <launcher><name>Titanfall 2</name><filePath>[HKEY_LOCAL_MACHINE\SOFTWARE\Respawn\Titanfall2\Install Dir]Titanfall2.exe</filePath><requires64BitOS>true</requires64BitOS></launcher>
+  </runtime>
+</DiPManifest>

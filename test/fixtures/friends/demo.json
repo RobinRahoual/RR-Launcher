@@ -1,0 +1,21 @@
+{
+  "discord": [
+    { "key": "dc:1", "source": "discord", "id": "1", "name": "Lucas", "status": "online", "activity": { "kind": "playing", "name": "Elden Ring", "details": "Limgrave", "state": "Niveau 42", "sinceAgo": 74 } },
+    { "key": "dc:2", "source": "discord", "id": "2", "name": "Inès", "status": "dnd", "activity": { "kind": "streaming", "name": "Hollow Knight", "details": "Run 112 % sans mort", "url": "https://www.twitch.tv/exemple", "sinceAgo": 31 } },
+    { "key": "dc:3", "source": "discord", "id": "3", "name": "Mehdi", "status": "online", "mobile": false, "activity": { "kind": "playing", "name": "Valorant", "details": "Compétition", "state": "En partie (7 - 5)", "sinceAgo": 12 } },
+    { "key": "dc:4", "source": "discord", "id": "4", "name": "Chloé", "status": "idle", "activity": { "kind": "listening", "name": "Spotify", "details": "Midnight City", "state": "M83" } },
+    { "key": "dc:5", "source": "discord", "id": "5", "name": "Théo", "status": "online", "custom": "Dispo pour un Mario Kart", "activity": null },
+    { "key": "dc:6", "source": "discord", "id": "6", "name": "Sarah", "status": "dnd", "mobile": true, "activity": null },
+    { "key": "dc:7", "source": "discord", "id": "7", "name": "Noah", "status": "offline", "activity": null },
+    { "key": "dc:8", "source": "discord", "id": "8", "name": "Jade", "status": "offline", "activity": null }
+  ],
+  "steam": [
+    { "key": "st:1", "source": "steam", "id": "76561198000000001", "name": "Zoé_Gaming", "status": "online", "activity": { "kind": "playing", "name": "Hades", "appid": 1145360, "sinceAgo": 5 } },
+    { "key": "st:2", "source": "steam", "id": "76561198000000002", "name": "Max", "status": "idle", "activity": null },
+    { "key": "st:3", "source": "steam", "id": "76561198000000003", "name": "Léa", "status": "offline", "lastSeenAgo": 180, "activity": null },
+    { "key": "st:4", "source": "steam", "id": "76561198000000004", "name": "Hugo", "status": "offline", "lastSeenAgo": 2900, "activity": null }
+  ],
+  "later": [
+    { "after": 7000, "key": "dc:5", "patch": { "activity": { "kind": "playing", "name": "Mario Kart Wii", "sinceAgo": 0 } } }
+  ]
+}

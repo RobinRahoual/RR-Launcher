@@ -5,6 +5,7 @@
 //          x:media:pickMusicDir, x:media:musicList, x:media:track ; évènement x:media:ready { id, file }.
 const fs = require('fs');
 const path = require('path');
+const { trailerSources, downloadSegmented } = require('./fixes/trailer'); // FIXES
 
 const VIDEO_EXT = ['.mp4', '.webm', '.m4v'];
 const AUDIO_EXT = ['.mp3', '.ogg', '.oga', '.opus', '.flac', '.m4a', '.aac', '.wav'];
@@ -12,7 +13,7 @@ const AUDIO_MIME = { '.mp3': 'audio/mpeg', '.ogg': 'audio/ogg', '.oga': 'audio/o
 const MAX_VIDEO = 60 * 1024 * 1024; // 60 Mo
 const MAX_TRACK = 80 * 1024 * 1024; // un morceau envoyé au renderer
 const RETRY_MS = 7 * 24 * 3600 * 1000;
-const UA = 'RR-Launcher/1.x (+media)';
+const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RRLauncher/1.9'; // FIXES : même UA que metadata.js
 
 /** Choisit une URL vidéo progressive (mp4 puis webm, 480p de préférence) dans `movies` de l'appdetails Steam. */
 function pickMovieUrls(movies) {
@@ -42,9 +43,9 @@ function init(ctx) {
   const trailerOf = (id) => findFile(gdir(id), 'trailer', VIDEO_EXT);
   const musicOf = (id) => findFile(gdir(id), 'music', AUDIO_EXT);
   const markerFresh = (id) => {
-    try { const { t } = JSON.parse(fs.readFileSync(path.join(gdir(id), 'trailer.none'), 'utf8')); return Date.now() - t < RETRY_MS; } catch { return false; }
+    try { const { t, v } = JSON.parse(fs.readFileSync(path.join(gdir(id), 'trailer.none'), 'utf8')); return v === 2 && Date.now() - t < RETRY_MS; } catch { return false; } // FIXES : marqueurs v1 (avant DASH/HLS) ignorés
   };
-  const writeMarker = (id) => { try { fs.mkdirSync(gdir(id), { recursive: true }); fs.writeFileSync(path.join(gdir(id), 'trailer.none'), JSON.stringify({ t: Date.now() })); } catch { /* ignore */ } };
+  const writeMarker = (id) => { try { fs.mkdirSync(gdir(id), { recursive: true }); fs.writeFileSync(path.join(gdir(id), 'trailer.none'), JSON.stringify({ t: Date.now(), v: 2 })); } catch { /* ignore */ } };
   const clearOld = (id, base, exts) => { for (const e of exts) fs.rmSync(path.join(gdir(id), base + e), { force: true }); };
 
   // ---- Téléchargement en arrière-plan (un à la fois, jamais bloquant pour l'UI)
@@ -78,6 +79,27 @@ function init(ctx) {
     }
   }
 
+  // FIXES : format actuel de Steam (DASH / HLS, plus de mp4 / webm) → voir ./fixes/trailer.js
+  async function fetchBufCapped(url, { range, maxBytes = MAX_VIDEO, partial = false } = {}) {
+    const headers = { 'User-Agent': UA };
+    if (range) headers.Range = `bytes=${range}`;
+    const res = await net.fetch(url, { headers, signal: AbortSignal.timeout(60000) });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const chunks = [];
+    let n = 0;
+    const reader = res.body.getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      n += value.length;
+      if (n > maxBytes) { await reader.cancel().catch(() => {}); if (partial) break; throw new Error('trop lourd'); }
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks);
+  }
+  const fetchText = async (url) => (await fetchBufCapped(url, { maxBytes: 2 * 1024 * 1024 })).toString('utf8');
+  const mo = (n) => `${(n / 1048576).toFixed(1)} Mo`;
+
   async function fetchTrailer(id) {
     const g = findGame(id);
     if (!g?.appid) return writeMarker(id);
@@ -87,17 +109,34 @@ function init(ctx) {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       movies = json?.[g.appid]?.data?.movies || json?.[String(g.appid)]?.data?.movies;
-    } catch (e) { log(`media : appdetails ${g.appid} : ${e.message}`); return; } // erreur réseau : pas de marqueur, on retentera
-    for (const { url, ext } of pickMovieUrls(movies)) {
+    } catch (e) { log(`trailer ${g.name} : appdetails ${g.appid} injoignable (${e.message}), nouvel essai plus tard`); return; } // pas de marqueur
+    const sources = trailerSources(movies);
+    if (!sources.length) { log(`trailer ${g.name} : aucune vidéo (Steam n'en propose pas pour ${g.appid})`); return writeMarker(id); }
+    const errors = [];
+    for (const src of sources) {
       try {
         fs.mkdirSync(gdir(id), { recursive: true });
-        await download(url, path.join(gdir(id), 'trailer' + ext));
+        const dest = path.join(gdir(id), 'trailer' + src.ext);
+        let size, extra = '';
+        if (src.kind === 'progressive') {
+          await download(src.url, dest);
+          size = fs.statSync(dest).size;
+        } else {
+          const r = await downloadSegmented(src, fetchText, (u, o) => fetchBufCapped(u, o), { maxBytes: MAX_VIDEO });
+          if (r.buf.length < 20 * 1024) throw new Error('vidéo vide');
+          fs.writeFileSync(dest + '.part', r.buf);
+          fs.renameSync(dest + '.part', dest);
+          size = r.buf.length;
+          extra = `, ${Math.round(r.seconds)} s, ${r.height || '?'}p, ${r.audio ? 'avec son' : 'muette'}`;
+        }
+        for (const e of VIDEO_EXT) if (e !== src.ext) fs.rmSync(path.join(gdir(id), 'trailer' + e), { force: true });
         fs.rmSync(path.join(gdir(id), 'trailer.none'), { force: true });
-        log(`media : bande-annonce ${g.name} (${ext})`);
-        send('x:media:ready', { id, file: 'trailer' + ext });
+        log(`trailer ${g.name} : source ${src.label}, taille ${mo(size)}${extra}`);
+        send('x:media:ready', { id, file: 'trailer' + src.ext });
         return;
-      } catch (e) { log(`media : vidéo ${g.appid} : ${e.message}`); }
+      } catch (e) { errors.push(`${src.label} : ${e.message}`); }
     }
+    log(`trailer ${g.name} : aucune vidéo (${errors.join(' ; ')})`);
     writeMarker(id);
   }
 

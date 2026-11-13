@@ -75,6 +75,7 @@ function init(ctx) {
       },
     };
   }
+  ctx.extrasSummary = () => summaryAll(); // PROFILES : résumé renvoyé au renderer après un changement de profil
   function summaryAll() {
     const out = {};
     for (const [id, d] of Object.entries(X().ach)) { const s = summarize(d); if (s && findGame(id)) out[id] = s; }

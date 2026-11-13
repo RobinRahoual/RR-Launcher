@@ -189,3 +189,25 @@ module.exports = {
   listProcesses,
   canSleep: !!SetSuspendState, sleep,
 };
+
+// ---------------------------------------------------------------- POLISH2 : batterie de la manette (XInput)
+// XInputGetBatteryInformation(index, BATTERY_DEVTYPE_GAMEPAD = 0, &info) → { BatteryType, BatteryLevel }.
+// BatteryType : 0 déconnectée, 1 filaire, 2 alcaline, 3 NiMH ; BatteryLevel : 0 vide … 3 plein.
+// Renvoie null si le slot est vide, si l'info n'existe pas ou en cas d'erreur.
+let xinputBatteryFn = null;
+try {
+  koffi.struct('RR_XINPUT_BATTERY_INFORMATION', { BatteryType: 'uint8', BatteryLevel: 'uint8' });
+  xinputBatteryFn = koffi.load('xinput1_4.dll').func(
+    'uint32 __stdcall XInputGetBatteryInformation(uint32 dwUserIndex, uint8 devType, _Out_ RR_XINPUT_BATTERY_INFORMATION *pBatteryInformation)'
+  );
+} catch { xinputBatteryFn = null; }
+function xinputBattery(i) {
+  if (!xinputBatteryFn) return null;
+  try {
+    const info = {};
+    if (xinputBatteryFn(i, 0, info) !== ERROR_SUCCESS) return null;
+    if (!info.BatteryType) return null;
+    return { type: info.BatteryType, level: info.BatteryLevel };
+  } catch { return null; }
+}
+module.exports.xinputBattery = xinputBattery;

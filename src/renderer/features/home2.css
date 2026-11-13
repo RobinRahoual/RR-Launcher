@@ -1,0 +1,31 @@
+/* HOME2 — tuile « Continuer », multijoueur local, accent qui suit le jeu */
+@property --accent { syntax: '<color>'; inherits: true; initial-value: #3C91E6; }
+:root { transition: --accent 400ms ease; }
+html:root { --accent-soft: color-mix(in srgb, var(--accent) 14%, transparent); --accent-line: color-mix(in srgb, var(--accent) 55%, transparent); }
+
+#home { --cont-ext: .8; }
+.h-tile[data-id="continue"] .t-in { right: calc(var(--tile) * var(--cont-ext) * -1); background: var(--accent-deep); }
+.t-cont .c-shade { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(0,0,0,.78), rgba(0,0,0,.5) 60%, rgba(0,0,0,.35)); }
+.c-cover { position: absolute; left: 5%; top: 50%; transform: translateY(-50%); height: 80%; width: auto; max-width: 32%; object-fit: cover; border-radius: max(3px, .25vw); box-shadow: 0 .8vh 2vh rgba(0,0,0,.55); }
+.c-txt { position: absolute; top: 0; bottom: 0; right: 4%; left: 41%; display: flex; flex-direction: column; justify-content: center; gap: calc(var(--tile) * .045); color: #fff; min-width: 0; }
+.t-cont:not(:has(.c-cover)) .c-txt { left: 6%; }
+.c-chip { align-self: flex-start; display: inline-flex; align-items: center; gap: .4em; padding: .3em .8em .3em .6em; border-radius: 999px; background: var(--accent-deep); border: 1px solid rgba(255,255,255,.35);
+  font-family: var(--font-display); font-size: calc(var(--tile) * .062); text-transform: uppercase; letter-spacing: .05em; line-height: 1; }
+.c-chip svg { width: .95em; height: .95em; fill: currentColor; }
+.c-name { font-family: var(--font-display); font-weight: 400; font-size: calc(var(--tile) * .105); line-height: 1.05; text-shadow: 0 .3vh 1vh rgba(0,0,0,.6);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.c-sub { font-size: calc(var(--tile) * .066); font-weight: 600; color: rgba(255,255,255,.9); display: inline-flex; align-items: center; gap: .5em; }
+.c-sub.is-run { color: #fff; }
+.c-dot { width: .6em; height: .6em; border-radius: 50%; background: #86EFAC; box-shadow: 0 0 .8em #86EFAC; animation: h2pulse 1.6s ease-in-out infinite; }
+@keyframes h2pulse { 50% { opacity: .35; } }
+
+/* Multijoueur local */
+.badge.coop svg { stroke-width: 2; }
+.badge.coop.is-ok { color: var(--ok-fg); border-color: rgba(34, 197, 94, .45); }
+.tag-coop { color: var(--ok-fg); }
+.tool[data-act="h2coop"] .ico, .tool[data-act="h2coop"] svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.tool[data-act="h2coop"][aria-pressed="true"] { background: rgba(var(--fg-rgb), .1); color: var(--fg); border-color: var(--line-strong); }
+.h2-pads b { font-variant-numeric: tabular-nums; }
+.h2-pads svg { stroke: currentColor; }
+
+@media (prefers-reduced-motion: reduce) { :root { transition: none; } .c-dot { animation: none; } }

@@ -6,12 +6,12 @@
 //   mediaSsDelay (min, '0' = jamais), mediaSsMode (slides|videos|black),
 //   mediaMusic, mediaMusicVolume, mediaMusicSource (synth|folder), mediaMusicDir (posé par le main).
 (() => {
-  // Musique désactivée par défaut : le launcher peut démarrer avec Windows et revenir seul au premier plan
-  // en fin de partie ; un son qui part sans prévenir (appel vocal, nuit) surprendrait. Une ligne dans Réglages suffit.
+  // FIXES : musique activée par défaut (demande de Robin) — ambiance générée douce, volume « Normal » (0,3),
+  // jamais pendant une partie ni fenêtre masquée ; migration unique côté main (src/features/fixes.js, fixesMusicV1).
   const DEF = {
     mediaVideos: true, mediaVideoDelay: '1.5', mediaVideoSound: false, mediaVideoVolume: '0.6',
     mediaSsDelay: '5', mediaSsMode: 'slides',
-    mediaMusic: false, mediaMusicVolume: '0.3', mediaMusicSource: 'synth',
+    mediaMusic: true, mediaMusicVolume: '0.3', mediaMusicSource: 'synth',
   };
   const opt = (k) => (S.lib.settings?.[k] ?? DEF[k]);
   const num = (k) => Number(opt(k)) || 0;
