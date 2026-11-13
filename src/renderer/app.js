@@ -990,10 +990,12 @@ function onSlotClick(id) {
 }
 function flip() { if (S.items.length) { S.flip = S.flip ? 0 : 1; sfx('flip'); } }
 
-async function play(id = S.items[S.sel]?.id) {
+async function play(id = S.items[S.sel]?.id, opts = {}) {
   const g = S.lib.games.find((x) => x.id === id);
   if (!g) return;
+  if (!opts.force && guideBeforePlay(g)) return; // GUIDE : jeu déjà en cours → reprendre ; autre jeu en cours → demander
   const r = await rr.launch(id);
+  if (r.resumed) return;
   if (!r.ok) {
     if (r.error === 'NO_EMULATOR') return askEmulator(r.platform, id);
     return toast(r.error || 'Impossible de lancer le jeu.', true);
@@ -1031,7 +1033,7 @@ async function toggleFav(id = S.items[S.sel]?.id) {
 }
 
 // ---------------------------------------------------------------- Overlays & focus spatial
-const OVERLAYS = { details: '#details', add: '#addDialog', hub: '#addHub', scan: '#scan', menu: '#menu', settings: '#settings', prompt: '#prompt' };
+const OVERLAYS = { details: '#details', add: '#addDialog', hub: '#addHub', scan: '#scan', menu: '#menu', settings: '#settings', prompt: '#prompt', ingame: '#ingame' };
 // Affichage / masquage des overlays avec une courte sortie animée (plus rapide que l'entrée)
 function showOverlayEl(el) {
   clearTimeout(el._closeT);
@@ -1061,6 +1063,7 @@ function openOverlay(mode) {
 function closeOverlay(silent = false) {
   if (S.mode === 'main') return;
   if (S.mode === 'scan') rr.cancelScan();
+  if (S.mode === 'ingame') igOnClose(); // GUIDE
   hideOverlayEl($(OVERLAYS[S.mode]), true);
   S.mode = S.stack.pop() || 'main';
   if (S.mode !== 'main') {
@@ -1075,6 +1078,7 @@ function closeAll() { while (S.mode !== 'main') closeOverlay(true); }
 // Retour contextuel : ferme d'abord un sous-menu ouvert, sinon l'overlay
 function overlayBack() {
   if (S.mode === 'details' && !$('#dSub').hidden) return toggleImageMenu(false);
+  if (S.mode === 'ingame') return igBack(); // GUIDE : B / Échap = sous-menu précédent, sinon reprendre le jeu
   closeOverlay();
 }
 function navables() {
@@ -1528,6 +1532,7 @@ function renderSettings() {
   $$('.set-tab').forEach((t) => t.setAttribute('aria-selected', t.dataset.settab === setPage));
   $$('.set-page').forEach((p) => { p.hidden = p.dataset.page !== setPage; });
   if (setPage === 'emus') renderEmus();
+  if (setPage === 'general') renderGuideStatus(); // GUIDE
 }
 function renderEmus() {
   const emus = S.lib.settings.emulators || {};
@@ -1629,6 +1634,8 @@ async function action(name) {
     case 'open': openHomeItem(); break;
     case 'closeSub': toggleImageMenu(false); break;
     case 'setNext': cycleSettingsPage(1); break;
+    case 'power': openPowerMenu(); break; // GUIDE
+    case 'igBack': igBack(); break; // GUIDE
   }
 }
 document.addEventListener('click', (e) => {
@@ -1659,7 +1666,12 @@ function glyph(btn) {
 function renderHints() {
   const H = [];
   const h = (btns, label, act) => H.push({ btns, label, act });
-  if (S.mode !== 'main') {
+  if (S.mode === 'ingame') { // GUIDE : menu en jeu
+    h(['b'], igPowerOpen() ? 'Retour' : 'Reprendre le jeu', 'igBack');
+    h(['ud'], 'Se déplacer', null);
+    h(['a'], 'Valider', null);
+  }
+  else if (S.mode !== 'main') {
     const sub = S.mode === 'details' && !$('#dSub').hidden;
     h(['b'], sub ? 'Fermer les images' : S.mode === 'menu' ? 'Fermer' : 'Retour', sub ? 'closeSub' : 'close');
     if (S.mode === 'settings') h(S.device === 'pad' ? ['lb', 'rb'] : ['tab'], 'Sections', 'setNext');
@@ -1814,6 +1826,7 @@ function pollPad(t) {
     else if (t >= pad.next) { pad.next = t + REPEAT_RATE; onPadDir(dir, true); }
   } else pad.axisDir = null;
   ['a', 'b', 'x', 'y', 'lb', 'rb', 'lt', 'rt', 'view', 'menu'].forEach((n, i) => { if (pressed(i)) onPadBtn(n); });
+  if (pressed(16)) guidePress({ source: 'gamepad' }); // GUIDE : bouton central (PS / Home ; Xbox via le processus principal)
   pad.prev = b;
 }
 function onPadDir(dir, repeat) {
@@ -2086,6 +2099,221 @@ rr.onRunning(({ running, name }) => {
   if (!running) toast(name ? `Session de ${name} terminée` : 'Session terminée');
 });
 rr.onVisible((v) => { if (v) { startClock(); sfx('open'); } });
+
+// ---------------------------------------------------------------- GUIDE : menu en jeu (bouton Xbox / PS / Home)
+// Le processus principal détecte le bouton Guide (XInput / HID, même launcher masqué) et Ctrl+Alt+L,
+// remet le launcher au premier plan puis envoie « guide:press ». Launcher actif : l'API Gamepad
+// (bouton 16) déclenche aussi guidePress ; les doublons sont filtrés.
+const IG = { id: null, start: 0, timer: null, lastGuide: 0 };
+const igPowerOpen = () => !$('#igPower').hidden;
+const igIsOpen = () => S.mode === 'ingame' || S.stack.includes('ingame');
+function runningGame(ids = S.lib.running || []) {
+  const id = IG.id && ids.includes(IG.id) ? IG.id : ids[ids.length - 1];
+  return S.lib.games.find((g) => g.id === id) || null;
+}
+function fmtSession(sec) {
+  sec = Math.max(0, Math.floor(sec));
+  const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+  const p2 = (n) => String(n).padStart(2, '0');
+  return h ? `${h}:${p2(m)}:${p2(s)}` : `${m}:${p2(s)}`;
+}
+
+function guidePress(info = {}) {
+  const now = performance.now();
+  if (now - IG.lastGuide < 450) return; // même appui vu par plusieurs sources (HID + API Gamepad)
+  IG.lastGuide = now;
+  if (shellSplashActive()) endSplash();
+  const g = runningGame(info.running || S.lib.running || []);
+  if (g) {
+    if (S.mode === 'ingame' && !info.summoned) return igResume(); // rappuyer sur Guide = retour au jeu
+    return openIngame(g);
+  }
+  if (!info.summoned) action('menu'); // pas de jeu : le bouton Guide ouvre / ferme le menu
+}
+
+async function openIngame(g) {
+  IG.id = g.id;
+  if (S.mode !== 'ingame') closeAll();
+  if (S.topFocus >= 0) shellLeaveTop(true);
+  igRender(g);
+  igShowList('main', false);
+  openOverlay('ingame');
+  rr.setIngame(true);
+  IG.start = Date.now();
+  igTick();
+  clearInterval(IG.timer);
+  IG.timer = setInterval(igTick, 1000);
+  const ses = await rr.sessions().catch(() => []);
+  const cur = ses.find((x) => x.id === g.id);
+  if (cur) { IG.start = cur.start; igTick(); }
+}
+function igRender(g) {
+  const p = plat(g.platform);
+  const hero = heroOf(g);
+  $('#igBg').style.backgroundImage = hero ? `url("${hero}")` : 'none';
+  const cover = g.media?.cover ? mediaUrl(g, g.media.cover) : '';
+  const cv = $('#igCover');
+  cv.style.backgroundImage = cover ? `url("${cover}")` : 'none';
+  cv.classList.toggle('none', !cover);
+  cv.textContent = cover ? '' : (p.short || p.name || '');
+  $('#igPlat').textContent = p.name;
+  $('#igTitle').textContent = g.name;
+  $('#igTotal').textContent = fmtTime(g.playtime);
+  $('#igFoot').innerHTML = S.device === 'pad' ? 'Bouton Guide ou B : retour au jeu' : '<kbd>Échap</kbd> ou <kbd>Ctrl+Alt+L</kbd> : retour au jeu';
+}
+function igTick() {
+  $('#igSession').textContent = fmtSession((Date.now() - IG.start) / 1000);
+  const c = $('#igClock');
+  const hm = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (c.textContent !== hm) { c.textContent = hm; c.dateTime = hm; }
+}
+function igOnClose() {
+  clearInterval(IG.timer);
+  IG.timer = null;
+  rr.setIngame(false);
+}
+function igShowList(which, focus = true) {
+  const power = which === 'power';
+  $('#igMain').hidden = power;
+  $('#igPower').hidden = !power;
+  if (focus) { setFocus(power ? $('#igPower [data-default]') : $('#igMain [data-ig="power"]')); sfx(power ? 'confirm' : 'back'); }
+  renderHints();
+}
+function igBack() {
+  if (igPowerOpen()) return igShowList('main');
+  igResume();
+}
+function igResume() {
+  const id = IG.id;
+  closeAll(true);
+  sfx('back');
+  rr.resumeGame(id);
+}
+function igQuit() {
+  const g = runningGame();
+  if (!g) return closeAll();
+  openPrompt({
+    title: `Quitter « ${g.name} » ?`,
+    icon: 'danger', tone: 'danger',
+    body: `<p class="dim">Le jeu est fermé tout de suite : ce qui n’a pas été sauvegardé est perdu. Le temps de jeu est enregistré.</p>`,
+    actions: [
+      { label: 'Annuler', focus: true, onClick: () => closeOverlay() },
+      { label: 'Quitter le jeu', danger: true, primary: true, onClick: async () => {
+        closeAll(true);
+        const r = await rr.quitGame(g.id);
+        if (!r?.ok) toast(r?.error || 'Impossible de quitter le jeu.', true);
+      } },
+    ],
+  });
+}
+function igSwitch() {
+  const g = runningGame();
+  closeAll();
+  if (g) toast(`${g.name} continue en arrière-plan`);
+}
+$('#ingame').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-ig]');
+  if (!b) return;
+  const act = b.dataset.ig;
+  if (act === 'resume') igResume();
+  else if (act === 'switch') igSwitch();
+  else if (act === 'quit') igQuit();
+  else if (act === 'power') igShowList('power');
+  else if (act === 'back') igShowList('main');
+  else confirmPower(act);
+});
+$('#ingame').addEventListener('mousedown', (e) => { if (e.target.id === 'igBg') igResume(); });
+
+// Lancer un jeu alors qu'un autre tourne. Renvoie true si play() doit s'arrêter là.
+function guideBeforePlay(g) {
+  const ids = S.lib.running || [];
+  if (ids.includes(g.id)) { // le jeu en cours : on le reprend, on n'en lance pas un 2e
+    closeAll(true);
+    sfx('launch');
+    toast(`Reprise de ${g.name}`, 'progress');
+    rr.resumeGame(g.id);
+    return true;
+  }
+  const cur = runningGame(ids);
+  if (!cur) return false;
+  openPrompt({
+    title: `${cur.name} est en cours`,
+    icon: 'emu',
+    body: `<p class="dim">Quitter « ${esc(cur.name)} » avant de lancer « ${esc(g.name)} » ? Ce qui n’a pas été sauvegardé dans le jeu en cours sera perdu.</p>`,
+    actions: [
+      { label: 'Annuler', focus: true, onClick: () => closeOverlay() },
+      { label: 'Lancer sans quitter', onClick: () => { closeAll(true); play(g.id, { force: true }); } },
+      { label: 'Quitter et lancer', primary: true, onClick: async () => { closeAll(true); await rr.quitGame(cur.id); play(g.id, { force: true }); } },
+    ],
+  });
+  return true;
+}
+
+// ---------- Alimentation (menu principal et menu en jeu)
+function openPowerMenu() {
+  openPrompt({
+    title: 'Alimentation',
+    icon: 'power',
+    body: `<p class="dim">Mettre le PC en veille, le redémarrer ou l’éteindre.</p>`,
+    actions: [
+      { label: 'Annuler', focus: true, onClick: () => closeOverlay() },
+      { label: 'Mettre en veille', onClick: () => confirmPower('sleep') },
+      { label: 'Redémarrer', onClick: () => confirmPower('restart') },
+      { label: 'Éteindre', danger: true, onClick: () => confirmPower('shutdown') },
+    ],
+  });
+}
+const POWER = {
+  sleep: { title: 'Mettre le PC en veille ?', btn: 'Mettre en veille', what: 'Le PC se met en veille' },
+  restart: { title: 'Redémarrer le PC ?', btn: 'Redémarrer', what: 'Le PC redémarre tout de suite' },
+  shutdown: { title: 'Éteindre le PC ?', btn: 'Éteindre', what: 'Le PC s’éteint tout de suite' },
+};
+function confirmPower(act) {
+  const P = POWER[act];
+  if (!P) return;
+  const g = runningGame();
+  const warn = act === 'sleep'
+    ? (g ? ` « ${esc(g.name)} » reste ouvert et reprendra au réveil.` : '')
+    : `${g ? ` « ${esc(g.name)} » sera fermé : sauvegarde ta partie avant.` : ''} Les programmes ouverts seront fermés.`;
+  openPrompt({
+    title: P.title,
+    icon: 'power', tone: act === 'sleep' ? '' : 'danger',
+    body: `<p class="dim">${P.what}.${warn}</p>`,
+    actions: [
+      { label: 'Annuler', focus: true, onClick: () => closeOverlay() },
+      { label: P.btn, primary: true, danger: act !== 'sleep', onClick: () => powerAct(act) },
+    ],
+  });
+}
+async function powerAct(act) {
+  closeAll(true);
+  const r = await rr.power(act).catch((e) => ({ ok: false, error: String(e?.message || e) }));
+  if (!r?.ok) return toast(r?.error || 'Action impossible', true);
+  toast(act === 'sleep' ? 'Mise en veille…' : act === 'restart' ? 'Redémarrage…' : 'Extinction…', 'progress');
+}
+
+// ---------- Réglages : état de la détection
+async function renderGuideStatus() {
+  const el = $('#guideStatus');
+  if (!el) return;
+  const st = await rr.guideStatus().catch(() => null);
+  if (!st) return;
+  if (st.platform !== 'win32') el.textContent = 'Détection en arrière-plan : Windows uniquement.';
+  else if (st.xinput || st.hid) el.textContent = `Détection active : ${[st.xinput && 'Xbox / XInput', st.hid && 'PlayStation · Switch Pro (HID)'].filter(Boolean).join(' · ')}.`;
+  else el.textContent = 'Détection native indisponible (détails dans metadata.log) : Ctrl+Alt+L fonctionne toujours.';
+}
+
+// ---------- Événements du processus principal
+rr.onGuide((info) => guidePress(info || {}));
+// Menu en jeu affiché sans le focus clavier (Windows l'a refusé) : la manette est relayée par le processus principal
+rr.onPadRemote((btn) => {
+  if (document.hasFocus()) return;
+  setDevice('pad');
+  if (['up', 'down', 'left', 'right'].includes(btn)) onPadDir(btn, false); else onPadBtn(btn);
+});
+rr.onRunning(({ id, running }) => {
+  if (!running && igIsOpen() && IG.id === id) closeAll(true); // le jeu s'est fermé tout seul
+});
 
 // ---------------------------------------------------------------- Démarrage
 (async function init() {
