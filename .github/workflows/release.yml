@@ -42,6 +42,13 @@ jobs:
             git push origin "v$V"
           fi
 
+      - name: Créer la release (évite les doublons quand plusieurs fichiers sont envoyés en parallèle)
+        if: steps.check.outputs.skip == 'false'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "v${{ steps.check.outputs.version }}" --repo "$GITHUB_REPOSITORY" --title "v${{ steps.check.outputs.version }}" --notes "RR Launcher ${{ steps.check.outputs.version }}"
+
       - uses: actions/setup-node@v4
         if: steps.check.outputs.skip == 'false'
         with:
@@ -56,3 +63,35 @@ jobs:
         run: npx electron-builder --win nsis --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Nettoyer les releases en double
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Pour chaque tag ayant plusieurs releases, on garde celle qui contient latest.yml
+          # (ou la plus fournie), on y rapatrie les fichiers manquants et on supprime les autres.
+          gh api "repos/$GITHUB_REPOSITORY/releases?per_page=100" > releases.json
+          node -e '
+            const rel = require("./releases.json");
+            const byTag = {};
+            for (const r of rel) (byTag[r.tag_name] ||= []).push(r);
+            const out = [];
+            for (const [tag, list] of Object.entries(byTag)) {
+              if (list.length < 2) continue;
+              list.sort((a, b) => (b.assets.some(x => x.name === "latest.yml") - a.assets.some(x => x.name === "latest.yml")) || b.assets.length - a.assets.length);
+              const keep = list[0];
+              for (const d of list.slice(1)) out.push({ keep: keep.id, drop: d.id, assets: d.assets.filter(a => !keep.assets.some(k => k.name === a.name)).map(a => ({ id: a.id, name: a.name })) });
+            }
+            require("fs").writeFileSync("dups.json", JSON.stringify(out));
+          '
+          node -e 'for (const d of require("./dups.json")) { for (const a of d.assets) console.log(["asset", d.keep, a.id, a.name].join(" ")); console.log(["drop", d.drop].join(" ")); }' | while read kind a b c; do
+            if [ "$kind" = asset ]; then
+              gh api -H "Accept: application/octet-stream" "repos/$GITHUB_REPOSITORY/releases/assets/$b" > "$c"
+              gh api -X POST -H "Content-Type: application/octet-stream" --input "$c" "https://uploads.github.com/repos/$GITHUB_REPOSITORY/releases/$a/assets?name=$c" > /dev/null
+            else
+              gh api -X DELETE "repos/$GITHUB_REPOSITORY/releases/$a"
+              echo "Release en double supprimée : $a"
+            fi
+          done
