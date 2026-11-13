@@ -3,13 +3,13 @@
 
 :root {
   /* Points d'accroche partagés : HOME et GAMES composent leur écran entre ces deux barres */
-  --top-h: clamp(64px, 8.15vh, 150px);    /* 88 px en 1080p */
-  --bottom-h: clamp(56px, 6.67vh, 120px); /* 72 px en 1080p */
+  --top-h: clamp(64px, 10.4vh, 190px);   /* 112 px en 1080p (réf. Switch : barre du haut ≈ 16 %) */
+  --bottom-h: clamp(56px, 10vh, 180px);   /* 108 px en 1080p (réf. Switch / ES-DE : ≈ 10 %) */
 
   --shell-x: clamp(24px, 2.5vw, 80px);    /* marge latérale des barres */
-  --sys: clamp(40px, 4.25vh, 80px);       /* bouton rond système : 46 px en 1080p */
-  --glyph: clamp(22px, 2.5vh, 44px);      /* glyphe de bouton dans la barre du bas : 27 px en 1080p */
-  --bar-text: clamp(13px, 1.55vh, 26px);  /* libellés de la barre du bas : 17 px en 1080p */
+  --sys: clamp(40px, 5.6vh, 100px);       /* bouton rond système : 60 px en 1080p (réf. Switch) */
+  --glyph: clamp(22px, 2.9vh, 52px);      /* glyphe rond de la barre du bas : 31 px en 1080p */
+  --bar-text: clamp(15px, 2.45vh, 44px);  /* libellés de la barre du bas : 26 px en 1080p */
   --light-bar: #f4f4f6;
   --light-ink: #3a3a3a;
 }
@@ -193,3 +193,88 @@ body[data-view="home"]:not(.has-overlay) .hints .glyph.pill { color: #fff; backg
   .splash { display: none; }
   .sys-btn.is-focus, .sys-btn:focus-visible { transform: none; }
 }
+
+
+/* ================================================================ LOOK : finitions façon refs (Switch / PS5 / ES-DE)
+   Barre du haut Switch : icônes rondes pleines à gauche, heure + wifi + batterie à droite.
+   Barre du bas Switch : ligne fine en retrait, glyphes ronds pleins, libellés réguliers.
+   Accueil ES-DE : barre du haut presque invisible, bande claire du bas en gros caractères gris. */
+.topbar { background: linear-gradient(to bottom, rgba(var(--shade-rgb), .42) 0%, rgba(var(--shade-rgb), .14) 70%, transparent 100%); }
+.sys-btn { border: 0; background: rgba(var(--bg-rgb), .72); box-shadow: 0 4px 14px rgba(0, 0, 0, .22); }
+.sys-btn svg { stroke-width: 2.1; }
+.brand-name { font-size: clamp(16px, 2.2vh, 38px); font-weight: 600; letter-spacing: .04em; }
+.tb-sep { height: calc(var(--sys) * .7); width: 2px; border-radius: 2px; background: rgba(var(--fg-rgb), .4); }
+/* Statut : heure d'abord, puis wifi / batterie (ordre Switch) */
+.status { gap: calc(var(--sys) * .38); }
+.status .clock { order: 0; }
+.status .status-ind { order: 1; }
+.status .win-ctrl { order: 2; }
+.status .update-chip { order: -1; }
+.clock-time { font-size: clamp(22px, 3.1vh, 56px); font-weight: 500; letter-spacing: .01em; }
+.clock-date { font-weight: 500; }
+.status-ind svg { width: calc(var(--sys) * .5); height: calc(var(--sys) * .5); }
+.bat-ind { font-size: clamp(16px, 2.5vh, 44px); font-weight: 500; }
+
+/* Barre du bas (écran jeux, overlays) : fond translucide + ligne fine en retrait (réf. Switch) */
+.hints { border-top: 0; background: linear-gradient(to top, rgba(var(--bg-rgb), .82), rgba(var(--bg-rgb), .6)); }
+.hints::after {
+  content: ''; position: absolute; top: 0; left: var(--shell-x); right: var(--shell-x); height: 1px;
+  background: rgba(var(--fg-rgb), .45); pointer-events: none;
+}
+.hint-list { gap: calc(var(--glyph) * 1.05); }
+.hint { gap: calc(var(--glyph) * .32); padding: 4px calc(var(--glyph) * .2); font-weight: 500; letter-spacing: .01em; color: var(--fg); }
+.foot-info { font-size: clamp(16px, 2.5vh, 44px); font-weight: 500; letter-spacing: .03em; text-transform: none; color: var(--fg); }
+/* Glyphes ronds pleins (réf. Switch : rond clair, lettre sombre) — monochromes, couleurs du thème */
+.hints .glyph, .hints .glyph.round, .hints .glyph.pill, .hints .glyph.ps {
+  height: var(--glyph); min-width: var(--glyph); border: 0; border-radius: 999px;
+  background: var(--fg); color: var(--bg); box-shadow: none;
+  font-family: var(--font-body); font-weight: 700; font-size: calc(var(--glyph) * .56); line-height: 1;
+}
+.hints .glyph.round { width: var(--glyph); padding: 0; }
+.hints .glyph.pill { padding: 0 calc(var(--glyph) * .36); font-size: calc(var(--glyph) * .44); letter-spacing: .02em; }
+.hints .glyph svg { width: calc(var(--glyph) * .64); height: calc(var(--glyph) * .64); stroke: currentColor; stroke-width: 2.6; fill: none; }
+
+/* ---------- Accueil : barre du haut discrète (heure en haut à droite, icônes petites et translucides) ---------- */
+body[data-view="home"] .topbar { --sys: clamp(30px, 3.6vh, 64px); background: none; }
+body[data-view="home"] .topbar .tb-left,
+body[data-view="home"] .topbar .status-ind,
+body[data-view="home"] .topbar .win-ctrl { opacity: .5; transition: opacity var(--dur-fast); }
+body[data-view="home"] .topbar .sys-btn { background: rgba(var(--bg-rgb), .38); box-shadow: none; backdrop-filter: blur(8px); }
+body[data-view="home"] .topbar .brand-mark { font-size: calc(var(--sys) * .55); }
+body[data-view="home"] .topbar .clock-date { display: none; }
+body[data-view="home"] .topbar .clock-time { font-size: clamp(18px, 2.4vh, 42px); }
+body[data-view="home"] .topbar .tb-sep { width: 1px; }
+body[data-view="home"].top-focus .topbar .tb-left,
+body[data-view="home"] .topbar .tb-left:hover,
+body[data-view="home"] .topbar .tb-left:focus-within,
+body[data-view="home"] .topbar .status-ind:hover,
+body[data-view="home"] .topbar .win-ctrl:hover,
+body[data-view="home"] .topbar .win-ctrl:focus-within { opacity: 1; }
+
+/* ---------- Accueil : bande blanche du bas (réf. ES-DE « 20 GAMES (0 FAVORITES) » + « ⊜ MENU Ⓐ SELECT ») ---------- */
+body[data-view="home"]:not(.has-overlay) .hints::after { display: none; }
+body[data-view="home"]:not(.has-overlay) .foot-info {
+  padding-left: calc(13.5vw - var(--shell-x));       /* aligné sur le bord gauche de la tuile sélectionnée */
+  font-size: clamp(18px, 3.3vh, 58px); font-weight: 600; letter-spacing: .02em; text-transform: uppercase;
+  color: var(--text-3);
+}
+body[data-view="home"]:not(.has-overlay) .hint-list { gap: calc(var(--glyph) * .9); }
+body[data-view="home"]:not(.has-overlay) .hint {
+  font-size: clamp(16px, 2.9vh, 50px); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; color: var(--text-3);
+}
+body[data-view="home"]:not(.has-overlay) .hints .glyph,
+body[data-view="home"]:not(.has-overlay) .hints .glyph.round,
+body[data-view="home"]:not(.has-overlay) .hints .glyph.pill { color: var(--light-bar); background: var(--text-3); border: 0; }
+
+@media (max-width: 1100px) {
+  .hint-list { gap: calc(var(--glyph) * .6); }
+  body[data-view="home"]:not(.has-overlay) .foot-info { padding-left: 0; }
+}
+
+/* LOOK : bande du bas de l'accueil sans dégradé sur les tuiles (réf. ES-DE : tuiles nettes jusqu'en bas) */
+body[data-view="home"]:not(.has-overlay) .hints::before { height: calc(var(--bottom-h) * .18); }
+/* Logo de console de la barre du haut lisible en thème clair (logo blanc → foncé) */
+[data-theme="light"] .brand-plat-logo { filter: brightness(0) opacity(.86); }
+/* LOOK : le texte d'info se tronque, jamais les commandes */
+.foot-info { flex: 1 1 auto; }
+.hint-list { flex: 0 0 auto; }

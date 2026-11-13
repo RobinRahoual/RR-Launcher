@@ -5,7 +5,7 @@
 
 /* ---------------------------------------------------------------- Fond : image hero nette du jeu */
 body[data-view="games"] .bg-layer {
-  inset: 0; filter: brightness(.86) saturate(1.06); animation: none; transform: none;
+  inset: 0; filter: brightness(.94) saturate(1.06); animation: none; transform: none;
   background-position: center 22%;
   transition: opacity 450ms var(--ease-out);
 }
@@ -14,10 +14,10 @@ body[data-view="games"] .bg-tint { opacity: 0; }
 body[data-view="games"] #motes { opacity: 0; }
 /* Dégradés de lisibilité : bas + gauche (bloc d'infos), léger voile en haut (barre système) */
 body[data-view="games"] .bg-shade {
+  /* LOOK : art du jeu net et bien visible (PS5) ; voile seulement sous le nom / l'encart (bas-gauche) */
   background:
-    linear-gradient(90deg, rgba(var(--bg-rgb), .9) 0%, rgba(var(--bg-rgb), .62) 28%, rgba(var(--bg-rgb), .16) 58%, transparent 78%),
-    linear-gradient(0deg, rgba(var(--bg-rgb), .96) 0%, rgba(var(--bg-rgb), .7) 24%, rgba(var(--bg-rgb), .1) 56%, transparent 66%),
-    linear-gradient(180deg, rgba(var(--bg-rgb), .6) 0%, transparent 24%);
+    linear-gradient(0deg, rgba(var(--bg-rgb), .92) 0%, rgba(var(--bg-rgb), .66) 20%, rgba(var(--bg-rgb), .12) 42%, transparent 52%),
+    linear-gradient(90deg, rgba(var(--bg-rgb), .5) 0%, rgba(var(--bg-rgb), .18) 40%, transparent 62%);
 }
 
 /* La roue des consoles s'efface dans l'écran jeux (rangée ancrée à gauche) */
@@ -47,8 +47,10 @@ body[data-view="home"] #stage { visibility: hidden; }
 /* Anneau de focus d'accent, arrondi, sur la face visible (avant ou dos retourné) */
 #stage .slot.is-selected .front,
 #stage .slot.is-selected .back {
-  outline: max(3px, calc(var(--box-h) * .009)) solid var(--color-accent);
+  /* LOOK : anneau façon Switch — épais, arrondi, accent + liseré clair dans l'écart */
+  outline: max(4px, calc(var(--box-h) * .016)) solid var(--color-accent);
   outline-offset: max(4px, calc(var(--box-h) * .014));
+  box-shadow: 0 0 0 max(4px, calc(var(--box-h) * .014)) rgba(var(--bg-rgb), .85);
 }
 #stage .slot.is-selected .box[data-style="card"] .front,
 #stage .slot.is-selected .box[data-style="jewel"] .front { border-radius: calc(var(--box-h) * .018); }
@@ -174,4 +176,46 @@ body[data-view="games"] .badge.time { display: inline-flex; }
   .cap-btn, .cap-btn.is-focus { transform: none; transition: none; }
   body[data-view="games"] .bg-layer { transition: opacity 120ms linear; }
   .cat-empty { animation: none; }
+}
+
+
+/* ================================================================ LOOK : nom du jeu (Switch) + encart d'état (PS5)
+   Sous la boîte sélectionnée : le nom en grand, texte simple ; puis une ligne compacte :
+   encart translucide (temps de jeu / dernière session / en cours) + boutons Jouer · Détails · ♡. */
+body[data-view="games"] .caption {
+  display: grid; grid-template-columns: auto 1fr; align-items: center;
+  column-gap: calc(14px * var(--ui)); row-gap: 0;
+  top: calc(var(--g-row-top, 160px) + var(--g-sel-h, 420px) + clamp(18px, 3vh, 40px));
+}
+body[data-view="games"] .cap-head { grid-column: 1 / -1; }
+body[data-view="games"] .caption h1 {
+  font-family: var(--font-body); font-weight: 500; letter-spacing: 0; text-transform: none;
+  font-size: clamp(26px, 4.3vh, 72px); line-height: 1.12; max-width: 72vw;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  color: var(--fg); text-shadow: 0 2px 16px rgba(var(--shade-rgb), .7);
+}
+body[data-view="games"] .caption p {
+  grid-column: 1 / -1; margin: clamp(4px, .7vh, 10px) 0 0;
+  font-size: clamp(12px, 1.45vh, 24px); font-weight: 600; letter-spacing: .14em; color: var(--text-2);
+}
+body[data-view="games"] .cap-badges {
+  grid-column: 1; margin-top: clamp(12px, 2vh, 26px); align-self: stretch;
+  display: flex; align-items: center; gap: calc(6px * var(--ui)); padding: calc(6px * var(--ui)) calc(10px * var(--ui));
+  border-radius: calc(16px * var(--ui)); background: rgba(var(--bg-rgb), .66); backdrop-filter: blur(14px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+}
+body[data-view="games"] .cap-badges:empty { display: none; }
+body[data-view="games"] .cap-badges .badge { border: 0; background: transparent; padding: 0 calc(6px * var(--ui)); }
+body[data-view="games"] .cap-badges .badge + .badge { border-left: 1px solid var(--line-strong); border-radius: 0; }
+body[data-view="games"] .cap-badges .badge.live { background: transparent; }
+body[data-view="games"] .cap-actions { grid-column: 2; margin-top: clamp(12px, 2vh, 26px); }
+.cap-btn { height: calc(48px * var(--ui)); }
+.cap-icon { width: calc(48px * var(--ui)); }
+
+/* Onglets : plus discrets (la rangée domine, comme sur Switch) */
+body[data-view="games"] #tabs .tab { font-weight: 500; }
+
+@media (max-height: 760px) {
+  body[data-view="games"] .caption h1 { font-size: clamp(22px, 4vh, 32px); }
+  body[data-view="games"] .cap-badges, body[data-view="games"] .cap-actions { margin-top: 10px; }
 }

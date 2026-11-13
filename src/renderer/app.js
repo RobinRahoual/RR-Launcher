@@ -117,6 +117,7 @@ function dismissToast(t) {
 // Fond = bannière d'un jeu de la console, panneau en biais avec le grand logo, rangée de tuiles en bas.
 const LAY = { k: 0, edge: 0, anchor: 0, R: 400, cx: 0, cy: 0 }; // géométrie partagée (layout / frameGames)
 const HOME_FADE = reduceMotion ? 0 : 350;
+const HOME_WRAP = 5; // LOOK : à partir de 5 tuiles, la rangée boucle (assez de tuiles pour cacher la couture hors écran)
 
 function computeHome() {
   const g = S.lib.games;
@@ -257,7 +258,10 @@ function onCardClick(id) {
   if (i === S.home.sel) openHomeItem(); else homeSelect(i);
 }
 function homeSelect(i) {
-  i = clamp(i, 0, S.home.items.length - 1);
+  // LOOK : la rangée boucle comme ES-DE (← sur la 1re tuile → dernière) ; pos décalé de n pour un glissement continu
+  const n = S.home.items.length;
+  if (n >= HOME_WRAP && (i < 0 || i >= n)) { S.home.pos += i < 0 ? n : -n; i = (i + n) % n; }
+  i = clamp(i, 0, n - 1);
   if (i === S.home.sel) return;
   S.home.sel = i;
   S.home.selId = S.home.items[i].id;
@@ -326,13 +330,23 @@ function warmHomeArt() {
   }
 }
 function homeLogoHTML(id) {
-  if (id === 'all' || id === 'add') {
-    return `<div class="h-brand"><span class="h-brand-t"><span class="brand-rr">RR</span> LAUNCHER</span>`
-      + `<span class="h-brand-s">${id === 'all' ? 'Tous les jeux' : 'Ajouter des jeux'}</span></div>`;
-  }
+  // LOOK : petite pastille de marque au-dessus d'un nom énorme (réf. ES-DE « Nintendo » / « Wii »)
+  const big = (maker, name) => {
+    // Lignes de ≤ 8 caractères ; taille ajustée à la plus longue ligne et au nombre de lignes
+    const lines = [];
+    for (const w of name.split(/\s+/)) {
+      const l = lines.length - 1;
+      if (l >= 0 && (lines[l] + ' ' + w).length <= 8) lines[l] += ' ' + w; else lines.push(w);
+    }
+    const fit = Math.min(1, 4.4 / Math.max(3, ...lines.map((x) => x.length)), 1.7 / lines.length);
+    return `<div class="h-brand">${maker ? `<span class="h-maker">${maker}</span>` : ''}`
+      + `<span class="h-name" style="--fit:${fit.toFixed(2)}">${lines.map(esc).join('<br>')}</span></div>`;
+  };
+  if (id === 'all' || id === 'add') return big('<span class="brand-rr">RR</span> Launcher', id === 'all' ? 'Tous les jeux' : 'Ajouter');
   const p = plat(id);
   if (S.platLogo[id]) return `<img class="h-logo-img" src="${platUrl(S.platLogo[id])}" alt="${esc(p.name)}" />`;
-  return `<div class="h-name" style="--fit:${Math.min(1, 7 / Math.max(3, p.name.length)).toFixed(2)}">${esc(p.name)}</div>`;
+  const m = p.name.match(/^(Nintendo|Sony|Sega|Microsoft|Atari|NEC|SNK|Bandai|Valve)\s+(.+)$/i);
+  return m ? big(esc(m[1]), m[2]) : big('', p.name);
 }
 function setHomeLogo(id) {
   const box = $('#homeLogo');
@@ -412,10 +426,13 @@ function frameHome() {
   const T = first.offsetWidth || 200;
   const pitch = T * 1.163;
   const x0 = innerWidth * 0.226 - T / 2;
+  const n = S.home.items.length;
   S.home.items.forEach((it, i) => {
     const el = cards.get(it.id);
     if (!el) return;
-    const x = x0 + (i - S.home.pos) * pitch;
+    let d = i - S.home.pos;
+    if (n >= HOME_WRAP) d = ((d + n / 2) % n + n) % n - n / 2; // LOOK : rangée bouclée
+    const x = x0 + d * pitch;
     const vis = x > -T * 1.3 && x < innerWidth + T * 0.3;
     if (!vis) { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'; return; }
     el.style.visibility = '';
@@ -543,9 +560,9 @@ function slotDims(g) {
   const c = caseInfo(g);
   const H0 = S.dims.H;
   let W, H;
-  if (c.ratio <= 0.8) { H = H0 * (c.style === 'small' ? 0.92 : 1); W = H * c.ratio; }
-  else if (c.ratio <= 1.05) { W = H0 * 0.8; H = W / c.ratio; }
-  else { W = H0 * 1.05; H = W / c.ratio; }
+  // LOOK : hauteur commune (rangée alignée façon tuiles Switch) ; seuls les boîtiers très larges sont plafonnés
+  H = H0; W = H * c.ratio;
+  if (W > H0 * 1.3) { W = H0 * 1.3; H = W / c.ratio; }
   return { W, H, D: H * (DEPTH[c.style] || 0.085) };
 }
 function syncSlots() {
@@ -579,7 +596,7 @@ function syncSlots() {
   });
   S.dims.Wref = S.dims.H * 0.66;
   // Position gauche de chaque boîte : largeurs réelles + écart fixe (rangée serrée façon tuiles)
-  const gap = S.dims.H * 0.13;
+  const gap = S.dims.H * 0.15;
   S.cum = [];
   let acc = 0;
   S.items.forEach((g) => { S.cum.push(acc); acc += (slots.get(g.id)?._dims?.W || S.dims.Wref) + gap; });
@@ -613,7 +630,7 @@ function scheduleSweep() {
 
 // ---------------------------------------------------------------- Dimensions
 // Rangée de jeux : sous la barre système et les onglets, sélection ancrée à gauche (façon PS5 / Switch)
-const SEL_K = 1.34; // échelle de la boîte sélectionnée
+const SEL_K = 1.5; // échelle de la boîte sélectionnée (réf. Switch : 1re tuile 1,5× plus grande)
 function cssPx(name, fb) {
   const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
   return Number.isFinite(v) && v > 0 ? v : fb;
@@ -621,10 +638,10 @@ function cssPx(name, fb) {
 function measure() {
   const vh = innerHeight;
   const topH = cssPx('--top-h', 88), botH = cssPx('--bottom-h', 72);
-  const rowTop = topH + clamp(vh * 0.065, 46, 84);
+  const rowTop = topH + clamp(vh * 0.07, 46, 90);
   // Hauteur dispo pour la boîte sélectionnée : il faut garder la place du bloc d'infos dessous
   const info = clamp(vh * 0.3, 250, 340);
-  const selH = clamp(Math.min(vh * 0.41, vh - rowTop - botH - info), 170, 600);
+  const selH = clamp(Math.min(vh * 0.415, vh - rowTop - botH - info), 170, 600);
   const H = selH / SEL_K;
   S.dims.H = H;
   S.dims.rowTop = rowTop;
@@ -841,10 +858,8 @@ function updateChrome(force = false) {
     title.textContent = g.name;
     title.dataset.id = g.id;
     const logo = $('#capGameLogo');
-    const src = g.media?.logo ? mediaUrl(g, g.media.logo) : '';
-    logo.onerror = () => { logo.hidden = true; title.classList.remove('sr-only'); };
-    if (src) { if (logo.getAttribute('src') !== src) logo.src = src; logo.alt = g.name; logo.hidden = false; title.classList.add('sr-only'); }
-    else { logo.hidden = true; logo.removeAttribute('src'); }
+    // LOOK : nom du jeu en texte simple sous la rangée (réf. Switch) ; le logo image n'est plus affiché
+    logo.hidden = true; logo.removeAttribute('src');
   }
   const p = plat(g.platform);
   const bits = [p.name, g.developer?.split(',')[0], yearOf(g), (g.genres || [])[0]].filter(Boolean);
@@ -1643,17 +1658,25 @@ const ICON = {
   mouse: '<svg viewBox="0 0 24 24"><rect x="6" y="3" width="12" height="18" rx="6"/><path d="M12 7v4"/></svg>',
   lr: '<svg viewBox="0 0 24 24"><path d="m9 6-6 6 6 6M15 6l6 6-6 6"/></svg>',
   ud: '<svg viewBox="0 0 24 24"><path d="m6 9 6-6 6 6M6 15l6 6 6-6"/></svg>',
+  menu: '<svg viewBox="0 0 24 24"><path d="M6 8h12M6 12h12M6 16h12"/></svg>',
+  view: '<svg viewBox="0 0 24 24"><rect x="4" y="6" width="11" height="9" rx="1.5"/><path d="M9 18h9.5a1.5 1.5 0 0 0 1.5-1.5V10"/></svg>',
 };
 function glyph(btn) {
   if (S.device === 'pad') {
     const ps = S.padType === 'ps';
     const map = { a: ps ? ['✕', 'g-a'] : ['A', 'g-a'], b: ps ? ['○', 'g-b'] : ['B', 'g-b'], x: ps ? ['□', 'g-x'] : ['X', 'g-x'], y: ps ? ['△', 'g-y'] : ['Y', 'g-y'] };
     if (map[btn]) return `<span class="glyph round ${ps ? 'ps ' : ''}${map[btn][1]}">${map[btn][0]}</span>`;
-    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB', view: ps ? 'SHARE' : 'VIEW', menu: ps ? 'OPTIONS' : 'MENU', lr: ICON.lr, ud: ICON.ud }[btn];
+    // LOOK : boutons Menu / Vue / croix en glyphes ronds (réf. ES-DE « ⊜ MENU », Switch « ⊕ Options »)
+    const roundIco = { menu: ICON.menu, view: ICON.view, lr: ICON.lr, ud: ICON.ud }[btn];
+    if (roundIco) return `<span class="glyph round g-ico">${roundIco}</span>`;
+    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB' }[btn];
     return `<span class="glyph pill">${pill}</span>`;
   }
   const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
-  return keys[btn] ? `<span class="glyph">${keys[btn]}</span>` : '';
+  const k = keys[btn];
+  if (!k) return '';
+  // LOOK : touche d'un caractère ou flèches → glyphe rond ; nom de touche → pastille arrondie
+  return `<span class="glyph kb ${k.startsWith('<svg') || k.length === 1 ? 'round g-ico' : 'pill'}">${k}</span>`;
 }
 // Barre du bas façon console : commandes alignées à droite, la plus importante (A) tout à droite
 function renderHints() {
