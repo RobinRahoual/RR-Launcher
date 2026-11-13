@@ -57,6 +57,12 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 - Windows réserve le bouton Xbox à la Game Bar : désactive *Paramètres → Jeux → Xbox Game Bar → « Ouvrir Xbox Game Bar avec ce bouton »* (et l'équivalent dans Steam si besoin). Option dans **Réglages → Général**.
 - Manettes Xbox/XInput via `koffi`, DualShock 4 / DualSense / Switch Pro via `node-hid` (lecture seule).
 
+## Lancement, retour, réveil par la manette
+
+- **Écran de lancement** façon PS5 : bannière du jeu en plein écran, logo au centre, « Lancement… » en bas à droite (B / Échap pour annuler dans la première seconde).
+- **Fin de partie** : quand tu quittes le dernier jeu, le launcher revient au premier plan sur la rangée du jeu.
+- **Réveil par la manette** : si le launcher est réduit ou dans la zone de notification et qu'aucun jeu ne tourne, allumer ou brancher une manette (Xbox, DualShock 4, DualSense, Switch Pro) l'ouvre. Option dans **Réglages → Général** ; active aussi « Lancer au démarrage de Windows » pour qu'il soit toujours prêt.
+
 ## Thème
 
 **Réglages → Apparence → Thème** : Clair (défaut), Sombre ou Auto (suit Windows).
