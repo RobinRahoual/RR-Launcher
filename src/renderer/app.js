@@ -86,7 +86,7 @@ function toast(msg, error = false) {
 }
 
 // ---------------------------------------------------------------- Roue des consoles (accueil)
-const WHEEL_STEP = 44; // degrés entre deux consoles sur la roue
+const WHEEL_STEP = 34; // degrés entre deux consoles sur la roue
 const LAY = { k: 0, edge: 0, anchor: 0, R: 400, cx: 0, cy: 0 }; // k : 0 = accueil, 1 = console ouverte
 
 function computeHome() {
@@ -107,38 +107,89 @@ function computeHome() {
   S.home.sel = i >= 0 ? i : 0;
   S.home.selId = items[S.home.sel]?.id;
 }
+// Pochettes des derniers jeux joués (visuel « Tous les jeux »)
+function recentCovers(n = 3) {
+  return [...S.lib.games].filter((g) => g.media?.cover)
+    .sort((a, b) => (b.lastPlayed || b.addedAt || 0) - (a.lastPlayed || a.addedAt || 0))
+    .slice(0, n).map((g) => mediaUrl(g, g.media.cover));
+}
 function wheelItemHTML(it) {
-  let visual;
-  if (it.id === 'add') visual = `<div class="w-add">+</div>`;
-  else if (it.id === 'all') visual = `<div class="w-all">TOUS<br/>LES JEUX</div>`;
-  else {
-    const p = plat(it.id), img = S.platImg[it.id];
-    visual = img ? `<img src="${platUrl(img)}" alt="" />`
-      : it.id === 'pc' ? `<img src="assets/pc.svg" alt="" />`
-      : S.platLogo[it.id] ? `<span class="w-logo" style="${logoCss(it.id)}"></span>`
-      : `<div class="w-text">${esc(p.short)}</div>`;
+  let visual, kind;
+  const p = plat(it.id);
+  if (it.id === 'add') {
+    kind = 'add';
+    visual = `<div class="w-add" aria-hidden="true"><i></i></div>`;
+  } else if (it.id === 'all') {
+    const cv = recentCovers();
+    kind = 'all';
+    visual = cv.length
+      ? `<div class="w-fan">${cv.map((u, k) => `<span style="--k:${k - (cv.length - 1) / 2}"><img src="${u}" alt="" /></span>`).join('')}</div>`
+      : `<div class="w-fan is-empty"><span></span><span></span><span></span></div>`;
+  } else {
+    const img = S.platImg[it.id];
+    if (img) { kind = 'photo'; visual = `<img class="w-photo" src="${platUrl(img)}" alt="" />`; }
+    else if (it.id === 'pc') { kind = 'photo'; visual = `<img class="w-photo" src="assets/pc.svg" alt="" />`; }
+    else if (S.platLogo[it.id]) { kind = 'logo'; visual = `<img class="w-logo-img" src="${platUrl(S.platLogo[it.id])}" alt="" />`; }
+    else {
+      kind = 'emblem';
+      visual = `<div class="w-emblem">${p.maker ? `<small>${esc(p.maker)}</small>` : ''}<strong>${esc(p.short || p.name)}</strong></div>`;
+    }
   }
-  const name = it.id === 'add' ? 'Ajouter' : it.id === 'all' ? 'Tous les jeux' : plat(it.id).name;
-  return `<div class="w-visual">${visual}<div class="sweep"></div></div><div class="w-label"><b>${esc(name)}</b>${it.n ? `<span>${it.n}</span>` : ''}</div>`;
+  const name = it.id === 'add' ? 'Ajouter' : it.id === 'all' ? 'Tous les jeux' : p.name;
+  const count = it.id === 'add' ? 'Jeux & ROMs' : `${it.n} jeu${it.n > 1 ? 'x' : ''}`;
+  return `<div class="w-stage"><div class="w-halo"></div><div class="w-contact"></div>`
+    + `<div class="w-visual" data-kind="${kind}">${visual}<div class="sweep"></div></div></div>`
+    + `<div class="w-label"><b>${esc(name)}</b><span>${esc(count)}</span></div>`;
+}
+// Logo très clair (blanc sur transparent) : illisible sur le disque clair → on le fonce
+function checkLogoTone(img) {
+  try {
+    const c = document.createElement('canvas'), w = 48, h = 24;
+    c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true });
+    x.drawImage(img, 0, 0, w, h);
+    const d = x.getImageData(0, 0, w, h).data;
+    let sum = 0, n = 0;
+    for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 100) { sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
+    img.classList.toggle('is-light', n > 0 && sum / n > 205);
+  } catch { /* image non lisible (origine) : on garde le rendu d'origine */ }
+}
+function wheelColor(id) {
+  return id === 'add' || id === 'all' ? '#F43F5E' : plat(id).color || '#F43F5E';
 }
 function syncCards() {
   const root = $('#wheelItems');
   const ids = new Set(S.home.items.map((x) => x.id));
   for (const [id, el] of cards) if (!ids.has(id)) { el.remove(); cards.delete(id); }
+  const covers = recentCovers().join(' ');
   S.home.items.forEach((it) => {
     let el = cards.get(it.id);
-    const sig = `${it.n}|${S.platImg[it.id] || ''}|${S.platLogo[it.id] || ''}`;
+    const sig = `${it.n}|${S.platImg[it.id] || ''}|${S.platLogo[it.id] || ''}|${it.id === 'all' ? covers : ''}`;
     if (!el) {
       el = document.createElement('div');
       el.className = 'witem';
+      el.dataset.id = it.id;
       el.addEventListener('click', (e) => { e.stopPropagation(); onCardClick(it.id); });
       root.appendChild(el);
       cards.set(it.id, el);
     }
-    if (el._sig !== sig) { el.innerHTML = wheelItemHTML(it); el._sig = sig; }
+    if (el._sig !== sig) {
+      el.innerHTML = wheelItemHTML(it);
+      el._sig = sig;
+      el.style.setProperty('--pc', wheelColor(it.id));
+      el._halo = $('.w-halo', el); el._contact = $('.w-contact', el); el._label = $('.w-label', el);
+      const logo = $('.w-logo-img', el);
+      if (logo) { if (logo.complete && logo.naturalWidth) checkLogoTone(logo); else logo.addEventListener('load', () => checkLogoTone(logo), { once: true }); }
+    }
     if (!['all', 'add', 'pc'].includes(it.id) && S.platImg[it.id] === undefined) loadPlatImage(it.id);
     loadPlatLogo(it.id);
   });
+  // Repères gravés sur le disque, un par élément (tournent avec la roue)
+  const ticks = $('#discTicks');
+  if (ticks._n !== S.home.items.length) {
+    ticks._n = S.home.items.length;
+    ticks.innerHTML = S.home.items.map((_, i) => `<i class="disc-pin" style="transform:rotate(${i * WHEEL_STEP}deg)"></i>`).join('');
+  }
 }
 async function loadPlatLogo(id) {
   if (!id || ['pc', 'all', 'add'].includes(id) || S.platLogo[id] !== undefined) return;
@@ -517,26 +568,45 @@ function layout() {
 }
 function frameWheel(t) {
   const { R, cx, cy } = LAY;
+  const e = LAY.ease || 0; // 0 = accueil, 1 = console ouverte (roue réduite à une bande)
   const disc = $('#disc');
   disc.style.transform = `translate3d(${cx - R}px, ${cy - R}px, 0)`;
   $('#discTicks').style.transform = `rotate(${-S.home.pos * WHEEL_STEP}deg)`;
-  const rI = R * 0.6, size = R * 0.56;
+  const selId = S.home.items[S.home.sel]?.id;
+  if (disc._sel !== selId) {
+    disc._sel = selId;
+    disc.style.setProperty('--pc', wheelColor(selId));
+    $$('.disc-pin', disc).forEach((p, i) => p.classList.toggle('on', i === S.home.sel));
+  }
+  // En mode console, les éléments glissent vers le bord pour rester visibles dans la bande
+  const rI = R * (0.66 + 0.14 * e);
+  const size = R * 0.44;
   S.home.items.forEach((it, i) => {
     const el = cards.get(it.id);
     if (!el) return;
     const th = (i - S.home.pos) * WHEEL_STEP;
     const a = Math.abs(th);
-    if (a > 120) { el.style.display = 'none'; return; }
+    if (a > 110) { if (el.style.display !== 'none') el.style.display = 'none'; return; }
     el.style.display = '';
     const rad = th * Math.PI / 180;
     const x = cx + rI * Math.cos(rad), y = cy + rI * Math.sin(rad);
-    const focus = clamp(1 - a / WHEEL_STEP, 0, 1);
-    const sc = 0.58 + 0.42 * focus;
-    const float = !reduceMotion && focus > 0.5 ? Math.sin(t / 1600) * 4 * focus : 0;
+    const f = clamp(1 - a / WHEEL_STEP, 0, 1);
+    const focus = f * f * (3 - 2 * f);
+    const sc = (0.44 + 0.56 * focus) * (1 - 0.5 * e);
+    const float = !reduceMotion && e < 0.5 ? Math.sin(t / 1700) * 3 * focus : 0;
     el.style.transform = `translate3d(${x - size / 2}px, ${y - size / 2 + float}px, 0) scale(${sc})`;
-    el.style.opacity = clamp(1 - Math.max(0, a - 70) / 50, 0, 1);
-    el.style.setProperty('--focus', focus.toFixed(3));
-    el.style.zIndex = String(100 - Math.round(a));
+    el.style.opacity = (clamp(1 - Math.max(0, a - 70) / 40, 0, 1) * (1 - 0.6 * e * (1 - focus))).toFixed(3);
+    el.style.zIndex = String(200 - Math.round(a));
+    el.classList.toggle('is-sel', focus > 0.5);
+    // Halo, ombre de contact et légende : seulement opacity/transform
+    if (el._halo) el._halo.style.opacity = (focus * (1 - e)).toFixed(3);
+    if (el._contact) el._contact.style.opacity = (0.35 + 0.65 * focus).toFixed(3);
+    if (el._label) {
+      // Légende compensée : lisible même sur les consoles voisines (≈ 70 % de la taille sélectionnée)
+      const ls = (0.74 + 0.26 * focus) / Math.max(0.3, 0.44 + 0.56 * focus);
+      el._label.style.transform = `scale(${ls.toFixed(3)})`;
+      el._label.style.opacity = ((0.78 + 0.22 * focus) * clamp(1 - e * 2.2, 0, 1)).toFixed(3);
+    }
   });
 }
 function cumAt(p) {
