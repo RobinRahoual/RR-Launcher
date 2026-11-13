@@ -10,6 +10,7 @@ const meta = require('./metadata');
 const scanner = require('./scanner');
 const { BY_ID, platformForFile, detectEmulator, publicPlatforms, romExtensions } = require('./platforms');
 const { autoUpdater } = require('electron-updater');
+const names = require('./names'); // noms collés (« RedDeadRedemption2 ») et similarité des titres
 const guide = require('./guide'); // GUIDE : bouton Xbox / PS / Home (natif optionnel)
 const padwake = require('./padwake'); // WAKE : manette allumée → launcher au premier plan
 const emuLaunch = require('./features/emu/launch'); // EMU : profil de lancement par jeu (g.launch)
@@ -113,11 +114,11 @@ function createWindow() {
   });
   win.on('enter-full-screen', () => send('win:fullscreen', true));
   win.on('leave-full-screen', () => send('win:fullscreen', false));
-  win.on('show', () => { send('win:visible', true); updatePadWake(); });
-  win.on('focus', () => recheckSessions());
-  win.on('hide', () => { send('win:visible', false); updatePadWake(); });
+  win.on('show', () => { send('win:visible', true); updatePadWake(); guideWatch.navFlush(); });
+  win.on('focus', () => { recheckSessions(); guideWatch.navFlush(); });
+  win.on('hide', () => { send('win:visible', false); updatePadWake(); guideWatch.navFlush(); });
   // WAKE : réduite / restaurée → (dés)active la surveillance des manettes
-  win.on('minimize', () => updatePadWake());
+  win.on('minimize', () => { updatePadWake(); guideWatch.navFlush(); });
   win.on('restore', () => updatePadWake());
   // GUIDE : « toujours au premier plan » n'est que temporaire (pour passer devant un jeu)
   win.on('blur', () => { if (win.isAlwaysOnTop()) win.setAlwaysOnTop(false); });
@@ -140,6 +141,7 @@ function createWindow() {
 
 function showWindow() {
   if (!win) return;
+  frontAt = Date.now(); // NAV : la manette pilote le launcher qu'on vient de ramener devant
   if (win.isMinimized()) win.restore();
   win.show();
   win.focus();
@@ -163,11 +165,16 @@ function bringToFront(reason, extra = {}) {
       try { n.allowForeground(); if (!win.isFocused()) n.focusWindow(n.hwndOf(win.getNativeWindowHandle())); }
       catch (e) { meta.log(`premier plan : ${e.message}`); }
     }
+    // Windows refuse parfois le premier plan au 1er essai (jeu encore en train de se fermer) : on réessaie
+    setTimeout(() => {
+      if (!win || win.isDestroyed() || win.isFocused() || !win.isVisible()) return;
+      try { const m = winNative(); win.show(); win.moveTop(); if (m) { m.allowForeground(); m.focusWindow(m.hwndOf(win.getNativeWindowHandle())); } } catch {}
+    }, 700);
     clearTimeout(wakeTopTimer);
     wakeTopTimer = setTimeout(() => {
       // le menu en jeu garde « toujours au premier plan » tant qu'il est ouvert (voir guide:ingame)
       if (win && !win.isDestroyed() && win.isAlwaysOnTop() && !ingameOpen) win.setAlwaysOnTop(false);
-    }, 1500);
+    }, 2000);
   }
   send('win:wake', { reason, wasHidden, wasFront, ...extra });
 }
@@ -264,13 +271,13 @@ function commit() {
 
 const GENERIC = /^(launcher|game|start|play|setup|bootstrap|unity|unreal|engine|client|win64|x64|binaries|bin|shipping|release|app|eboot)$/i;
 function cleanName(s) {
-  return s
+  return names.prettify(s
     .replace(/\.(exe|lnk|url|bat|cmd)$/i, '')
     .replace(/[-_ ](win64|win32|x64|x86|shipping|dx11|dx12|vulkan|launcher)\b/gi, '')
     .replace(/([a-z])([A-Z])/g, '$1 $2')
     .replace(/[_\.]+/g, ' ')
     .replace(/\s+/g, ' ')
-    .trim();
+    .trim()); // « Redemption2 » → « Redemption 2 »
 }
 function folderGuess(exePath) {
   const parts = exePath.split(/[\\/]/).filter(Boolean);
@@ -347,10 +354,19 @@ async function applyMetadata(game, match) {
       else if (platform.id !== 'pc') match = { source: 'auto', name: game.name };
       else {
         progress('Recherche du jeu…');
-        const res = await meta.search(game.name, store.data.settings, platform).catch(() => []);
-        const norm = meta.normalize;
-        match = res.find((r) => norm(r.name) === norm(game.name)) || res[0] || { source: 'none', name: game.name };
-        meta.log(`recherche auto « ${game.name} » → ${res.length} résultat(s), choisi : ${match.source} ${match.name}`);
+        // Plusieurs écritures (« RedDeadRedemption2 » → « Red Dead Redemption 2 ») ; on garde le résultat le plus proche
+        // du nom, jamais un résultat sans rapport (mieux vaut une jaquette générée qu'un autre jeu)
+        const tries = [...new Set([game.name, names.prettify(game.name)])];
+        let pick = null, total = 0;
+        for (const term of tries) {
+          const res = await meta.search(term, store.data.settings, platform).catch(() => []);
+          total += res.length;
+          const b = names.best(res, tries);
+          if (b && (!pick || b.score > pick.score)) pick = b;
+          if (pick && pick.score >= 0.95) break;
+        }
+        match = pick && pick.score >= 0.5 ? pick.item : { source: 'none', name: game.name };
+        meta.log(`recherche auto « ${game.name} » → ${total} résultat(s), choisi : ${match.source} ${match.name} (score ${pick ? pick.score.toFixed(2) : '-'})`);
       }
     }
     const tmp = dir + '.new';
@@ -663,6 +679,23 @@ function countProcessesIn(dir) {
     });
   });
 }
+// Processus qui traînent après la fermeture d'un jeu (rapport de plantage, anti-triche, overlay, mise à jour) :
+// ils ne prolongent pas la session.
+const HELPER_EXE = /crash|reporter|unitycrashhandler|easyanticheat|eac_?launcher|beservice|battleye|overlay|webhelper|cefprocess|updater|uninst|redist|dxsetup|prereq|vcredist|launcherpatcher|socialclubhelper/i;
+// État des processus d'un dossier : { count, win } — win = une fenêtre principale visible existe (null si inconnu)
+async function dirStatus(dir) {
+  const n = winNative();
+  if (n && process.platform === 'win32' && dir) {
+    try {
+      const d = normDir(dir) + '\\';
+      const pids = n.listProcesses()
+        .filter((p) => p.pid !== process.pid && p.path && p.path.toLowerCase().startsWith(d) && !HELPER_EXE.test(path.basename(p.path)))
+        .map((p) => p.pid);
+      return { count: pids.length, win: pids.length ? !!n.findMainWindow(pids) : false };
+    } catch (e) { meta.log(`suivi : ${e.message}`); }
+  }
+  return { count: await countProcessesIn(dir), win: null };
+}
 // Un dossier trop large (racine d'un disque, Program Files, profil, Bureau, dossier Steam…) contient
 // d'autres programmes qui tournent en permanence : la session ne se terminerait jamais.
 function tooBroad(dir) {
@@ -681,7 +714,53 @@ function onSessionStart(id) {
   send('game:running', { id, running: true });
   commit();
   updatePadWake(); // WAKE : pendant un jeu, seul le sondage Guide reste actif
-  if (store.data.settings.hideOnLaunch) setTimeout(() => { if (running.has(id) && !ingameOpen) hideToTray(); }, 900);
+  handOffToGame(id);
+}
+// Passe la main au jeu : l'écran de lancement reste affiché jusqu'à ce que la fenêtre du jeu existe, puis elle est
+// mise au premier plan (Windows laisse souvent un jeu démarrer DERRIÈRE la fenêtre active) et le launcher se masque.
+// Sans fenêtre au bout de quelques secondes (Steam qui synchronise, petit launcher…) le launcher se masque quand
+// même pour ne rien cacher, et la fenêtre du jeu est mise devant dès qu'elle apparaît (jusqu'à 2 min).
+function handOffToGame(id) {
+  const g = findGame(id);
+  const n = winNative();
+  const t0 = Date.now();
+  const maxWait = g && (g.kind === 'steam' || g.kind === 'epic' || g.kind === 'uri') ? 12000 : 25000;
+  let hidden = false;
+  const hide = () => {
+    if (hidden) return;
+    hidden = true;
+    if (!store.data.settings.hideOnLaunch || !running.has(id) || ingameOpen || !win || win.isDestroyed()) return;
+    if (win.isAlwaysOnTop()) win.setAlwaysOnTop(false);
+    hideToTray();
+  };
+  if (!n) { setTimeout(hide, 900); return; }
+  try { n.allowForeground(); } catch {}
+  let anyPid = false;
+  const tick = async () => {
+    if (!running.has(id) || ingameOpen) return;
+    let pids = [], hwnd = 0;
+    try { pids = await gamePids(id); hwnd = pids.length ? n.findMainWindow(pids) : 0; } catch (e) { meta.log(`lancement : ${e.message}`); }
+    if (pids.length) anyPid = true;
+    if (hwnd) {
+      hide();
+      const ok = n.focusWindow(hwnd);
+      meta.log(`lancement : fenêtre de ${g?.name} trouvée en ${Date.now() - t0} ms${ok ? '' : ' (premier plan refusé)'}`);
+      // 2e passage : un splash / petit launcher qui laisse la place à la vraie fenêtre (sans voler le focus à une autre appli)
+      setTimeout(async () => {
+        if (!running.has(id) || ingameOpen) return;
+        try {
+          const p2 = await gamePids(id), h2 = n.findMainWindow(p2), fg = n.foregroundPid();
+          if (h2 && h2 !== hwnd && (!fg || p2.includes(fg) || fg === process.pid)) n.focusWindow(h2);
+        } catch {}
+      }, 3000);
+      return;
+    }
+    const el = Date.now() - t0;
+    if (el > maxWait || (!anyPid && el > 8000 && g?.kind !== 'steam' && g?.kind !== 'epic' && g?.kind !== 'uri')) hide();
+    if (el > 120000) return;
+    setTimeout(tick, hidden ? 1000 : 300);
+  };
+  setTimeout(tick, 200);
 }
 function finishSession(id) {
   const r = running.get(id);
@@ -706,21 +785,28 @@ function watchDir(id, dir, { graceMs = 180000, exe = '' } = {}) {
   if (tooBroad(dir) && exe && !tooBroad(path.dirname(exe))) dir = path.dirname(exe);
   if (tooBroad(dir)) meta.log(`suivi : dossier très large pour ${findGame(id)?.name} (${dir}), la fin de partie peut ne pas être détectée`);
   clearInterval(r.timer);
-  let seen = false, misses = 0, busy = false;
+  let seen = false, misses = 0, busy = false, hadWin = false, noWin = 0;
   const started = Date.now();
   const check = async () => {
     if (busy || !running.has(id)) return;
     busy = true;
     try {
-      const n = await countProcessesIn(dir);
+      const st = await dirStatus(dir);
+      const n = st.count;
       if (n < 0) return;
-      if (n > 0) { seen = true; misses = 0; return; }
+      if (n > 0) {
+        seen = true; misses = 0;
+        // Le jeu a eu une fenêtre puis n'en a plus depuis ~8 s : il est fermé, seuls des processus d'arrière-plan restent
+        if (st.win === true) { hadWin = true; noWin = 0; }
+        else if (st.win === false && hadWin && ++noWin >= 4) { meta.log(`suivi : ${findGame(id)?.name} sans fenêtre, fin de session`); finishSession(id); }
+        return;
+      }
       if (seen) { if (++misses >= 2) finishSession(id); }
       else if (Date.now() - started > graceMs) finishSession(id);
     } finally { busy = false; }
   };
   r.check = check;
-  r.timer = setInterval(check, 3000);
+  r.timer = setInterval(check, winNative() ? 2000 : 3000);
 }
 // Revérifie tout de suite les sessions en cours (ex. quand on revient sur le launcher)
 function recheckSessions() { for (const r of running.values()) r.check?.(); }
@@ -787,12 +873,17 @@ function spawnTracked(id, file, args, cwd, begin, followDir, opts = {}) { // EMU
       begin({ child });
       resolve({ ok: true });
     });
-    child.once('exit', () => {
+    child.once('exit', async () => {
       const r = running.get(id);
       if (!r) return;
-      // Si le programme a passé la main à un autre processus (petit launcher), on suit le dossier.
-      if (followDir && Date.now() - r.start < 20000) watchDir(id, followDir, { graceMs: 15000, exe: file });
-      else finishSession(id);
+      // Si le programme a passé la main à un autre processus (petit launcher, ou jeu relancé par lui-même),
+      // on suit le dossier tant que des processus y tournent ; sinon la session est finie tout de suite.
+      if (followDir && !tooBroad(followDir)) {
+        const st = await dirStatus(followDir).catch(() => ({ count: -1 }));
+        if (!running.has(id)) return;
+        if (st.count > 0 || (st.count < 0 && Date.now() - r.start < 20000)) return watchDir(id, followDir, { graceMs: 15000, exe: file });
+      }
+      finishSession(id);
     });
     child.once('error', async (e) => {
       if (settled) return;
@@ -875,18 +966,35 @@ function winNative() {
 const guideWatch = guide.createGuideWatcher({
   log: (m) => meta.log(m),
   loadNative: () => { const n = winNative(); if (!n) throw new Error(process.platform !== 'win32' ? 'Windows uniquement' : 'koffi non chargé'); return n; },
-  onGuide: () => summon('guide'),
-  // Menu en jeu affiché mais fenêtre sans focus (Windows a refusé le premier plan) : on relaie la manette
-  wantRemote: () => ingameOpen && !!win && win.isVisible() && !win.isFocused(),
-  onRemote: (btn) => send('pad:remote', btn),
+  onGuide: () => { if (store.data.settings.guideButton !== false) summon('guide'); },
+  // NAV : la navigation à la manette passe aussi par la lecture native (XInput / HID), pas seulement par l'API
+  // Gamepad de Chromium — qui ne voit rien sans le focus et rate certaines manettes (Xbox, Switch Pro).
+  // Relayée tant que le launcher est visible et « au premier plan pour l'utilisateur » (focus, menu en jeu,
+  // ou ramené devant il y a peu). L'ancien relais « pad:remote » du menu en jeu est remplacé par celui-ci.
+  wantNav: () => navWanted(),
+  onNav: (mask) => {
+    send('pad:nav', mask);
+    if (mask && win && !win.isDestroyed() && !win.isFocused()) focusSelfSoon(); // la manette sert le launcher : on lui rend le focus
+  },
   // WAKE : une manette vient de s'allumer / d'être branchée (launcher masqué ou réduit, aucun jeu)
   onConnect: () => { if (running.size === 0) bringToFront('pad'); },
   // CAPTURE : pendant un jeu (launcher pas au premier plan), Guide + RB / LB / B, Guide maintenu et Share
-  combos: () => store.data.settings.padShortcuts !== false && running.size > 0 && !(win && !win.isDestroyed() && win.isVisible() && win.isFocused()),
+  combos: () => store.data.settings.guideButton !== false && store.data.settings.padShortcuts !== false && running.size > 0 && !(win && !win.isDestroyed() && win.isVisible() && win.isFocused()),
   onCombo: (name, src) => { if (name === 'quit' || name === 'power') summon('guide', name); else hub.emit('pad:combo', name, src); },
 });
-function updateGuideWatch() {
-  if (store.data.settings.guideButton !== false) guideWatch.start(); else guideWatch.stop();
+// La lecture native tourne toujours (navigation à la manette) ; le réglage guideButton ne coupe que le bouton Guide
+function updateGuideWatch() { guideWatch.start(); }
+let frontAt = 0, focusSelfT = 0;
+function navWanted() {
+  if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) return false;
+  return win.isFocused() || ingameOpen || Date.now() - frontAt < 30000;
+}
+function focusSelfSoon() {
+  const now = Date.now();
+  if (now - focusSelfT < 1500) return;
+  focusSelfT = now;
+  const n = winNative();
+  try { win.focus(); if (n && !win.isFocused()) { n.allowForeground(); n.focusWindow(n.hwndOf(win.getNativeWindowHandle())); } } catch (e) { meta.log(`focus : ${e.message}`); }
 }
 // WAKE : surveillance des connexions de manettes — fenêtre masquée (zone de notification, y compris
 // démarrage avec --hidden) ou réduite, aucun jeu en cours, réglage wakeOnPad actif.
@@ -1008,6 +1116,7 @@ ipcMain.handle('game:sessions', () => [...running.entries()].map(([id, r]) => ({
 ipcMain.handle('guide:status', () => ({ ...guideWatch.status(), enabled: store.data.settings.guideButton !== false, wakeOnPad: store.data.settings.wakeOnPad !== false }));
 ipcMain.handle('guide:ingame', (_e, open) => {
   ingameOpen = !!open;
+  guideWatch.navFlush(); // NAV
   if (!ingameOpen && win && !win.isDestroyed() && win.isAlwaysOnTop() && win.isFocused()) win.setAlwaysOnTop(false);
 });
 

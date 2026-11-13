@@ -336,9 +336,8 @@
   // RS (clic du stick droit, bouton 11) = recherche, depuis l'accueil ou l'écran jeux
   let rsPrev = false;
   setInterval(() => {
-    const gp = [...(navigator.getGamepads?.() || [])].find((g) => g && g.connected);
-    const p = !!gp?.buttons?.[11]?.pressed;
-    if (p && !rsPrev && document.hasFocus() && !document.hidden && S.mode === 'main') { setDevice('pad'); openSearch(); }
+    const p = !document.hidden && !!window.padSnapshot?.().b[11]; // NAV : API Gamepad + lecture native
+    if (p && !rsPrev && !document.hidden && S.mode === 'main') { setDevice('pad'); openSearch(); }
     rsPrev = p;
   }, 50);
   // Clavier physique : « / » ou Ctrl+F ouvrent ; dans la recherche, la frappe va directement dans le champ

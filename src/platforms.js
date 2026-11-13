@@ -12,10 +12,21 @@ const PLATFORMS = [
   P({ id: 'pc', tgdb: 1, name: 'PC', short: 'PC', maker: 'Windows', year: '', color: '#3C91E6', wiki: null, libretro: null, logos: [],
     case: { style: 'dvd', ratio: 0.64 }, exts: [], hints: [], emulators: [] }),
 
+  // Switch 2 : mêmes formats de fichiers que la Switch (.nsp / .xci) → rangée sous Switch 2 d'après le dossier
+  // (« Switch 2 », « Switch2 », « NS2 ») ou en choisissant la console à l'ajout. sharedExts : jamais choisie sur la seule extension.
+  P({ id: 'switch2', tgdb: null, name: 'Nintendo Switch 2', short: 'SWITCH 2', maker: 'Nintendo', year: '2025', color: '#e60012', wiki: 'Nintendo Switch 2', libretro: null,
+    logos: ['Nintendo_Switch_2_logo.svg', 'Nintendo_Switch_2_Logo.svg', 'Nintendo_Switch_2_wordmark.svg'],
+    case: { style: 'small', ratio: 0.62, body: '#c40d1b', band: '#e60012', fg: '#ffffff', label: 'NINTENDO SWITCH 2' },
+    exts: ['nsp', 'xci', 'nsz', 'xcz'], sharedExts: true, hints: [/switch ?2|\bns2\b/i],
+    emulators: [
+      { name: 'Ryujinx', match: /ryujinx/i, args: '"{rom}"' },
+      { name: 'Eden / Citron / Sudachi (yuzu)', match: /eden|citron|sudachi|yuzu|suyu/i, args: '-f -g "{rom}"' },
+    ] }),
+
   P({ id: 'switch', tgdb: 4971, name: 'Nintendo Switch', short: 'SWITCH', maker: 'Nintendo', year: '2017', color: '#e60012', wiki: 'Nintendo Switch', libretro: null,
     logos: ['Nintendo_Switch_logo.svg'],
     case: { style: 'small', ratio: 0.62, body: '#d70f1e', band: '#e60012', fg: '#ffffff', label: 'NINTENDO SWITCH' },
-    exts: ['nsp', 'xci', 'nsz', 'xcz'], hints: [/switch/i],
+    exts: ['nsp', 'xci', 'nsz', 'xcz'], hints: [/switch(?! ?2)/i],
     emulators: [
       { name: 'Ryujinx', match: /ryujinx/i, args: '"{rom}"' },
       { name: 'Eden / Citron / Sudachi (yuzu)', match: /eden|citron|sudachi|yuzu|suyu/i, args: '-f -g "{rom}"' },
@@ -191,7 +202,12 @@ function platformForFile(filePath) {
   if (base === 'eboot.bin' && /usrdir/.test(lower)) return 'ps3';
   if (ext === 'bin') return /mega ?drive|genesis/i.test(lower) ? 'md' : AMBIGUOUS_CANDIDATES.bin.some((id) => BY_ID[id].hints.some((h) => h.test(lower))) ? 'ps1' : null;
   if (ext === 'exe') return null;
-  for (const p of PLATFORMS) if (p.exts.includes(ext)) return p.id;
+  for (const p of PLATFORMS) {
+    if (!p.exts.includes(ext) || p.sharedExts) continue;
+    // Switch / Switch 2 : même format, le dossier tranche
+    if (p.id === 'switch' && BY_ID.switch2.hints.some((h) => h.test(filePath.split(/[\\/]/).slice(0, -1).join('/')))) return 'switch2';
+    return p.id;
+  }
   if (AMBIGUOUS.includes(ext)) {
     const dirs = filePath.split(/[\\/]/).slice(0, -1).join('/');
     for (const id of AMBIGUOUS_CANDIDATES[ext]) {

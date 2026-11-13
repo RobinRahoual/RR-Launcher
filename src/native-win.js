@@ -36,7 +36,16 @@ function xinputButtons() {
     if (now < xEmptyUntil[i]) continue;
     xbuf.fill(0);
     const r = getStateEx(i, xbuf);
-    if (r === ERROR_SUCCESS) out[i] = xbuf.readUInt16LE(4);
+    if (r === ERROR_SUCCESS) {
+      // XINPUT_GAMEPAD : wButtons @4, gâchettes @6 / @7, stick gauche @8 / @10 (int16). NAV : bits 16+ (voir guide.js)
+      let m = xbuf.readUInt16LE(4);
+      if (xbuf[6] > 100) m |= 1 << 16;
+      if (xbuf[7] > 100) m |= 1 << 17;
+      const lx = xbuf.readInt16LE(8), ly = xbuf.readInt16LE(10), dz = 16000;
+      if (lx <= -dz) m |= 1 << 21; else if (lx >= dz) m |= 1 << 22;
+      if (ly >= dz) m |= 1 << 19; else if (ly <= -dz) m |= 1 << 20;
+      out[i] = m >>> 0;
+    }
     else xEmptyUntil[i] = now + 2000;
   }
   return out;
@@ -117,6 +126,10 @@ function focusWindow(hwnd) {
   } catch { return false; }
 }
 function allowForeground() { try { AllowSetForegroundWindow(ASFW_ANY); } catch {} }
+// Processus propriétaire de la fenêtre au premier plan (0 si aucune)
+function foregroundPid() {
+  try { const h = GetForegroundWindow(); if (!h) return 0; const out = [0]; GetWindowThreadProcessId(h, out); return out[0]; } catch { return 0; }
+}
 
 // ---------------------------------------------------------------- Processus
 const PROCESSENTRY32W = koffi.struct('RR_PROCESSENTRY32W', {
@@ -185,7 +198,7 @@ module.exports = {
   get xinputError() { return xinputError; },
   xinputDll,
   xinputButtons,
-  hwndOf, findMainWindow, focusWindow, allowForeground,
+  hwndOf, findMainWindow, focusWindow, allowForeground, foregroundPid,
   listProcesses,
   canSleep: !!SetSuspendState, sleep,
 };

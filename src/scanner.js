@@ -3,6 +3,7 @@ const fs = require('fs');
 const fsp = fs.promises;
 const path = require('path');
 const { execFile } = require('child_process');
+const { prettify } = require('./names');
 const { BY_ID, platformForFile, folderHint, romExtensions, detectEmulator } = require('./platforms');
 const { checkRom } = require('./romcheck');
 
@@ -210,7 +211,8 @@ async function scanFolders(roots, opts = {}) {
         if (size < (['cue', 'm3u', 'gdi', 'ccd'].includes(ext) ? 20 : 16 * 1024)) continue;
         if (ext === 'bin' && lowerFiles.some((x) => x.endsWith('.cue'))) continue; // la piste est lancée via son .cue
         // Vérification par le contenu (signature / en-tête) : .md Markdown, .wad Doom, .iso Windows… exclus
-        const platform = await checkRom(full, ext, folderHint(full));
+        let platform = await checkRom(full, ext, folderHint(full));
+        if (platform === 'switch' && folderHint(full) === 'switch2') platform = 'switch2'; // même format que la Switch
         if (!platform || platform === 'unknown') continue;
         roms.push({ kind: 'rom', platform, name: cleanRomName(f), romPath: full });
       }
@@ -265,7 +267,7 @@ async function scanFolders(roots, opts = {}) {
       s -= e.depth * 2;
       if (s > bestScore) { bestScore = s; best = e; }
     }
-    const name = path.basename(root).replace(/[_\.]+/g, ' ').replace(/\s+/g, ' ').trim();
+    const name = prettify(path.basename(root)); // « RedDeadRedemption2 » → « Red Dead Redemption 2 »
     exeItems.push({ kind: 'exe', source: 'scan', platform: 'pc', name, exePath: best.path, installDir: root, ...(uncertain ? { uncertain: true } : {}) });
   }
 

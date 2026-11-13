@@ -45,6 +45,7 @@ const RECO = {
   ps2: [{ emu: 'pcsx2' }], ps3: [{ emu: 'rpcs3' }], psp: [{ emu: 'ppsspp' }], vita: [{ emu: 'vita3k' }],
   gc: [{ emu: 'dolphin' }], wii: [{ emu: 'dolphin' }], wiiu: [{ emu: 'cemu' }],
   switch: [{ emu: 'eden' }, { emu: 'citron' }, { emu: 'ryujinx' }],
+  switch2: [{ emu: 'eden' }, { emu: 'citron' }, { emu: 'ryujinx' }], // pas encore d'émulateur Switch 2 abouti : les mêmes, au choix
   '3ds': [{ emu: 'azahar' }], nds: [{ emu: 'melonds' }],
   xbox: [{ emu: 'xemu' }], x360: [{ emu: 'xenia' }],
 };

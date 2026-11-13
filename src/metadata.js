@@ -2,7 +2,8 @@
 // Sources (dans l'ordre) : Steam (sans clé) → SteamGridDB (clé optionnelle) → Wikipédia (description).
 const fs = require('fs');
 const path = require('path');
-const { net, nativeImage } = require('electron');
+const { net, nativeImage, app } = require('electron');
+const names = require('./names');
 
 let logFile = null;
 function setLogFile(f) { logFile = f; }
@@ -184,21 +185,121 @@ async function sgdbImages(gameId, key) {
 }
 
 // ---------- TheGamesDB (scans de jaquettes avant / arrière, clé gratuite) ----------
+// Recherche par nom avec plusieurs écritures (nom affiché, titre anglais, nom du fichier), d'abord sur la console
+// puis sans filtre ; on garde le jeu dont le titre est le plus proche (jamais un résultat sans rapport).
+// Les jaquettes viennent de « include=boxart » (même requête) et de Games/Images (fanart, captures, dos manquants).
 const TGDB = 'https://api.thegamesdb.net';
-async function tgdbBoxart(name, platformId, key) {
-  const q = `${TGDB}/v1.1/Games/ByGameName?apikey=${encodeURIComponent(key)}&name=${encodeURIComponent(name)}${platformId ? `&filter%5Bplatform%5D=${platformId}` : ''}`;
-  const res = await getJson(q);
-  const games = res?.data?.games || [];
-  if (!games.length) { log(`tgdb « ${name} » : aucun résultat`); return {}; }
-  const n = normalize(name);
-  const game = games.find((g) => normalize(g.game_title) === n) || games.find((g) => normalize(g.game_title).startsWith(n)) || games[0];
-  const img = await getJson(`${TGDB}/v1/Games/Images?apikey=${encodeURIComponent(key)}&games_id=${game.id}&filter%5Btype%5D=boxart,fanart,screenshot`);
-  const base = img?.data?.base_url?.original || 'https://cdn.thegamesdb.net/images/original/';
-  const list = img?.data?.images?.[game.id] || img?.data?.images?.[String(game.id)] || [];
-  const url = (side) => list.filter((i) => i.side === side).map((i) => base + i.filename);
-  log(`tgdb « ${name} » → ${game.game_title} (#${game.id}) front=${url('front').length} back=${url('back').length}`);
-  const typ = (t) => list.filter((i) => i.type === t).map((i) => base + i.filename);
-  return { front: url('front'), back: url('back'), fanart: typ('fanart'), screenshots: typ('screenshot') };
+const tgdbIdCache = new Map(); // `${plateforme}|${nom}` → { id, title }
+async function tgdbFind(cands, platformId, key) {
+  const k = `${platformId || ''}|${cands.join('|')}`;
+  if (tgdbIdCache.has(k)) return tgdbIdCache.get(k);
+  let found = null;
+  for (const pf of platformId ? [platformId, null] : [null]) {
+    for (const name of cands) {
+      const q = `${TGDB}/v1.1/Games/ByGameName?apikey=${encodeURIComponent(key)}&name=${encodeURIComponent(name)}&include=boxart${pf ? `&filter%5Bplatform%5D=${pf}` : ''}`;
+      let res;
+      try { res = await getJson(q); } catch (e) { log(`tgdb « ${name} » : ${e.message}`); if (/HTTP 40[13]/.test(e.message)) throw new Error('clé TheGamesDB refusée ou quota mensuel atteint'); continue; }
+      if (res?.remaining_monthly_allowance === 0) log('tgdb : quota mensuel atteint');
+      const games = res?.data?.games || [];
+      const b = names.best(games, cands, (g) => g.game_title);
+      log(`tgdb « ${name} »${pf ? ` (plateforme ${pf})` : ''} : ${games.length} résultat(s)${b ? `, meilleur ${b.item.game_title} (${b.score.toFixed(2)})` : ''}`);
+      if (b && b.score >= 0.6 && (!found || b.score > found.score)) {
+        const inc = res?.include?.boxart;
+        found = { id: b.item.id, title: b.item.game_title, score: b.score, boxBase: inc?.base_url?.original, box: inc?.data?.[b.item.id] || inc?.data?.[String(b.item.id)] || [] };
+      }
+      if (found && found.score >= 0.95) break;
+    }
+    if (found) break;
+  }
+  tgdbIdCache.set(k, found);
+  return found;
+}
+async function tgdbBoxart(name, platformId, key, alt = []) {
+  const cands = [...new Set([name, ...alt].filter(Boolean))];
+  const game = await tgdbFind(cands, platformId, key);
+  if (!game) { log(`tgdb « ${name} » : aucun jeu correspondant`); return {}; }
+  let list = [], base = game.boxBase || 'https://cdn.thegamesdb.net/images/original/';
+  for (const filter of ['&filter%5Btype%5D=boxart,fanart,screenshot', '']) {
+    try {
+      const img = await getJson(`${TGDB}/v1/Games/Images?apikey=${encodeURIComponent(key)}&games_id=${game.id}${filter}`);
+      base = img?.data?.base_url?.original || base;
+      const imgs = img?.data?.images;
+      list = (imgs && (imgs[game.id] || imgs[String(game.id)])) || (Array.isArray(imgs) ? imgs : []);
+      if (list.length) break;
+    } catch (e) { log(`tgdb images #${game.id} : ${e.message}`); }
+  }
+  // Images de « include=boxart » en plus (certaines réponses Images sont vides alors que la recherche les donne)
+  const all = [...list, ...game.box.map((b) => ({ ...b, type: b.type || 'boxart' }))];
+  const seen = new Set();
+  const uniq = all.filter((i) => i?.filename && !seen.has(i.filename) && seen.add(i.filename));
+  const url = (side) => uniq.filter((i) => i.type === 'boxart' && (i.side === side || (!i.side && side === 'front' && /front/.test(i.filename)) || (!i.side && side === 'back' && /\/back\//.test(i.filename)))).map((i) => base + i.filename);
+  const typ = (t) => uniq.filter((i) => i.type === t).map((i) => base + i.filename);
+  log(`tgdb « ${name} » → ${game.title} (#${game.id}) front=${url('front').length} back=${url('back').length}`);
+  return { id: game.id, title: game.title, front: url('front'), back: url('back'), fanart: typ('fanart'), screenshots: typ('screenshot') };
+}
+
+// ---------- Titre anglais d'un jeu nommé en français (Wikipédia FR → lien interlangue EN) ----------
+// « Pokémon Émeraude » → « Pokémon Emerald » : les bases (TheGamesDB, libretro, Wikipédia EN) sont en anglais.
+const enCache = new Map();
+async function englishTitle(name) {
+  if (!name) return null;
+  if (enCache.has(name)) return enCache.get(name);
+  let out = null;
+  try {
+    const s = await getJson(`https://fr.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=5&srsearch=${encodeURIComponent(name)}`);
+    const hits = (s?.query?.search || []).map((r) => r.title);
+    const b = names.best(hits, [name], (t) => t.replace(/\s*\([^)]*\)$/, ''));
+    if (b && b.score >= 0.75) {
+      const ll = await getJson(`https://fr.wikipedia.org/w/api.php?action=query&prop=langlinks&lllang=en&format=json&redirects=1&titles=${encodeURIComponent(b.item)}`);
+      const page = Object.values(ll?.query?.pages || {})[0];
+      const en = page?.langlinks?.[0]?.['*'];
+      if (en) out = en.replace(/\s*\((video game|jeu vidéo)\)$/i, '');
+    }
+  } catch (e) { log(`titre anglais « ${name} » : ${e.message}`); }
+  if (out && names.compact(out) === names.compact(name)) out = null; // déjà en anglais
+  if (out) log(`titre anglais « ${name} » → « ${out} »`);
+  enCache.set(name, out);
+  return out;
+}
+
+// ---------- libretro-thumbnails : index des jaquettes d'une console (noms No-Intro / Redump) ----------
+// Les fichiers s'appellent « Pokemon - Emerald Version (USA, Europe).png » : on télécharge la liste une fois
+// (API GitHub, mise en cache 14 jours) et on cherche le nom le plus proche au lieu de deviner l'orthographe exacte.
+const lrMem = new Map();
+async function libretroIndex(repo) {
+  if (lrMem.has(repo)) return lrMem.get(repo);
+  let file = null;
+  try { file = path.join(app.getPath('userData'), 'cache', `libretro-${repo}.json`); } catch {}
+  try {
+    if (file && fs.existsSync(file) && Date.now() - fs.statSync(file).mtimeMs < 14 * 864e5) {
+      const v = JSON.parse(fs.readFileSync(file, 'utf8'));
+      lrMem.set(repo, v); return v;
+    }
+  } catch {}
+  let list = [];
+  try {
+    const t = await getJson(`https://api.github.com/repos/libretro-thumbnails/${repo}/git/trees/master?recursive=1`, { Accept: 'application/vnd.github+json' }, 30000);
+    list = (t?.tree || []).map((x) => x.path).filter((p) => /^Named_Boxarts\/.+\.png$/i.test(p)).map((p) => p.slice(14, -4));
+    if (file && list.length) { fs.mkdirSync(path.dirname(file), { recursive: true }); fs.writeFileSync(file, JSON.stringify(list)); }
+  } catch (e) { log(`libretro index ${repo} : ${e.message}`); }
+  lrMem.set(repo, list);
+  return list;
+}
+const REGION_RANK = (n) => (/\(France\)/i.test(n) ? 0 : /\(Europe\)|\(USA, Europe\)|\(Europe, /i.test(n) ? 1 : /\(World\)/i.test(n) ? 2 : /\(USA\)/i.test(n) ? 3 : 4);
+async function libretroMatch(repo, cands) {
+  const list = await libretroIndex(repo);
+  if (!list.length) return null;
+  let best = null;
+  for (const n of list) {
+    if (/\((Beta|Proto|Demo|Sample|Kiosk)/i.test(n)) continue;
+    const label = n.replace(/ - /g, ' ');
+    for (const c of cands) {
+      const s = names.similarity(label, c);
+      if (!best || s > best.score || (s === best.score && REGION_RANK(n) < REGION_RANK(best.name))) best = { name: n, score: s };
+    }
+  }
+  if (best) log(`libretro ${repo} : ${cands.join(' / ')} → ${best.name} (${best.score.toFixed(2)})`);
+  return best && best.score >= 0.75 ? best.name : null;
 }
 
 // ---------- Wikipédia (description de secours) ----------
@@ -493,13 +594,18 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   const plat = ctx.platform;
   let wikiCover = null;
   const lowHero = []; // captures rétro (basse définition) : en dernier
+  let enName = null; // titre anglais (jeux nommés en français)
   if (plat && plat.id !== 'pc') {
+    enName = match.source === 'wiki' ? null : await englishTitle(match.name);
+    const stem = ctx.romPath ? path.basename(ctx.romPath).replace(/\.[^.]+$/, '') : '';
+    const cands = [...new Set([enName, match.name, stem && stem.replace(/\s*[([][^)\]]*[)\]]/g, '').trim()].filter(Boolean))];
+    ctx.cands = cands;
     if (plat.libretro && ctx.romPath) {
       progress('Jaquette (libretro)…');
-      const stem = path.basename(ctx.romPath).replace(/\.[^.]+$/, '');
-      const variants = [...new Set([stem, match.name, `${match.name} (USA)`, `${match.name} (Europe)`, `${match.name} (World)`, `${match.name} (France)`])]
-        .map((v) => v.replace(/[&*\/:`<>?\\|"]/g, '_'));
       const base = `https://raw.githubusercontent.com/libretro-thumbnails/${plat.libretro}/master`;
+      const hit = await libretroMatch(plat.libretro, cands).catch(() => null);
+      const variants = [...new Set([hit, stem, ...cands.flatMap((c) => [c, `${c} (France)`, `${c} (Europe)`, `${c} (USA)`, `${c} (World)`])].filter(Boolean))]
+        .map((v) => v.replace(/[&*\/:`<>?\\|"]/g, '_'));
       for (const v of variants) {
         urls.cover.push(`${base}/Named_Boxarts/${encodeURIComponent(v)}.png`);
         lowHero.push(`${base}/Named_Snaps/${encodeURIComponent(v)}.png`, `${base}/Named_Titles/${encodeURIComponent(v)}.png`);
@@ -507,16 +613,26 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
     }
     try {
       progress('Wikipédia…');
-      const title = match.source === 'wiki' ? match.title : (await wikiSearch(match.name, plat.name))[0]?.title;
+      let title = match.source === 'wiki' ? match.title : null;
+      if (!title) {
+        // Titre anglais exact si on l'a, sinon le résultat de recherche le plus proche (jamais un autre jeu de la série)
+        const res = await wikiSearch(enName || match.name, plat.name).catch(() => []);
+        const b = names.best(res, cands);
+        title = b && b.score >= 0.6 ? b.item.title : enName;
+      }
       if (title) {
         const en = await getJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
-        if (en?.originalimage?.source) wikiCover = en.originalimage.source;
-        if (match.source === 'wiki') out.name = (en?.title || match.name).replace(/\s*\((video game|jeu vidéo)\)$/i, '');
-        const year = (en?.description || '').match(/(19|20)\d{2}/);
-        if (year) out.releaseDate = year[0];
-        out.description = en?.extract || '';
+        const enTitle = (en?.title || '').replace(/\s*\((video game|jeu vidéo)\)$/i, '');
+        const same = match.source === 'wiki' || names.best([enTitle], cands, (x) => x)?.score >= 0.6;
+        if (same) {
+          if (en?.originalimage?.source) wikiCover = en.originalimage.source;
+          if (match.source === 'wiki') out.name = enTitle || match.name;
+          const year = (en?.description || '').match(/(19|20)\d{2}/);
+          if (year) out.releaseDate = year[0];
+          out.description = en?.extract || '';
+        } else log(`wiki « ${match.name} » : ${enTitle} écarté (autre jeu)`);
       }
-      const fr = await wikiSummary(out.name);
+      const fr = await wikiSummary(match.source === 'wiki' ? out.name : match.name);
       if (fr) out.description = fr;
     } catch { /* hors ligne */ }
   }
@@ -540,7 +656,12 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
       progress('Visuels SteamGridDB…');
       let id = match.sgdbId;
       if (!id && match.appid) id = (await sgdb(`/games/steam/${match.appid}`, settings.sgdbKey))?.id;
-      if (!id && !match.appid) id = (await sgdbSearch(match.name, settings.sgdbKey))[0]?.sgdbId;
+      if (!id && !match.appid) {
+        const cands = ctx.cands || [match.name];
+        const res = await sgdbSearch(cands[0], settings.sgdbKey).catch(() => []);
+        const b = names.best(res, cands);
+        id = b && b.score >= 0.6 ? b.item.sgdbId : null;
+      }
       if (id) {
         out.sgdbId = id;
         const g = await sgdbImages(id, settings.sgdbKey);
@@ -555,7 +676,8 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   if (settings.tgdbKey) {
     try {
       progress('Jaquettes TheGamesDB…');
-      const t = await tgdbBoxart(out.name || match.name, plat?.tgdb || 1, settings.tgdbKey);
+      const t = await tgdbBoxart(out.name || match.name, plat ? plat.tgdb || null : 1, settings.tgdbKey, [enName, ...(ctx.cands || []), match.name, names.prettify(match.name)]);
+      if (t.id) out.tgdbId = t.id;
       if (plat && plat.id !== 'pc') urls.cover.push(...(t.front || []));
       urls.back.push(...(t.back || []));
       urls.hero.push(...(t.fanart || []));
@@ -602,10 +724,10 @@ async function upgradeHero(game, dir, settings, platformTgdb) {
     } catch (e) { log(`hero sgdb ${game.name} : ${e.message}`); }
   }
   if (settings.tgdbKey) {
-    try { urls.push(...((await tgdbBoxart(game.name, platformTgdb, settings.tgdbKey)).fanart || [])); } catch (e) { log(`hero tgdb ${game.name} : ${e.message}`); }
+    try { urls.push(...((await tgdbBoxart(game.name, platformTgdb, settings.tgdbKey, [names.prettify(game.name)])).fanart || [])); } catch (e) { log(`hero tgdb ${game.name} : ${e.message}`); }
   }
   if (!urls.length) return null;
   return downloadBest(urls, dir, `hero-hd-${Date.now().toString(36)}`, { minWidth: 1280 });
 }
 
-module.exports = { steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };
+module.exports = { englishTitle, tgdbBoxart, steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };

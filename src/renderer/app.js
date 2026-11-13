@@ -128,6 +128,16 @@ function dismissToast(t) {
 const LAY = { k: 0, edge: 0, anchor: 0, R: 400, cx: 0, cy: 0 }; // géométrie partagée (layout / frameGames)
 const HOME_FADE = reduceMotion ? 0 : 350;
 const HOME_WRAP = 5; // LOOK : à partir de 5 tuiles, la rangée boucle (assez de tuiles pour cacher la couture hors écran)
+// La rangée ne boucle que si elle est nettement plus large que l'écran : sinon la tuile qui passe d'un bord
+// à l'autre apparaît puis disparaît (« la dernière clignote ») au lieu de rester hors champ.
+function homeLoops() {
+  const n = S.home.items.length;
+  if (n < HOME_WRAP) return false;
+  let T = 0;
+  for (const el of cards.values()) { if (el.dataset.id !== 'continue') { T = el.offsetWidth; break; } }
+  T ||= 200;
+  return n * T * 1.163 >= innerWidth + T * 3.2;
+}
 
 function computeHome() {
   const g = S.lib.games;
@@ -319,7 +329,7 @@ function onCardClick(id) {
 function homeSelect(i) {
   // LOOK : la rangée boucle comme ES-DE (← sur la 1re tuile → dernière) ; pos décalé de n pour un glissement continu
   const n = S.home.items.length;
-  if (n >= HOME_WRAP && (i < 0 || i >= n)) { S.home.pos += i < 0 ? n : -n; i = (i + n) % n; }
+  if (homeLoops() && (i < 0 || i >= n)) { S.home.pos += i < 0 ? n : -n; i = (i + n) % n; }
   i = clamp(i, 0, n - 1);
   if (i === S.home.sel) return;
   S.home.sel = i;
@@ -489,11 +499,15 @@ function frameHome() {
   const pitch = T * 1.163;
   const x0 = innerWidth * 0.226 - T / 2;
   const n = S.home.items.length;
+  const loop = homeLoops();
+  // Plus de boucle (fenêtre agrandie, console retirée…) : on ramène la position sur la sélection sans tour complet
+  if (!loop && Math.abs(S.home.pos - S.home.sel) >= n - 0.5) { S.home.pos = S.home.sel; S.home.vel = 0; }
+  const c = (innerWidth / 2 - x0 - T / 2) / pitch; // fenêtre de boucle centrée sur l'écran (pas sur la tuile choisie)
   S.home.items.forEach((it, i) => {
     const el = cards.get(it.id);
     if (!el) return;
     let d = i - S.home.pos;
-    if (n >= HOME_WRAP) d = ((d + n / 2) % n + n) % n - n / 2; // LOOK : rangée bouclée
+    if (loop) d = ((d - c + n / 2) % n + n) % n - n / 2 + c; // LOOK : rangée bouclée, couture hors écran
     const x = x0 + d * pitch;
     const vis = x > -T * 1.3 && x < innerWidth + T * 0.3;
     if (!vis) { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'; return; }
@@ -1133,14 +1147,14 @@ async function play(id = S.items[S.sel]?.id, opts = {}) {
     if (r.error === 'NO_EMULATOR') return askEmulator(r.platform, id);
     return toast(r.error || 'Impossible de lancer le jeu.', true);
   }
-  ldCommitted(); // LOADING : l'écran reste jusqu'au retour du launcher (rr.onVisible / game:running false) ou 12 s
+  ldCommitted(); // LOADING : l'écran reste jusqu'à l'apparition du jeu (launcher masqué), sa fin, ou 60 s
 }
 // ================================================================ LOADING : écran de lancement façon console
 // Overlay plein écran #launching affiché AVANT rr.launch : bannière du jeu (zoom lent), logo au centre, anneau « Lancement… ».
-// Reste ≥ 1,6 s (0,8 s si reduceMotion), puis rr.launch. B / Échap annulent tant que rr.launch n'est pas appelé.
+// Reste ≥ 0,7 s (0,3 s si reduceMotion), puis rr.launch. B / Échap annulent tant que rr.launch n'est pas appelé.
 // Après un lancement réussi, il disparaît au retour du launcher (win:visible / fin de session) ou après 12 s.
 const LD = { active: false, committed: false, t0: 0, tCommit: 0, resolve: null, minT: null, safeT: null, hideT: null, id: null };
-const LD_MIN = reduceMotion ? 800 : 1600;
+const LD_MIN = reduceMotion ? 300 : 700; // court : le lancement réel démarre après ce délai (B / Échap pour annuler)
 function ldShow(g) {
   const el = $('#launching');
   const m = g.media || {};
@@ -1173,7 +1187,7 @@ function ldCommitted() {
   LD.committed = true; LD.tCommit = performance.now();
   $('#launching').classList.add('go');
   clearTimeout(LD.safeT);
-  LD.safeT = setTimeout(() => ldHide(), 12000);
+  LD.safeT = setTimeout(() => ldHide(), 60000); // le launcher se masque dès que la fenêtre du jeu apparaît (processus principal)
 }
 function ldHide(now = false) {
   if (!LD.active) return;
@@ -1410,7 +1424,7 @@ $('#dSub').addEventListener('click', async (e) => {
 // Tout passe par Web Animations (transform / opacity). Interruptible : B annule, A saute. Mouvement réduit : simple fondu.
 const BO_MEDIA = {
   pc: 'dvd', xbox: 'dvd', x360: 'dvd', ps2: 'ps2', ps3: 'bluray', wiiu: 'bluray', ps1: 'ps1', wii: 'wii', gc: 'mini', psp: 'umd', dc: 'gd',
-  switch: 'c:switch', nds: 'c:ds', '3ds': 'c:ds3', gb: 'c:gb', gba: 'c:gba', snes: 'c:snes', n64: 'c:n64', nes: 'c:nes', md: 'c:md', vita: 'c:vita',
+  switch: 'c:switch', switch2: 'c:switch', nds: 'c:ds', '3ds': 'c:ds3', gb: 'c:gb', gba: 'c:gba', snes: 'c:snes', n64: 'c:n64', nes: 'c:nes', md: 'c:md', vita: 'c:vita',
 };
 // Disques : taille relative, face argentée (dessus) et face gravée (dessous) — couleurs d'objets physiques, pas d'interface
 const BO_DISC = {
@@ -2258,13 +2272,43 @@ $('#details').addEventListener('mousedown', (e) => { if (e.target.closest('.deta
 // ---------------------------------------------------------------- Manette
 const pad = { prev: [], axisDir: null };
 const REPEAT_DELAY = 360, REPEAT_RATE = 95;
+// NAV : deux sources fusionnées (OU logique, un même appui vu deux fois ne compte qu'une fois) :
+//  - l'API Gamepad de Chromium, TOUTES les manettes au mapping « standard » (pas seulement la première :
+//    une manette virtuelle ou un volant branché en premier masquait la vraie manette) ;
+//  - la lecture native du processus principal (XInput / HID : Xbox, DualShock, DualSense, Switch Pro), qui
+//    marche aussi quand Chromium ne voit pas la manette ou que la fenêtre n'a pas le focus clavier.
+const NATIVE = { mask: 0, at: 0 };
+rr.onPadNav?.((m) => { NATIVE.mask = m >>> 0; NATIVE.at = performance.now(); });
+// bit du masque natif (format XInput + gâchettes) → index du bouton « standard » de l'API Gamepad
+const NAV_BITS = [[0x1000, 0], [0x2000, 1], [0x4000, 2], [0x8000, 3], [0x0100, 4], [0x0200, 5], [1 << 16, 6], [1 << 17, 7],
+  [0x0020, 8], [0x0010, 9], [0x0080, 11], [0x0001, 12], [0x0002, 13], [0x0004, 14], [0x0008, 15]];
+const padKind = (id) => (/054c|dualsense|dualshock|wireless controller|playstation/i.test(id) ? 'ps' : 'xbox');
+function padSnapshot(useApi = document.hasFocus()) {
+  const b = new Array(17).fill(false);
+  let ax = 0, ay = 0, any = false, kind = null;
+  const pads = useApi ? [...(navigator.getGamepads?.() || [])].filter((g) => g && g.connected) : [];
+  const std = pads.filter((g) => g.mapping === 'standard');
+  const native = NATIVE.mask && performance.now() - NATIVE.at < 1200 ? NATIVE.mask : 0;
+  // Manettes au mapping non standard (DirectInput) : seulement s'il n'y a rien d'autre (boutons dans un autre ordre)
+  for (const gp of std.length || native ? std : pads) {
+    any = true;
+    kind ||= padKind(gp.id);
+    gp.buttons.forEach((x, i) => { if (i < 17 && (x.pressed || x.value > 0.5)) b[i] = true; });
+    const x = gp.axes[0] || 0, y = gp.axes[1] || 0;
+    if (Math.abs(x) > Math.abs(ax)) ax = x;
+    if (Math.abs(y) > Math.abs(ay)) ay = y;
+  }
+  if (native) { any = true; for (const [bit, i] of NAV_BITS) if (native & bit) b[i] = true; }
+  return { b, ax, ay, any, kind };
+}
+window.padSnapshot = padSnapshot;
 function pollPad(t) {
-  if (!document.hasFocus() || document.hidden) return;
-  const gp = [...(navigator.getGamepads?.() || [])].find((g) => g && g.connected);
-  if (!gp) return;
-  S.padType = /054c|dualsense|dualshock|wireless controller|playstation/i.test(gp.id) ? 'ps' : 'xbox';
-  const b = gp.buttons.map((x) => x.pressed || x.value > 0.5);
-  const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+  if (document.hidden) return;
+  const snap = padSnapshot();
+  if (!snap.any) { pad.prev = []; pad.axisDir = null; return; }
+  if (snap.kind) S.padType = snap.kind;
+  const b = snap.b;
+  const ax = snap.ax, ay = snap.ay;
   const dir = b[14] || ax < -0.55 ? 'left' : b[15] || ax > 0.55 ? 'right' : b[12] || ay < -0.55 ? 'up' : b[13] || ay > 0.55 ? 'down' : null;
   const pressed = (i) => b[i] && !pad.prev[i];
   if (b.some(Boolean) || dir) setDevice('pad');
@@ -2373,9 +2417,10 @@ const SICON = {
 };
 // Manette connectée (même si le périphérique actif est le clavier) : icône allumée + type
 function padInfo() {
-  const gp = [...(navigator.getGamepads?.() || [])].find((g) => g && g.connected);
-  if (!gp) return null;
-  return /054c|dualsense|dualshock|wireless controller|playstation/i.test(gp.id) ? 'ps' : 'xbox';
+  const gp = [...(navigator.getGamepads?.() || [])].find((g) => g && g.connected && g.mapping === 'standard')
+    || [...(navigator.getGamepads?.() || [])].find((g) => g && g.connected);
+  if (!gp) return NATIVE.at && performance.now() - NATIVE.at < 60000 ? S.padType || 'xbox' : null;
+  return padKind(gp.id);
 }
 let battery = null;
 function renderStatus() {
@@ -2779,7 +2824,7 @@ async function renderGuideStatus() {
 rr.onGuide((info) => guidePress(info || {}));
 // Menu en jeu affiché sans le focus clavier (Windows l'a refusé) : la manette est relayée par le processus principal
 rr.onPadRemote((btn) => {
-  if (document.hasFocus()) return;
+  if (document.hasFocus() || rr.onPadNav) return; // NAV : remplacé par le relais natif « pad:nav »
   setDevice('pad');
   if (['up', 'down', 'left', 'right'].includes(btn)) onPadDir(btn, false); else onPadBtn(btn);
 });

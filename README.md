@@ -10,7 +10,7 @@ Télécharge `RR-Launcher-Setup-x.y.z.exe` depuis la [dernière release](https:/
 
 L'accueil est une roue à gauche qui tourne verticalement (↑ ↓, molette, stick) : la console sélectionnée est au bord de la roue et ses jeux s'affichent à droite. En ouvrant une console, la roue glisse à gauche et laisse la place à la rangée de jeux ; ← sur le premier jeu, B/Échap ou un clic sur la roue y reviennent. La photo et le logo officiel de chaque console sont téléchargés depuis Wikipédia/Wikimedia sur le PC au premier affichage (ils ne font pas partie du dépôt) ; tu peux les remplacer dans **Réglages → Consoles & émulateurs → Image / Logo**. Le logo s'affiche sur le bandeau et la tranche des boîtes, sur l'accueil et en en-tête. Les boîtes reprennent le format de chaque support : DVD (PC, PS2, Xbox, Wii…), Blu-ray (PS3), petits boîtiers (Switch, PSP, DS, GameCube), boîtier CD (PlayStation, Dreamcast) ou carton (NES, SNES, N64, Game Boy).
 
-Consoles gérées : Switch, Wii U, Wii, GameCube, N64, SNES, NES, Game Boy / Color, GBA, DS, 3DS, PlayStation 1/2/3, PSP, PS Vita, Xbox, Xbox 360, Dreamcast, Mega Drive.
+Consoles gérées : Switch, Switch 2, Wii U, Wii, GameCube, N64, SNES, NES, Game Boy / Color, GBA, DS, 3DS, PlayStation 1/2/3, PSP, PS Vita, Xbox, Xbox 360, Dreamcast, Mega Drive.
 
 Pour chaque console, choisis l'exécutable de l'émulateur (Réglages → Consoles & émulateurs, ou au premier lancement d'un jeu). Les arguments sont préremplis pour RPCS3, PCSX2, DuckStation, Dolphin, Cemu, Ryujinx, Eden/Citron, PPSSPP, xemu, Xenia, Azahar/Citra, melonDS, mGBA, Mesen, Snes9x, Project64, simple64, ares, Flycast, BlastEm, Vita3K et RetroArch ; `{rom}` est remplacé par le chemin du jeu.
 
@@ -22,6 +22,8 @@ Pour chaque console, choisis l'exécutable de l'émulateur (Réglages → Consol
 
 Les portages recompilés (.exe) peuvent être rangés sous leur console d'origine : ajoute l'exe et choisis la console.
 
+**Switch 2** : les dumps ont le même format que la Switch (`.nsp`, `.xci`…). Range-les dans un dossier dont le nom contient *Switch 2*, *Switch2* ou *NS2* (ex. `ROMs\Switch 2\`) pour qu'ils soient classés sous Switch 2 au scan, ou choisis la console à l'ajout. Aucun émulateur Switch 2 abouti n'existe encore : choisis l'exécutable de ton choix dans Réglages → Consoles & émulateurs.
+
 ## Ajouter un jeu
 
 `N` (clavier), bouton **View/Share** (manette) ou **Menu → Ajouter des jeux** :
@@ -32,6 +34,8 @@ Les portages recompilés (.exe) peuvent être rangés sous leur console d'origin
 - **Scanner des dossiers** / **tout le PC** : trouve les jeux PC (un exe par dossier de jeu), les ROMs, les dumps PS3 (titre lu dans `PARAM.SFO`) et les émulateurs, qui sont configurés automatiquement. Tu coches ce que tu veux ajouter.
 
 Le scan vérifie chaque fichier par son **contenu** (en-tête de la ROM) et pas seulement son extension : un `README.md`, un `.wad` de Doom ou un `.iso` d'installation Windows ne sont pas proposés. Pour les **.exe**, seuls les dossiers qui contiennent des indices de jeu (moteur Unity / Unreal / Godot / Ren'Py / RPG Maker, `steam_api`, GOG Galaxy, Epic Online Services, Bink, FMOD…) sont retenus ; les logiciels (Electron, Qt, Python, Adobe, Microsoft, Blender…) sont ignorés. Un exe sans indice rangé dans un dossier *Jeux* / *Games* est proposé **non coché** (« À VÉRIFIER »). Les images `.chd` / `.cue` sans console reconnaissable sont classées d'après le nom du dossier (`PS1`, `PS2`, `Dreamcast`…).
+
+Les noms collés (`RedDeadRedemption2`) sont redécoupés (« Red Dead Redemption 2 ») et le résultat retenu est celui dont le titre est le plus proche — jamais un autre jeu de la série. Pour un jeu nommé en français (« Pokémon Émeraude »), le titre anglais est retrouvé via Wikipédia (« Pokémon Emerald ») pour interroger TheGamesDB, libretro-thumbnails (recherche dans la liste complète des jaquettes No-Intro / Redump) et Wikipédia EN.
 
 Le launcher télécharge alors tout seul : jaquette, image de fond, logo, description, développeur, date, genres et captures d'écran.
 
@@ -64,12 +68,12 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 - **Ouvrir un jeu** (A, Entrée, clic) : la boîte s'ouvre, le disque (ou la cartouche) sort en tournant, puis la page du jeu s'affiche ; A y lance le jeu, B referme la boîte. Le bouton « Jouer » sous la rangée et le double-clic lancent directement.
 - **Bouton Xbox / PS / Home** de la manette pendant une partie : le launcher repasse devant avec le menu en jeu — **Reprendre** (A, B ou rappui), **Changer de jeu**, **Quitter le jeu**, **Alimentation** (veille, redémarrer, éteindre). Revalider le jeu en cours dans la bibliothèque le reprend. Ctrl+Alt+L fait la même chose au clavier.
 - Windows réserve le bouton Xbox à la Game Bar : désactive *Paramètres → Jeux → Xbox Game Bar → « Ouvrir Xbox Game Bar avec ce bouton »* (et l'équivalent dans Steam si besoin). Option dans **Réglages → Général**.
-- Manettes Xbox/XInput via `koffi`, DualShock 4 / DualSense / Switch Pro via `node-hid` (lecture seule).
+- Manettes Xbox/XInput via `koffi`, DualShock 4 / DualSense / Switch Pro via `node-hid` (lecture seule). Cette lecture native sert aussi à **naviguer dans le launcher** (croix, stick gauche, boutons, gâchettes), en plus de l'API Gamepad de Chromium : les manettes que Chromium ne voit pas, ou une fenêtre sans le focus clavier, ne bloquent plus la navigation. Toutes les manettes branchées sont lues (plus seulement la première).
 
 ## Lancement, retour, réveil par la manette
 
-- **Écran de lancement** façon PS5 : bannière du jeu en plein écran, logo au centre, « Lancement… » en bas à droite (B / Échap pour annuler dans la première seconde).
-- **Fin de partie** : quand tu quittes le dernier jeu, le launcher revient au premier plan sur la rangée du jeu.
+- **Écran de lancement** façon PS5 : bannière du jeu en plein écran, logo au centre, « Lancement… » en bas à droite (B / Échap pour annuler pendant ~0,7 s). Il reste affiché jusqu'à l'apparition de la fenêtre du jeu, qui est alors **mise au premier plan** (Windows laisse souvent un jeu démarrer derrière la fenêtre active) ; sans fenêtre au bout de 12 s (Steam, Epic…) ou 25 s, le launcher se masque quand même.
+- **Fin de partie** : quand tu quittes le dernier jeu, le launcher revient au premier plan sur la rangée du jeu (2e tentative si Windows refuse). Un jeu qui n'a plus de fenêtre depuis ~8 s est considéré comme fermé même si des processus d'arrière-plan traînent (rapport de plantage, anti-triche, overlay).
 - **Réveil par la manette** : si le launcher est réduit ou dans la zone de notification et qu'aucun jeu ne tourne, allumer ou brancher une manette (Xbox, DualShock 4, DualSense, Switch Pro) l'ouvre. Option dans **Réglages → Général** ; active aussi « Lancer au démarrage de Windows » pour qu'il soit toujours prêt.
 
 ## Fonctions (Réglages → Fonctions)
@@ -124,4 +128,4 @@ npm start          # lancer en dev
 npm run dist       # construire l'installateur Windows (dist/)
 ```
 
-Stack : Electron, HTML/CSS 3D (sans framework), Gamepad API. Direction visuelle issue du skill UI/UX Pro Max (Russo One + Chakra Petch). Palette : accent #3C91E6, navy #0C335A, thème clair (fond #FFFFFF, texte #101010) ou sombre (fond #101010, texte #FFFFFF) — Réglages → Thème.
+Stack : Electron, HTML/CSS 3D (sans framework), Gamepad API + lecture native des manettes. Icône : `build/icon.html` rendue en PNG 512 px (Chrome sans interface), copiée dans `src/renderer/assets/icon.png`. Direction visuelle issue du skill UI/UX Pro Max (Russo One + Chakra Petch). Palette : accent #3C91E6, navy #0C335A, thème clair (fond #FFFFFF, texte #101010) ou sombre (fond #101010, texte #FFFFFF) — Réglages → Thème.

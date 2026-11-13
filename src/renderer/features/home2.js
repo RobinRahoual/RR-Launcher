@@ -106,8 +106,9 @@
     const pitch = T * 1.163, E = T * EXT + T * 0.08, W = T * (1 + EXT);
     const cen = (i) => (i === 0 ? (T + E) / 2 : i * pitch + E + T / 2);
     const tot = n * pitch + E, P = S.home.pos;
+    const loop = typeof homeLoops === 'function' ? homeLoops() : n >= HOME_WRAP;
     let C;
-    if (n >= HOME_WRAP) {
+    if (loop) {
       const k = Math.floor(P / n), q = P - k * n, i0 = Math.floor(q), f = q - i0;
       const nx = i0 + 1 >= n ? tot + cen(0) : cen(i0 + 1);
       C = k * tot + cen(i0) + f * (nx - cen(i0));
@@ -119,7 +120,8 @@
       const el = cards.get(it.id);
       if (!el) return;
       let rel = cen(i) - C;
-      if (n >= HOME_WRAP) rel = ((rel + tot / 2) % tot + tot) % tot - tot / 2;
+      const off = innerWidth / 2 - anchor; // couture de la boucle à l'opposé du centre de l'écran (hors champ)
+      if (loop) rel = ((rel - off + tot / 2) % tot + tot) % tot - tot / 2 + off;
       const w = i === 0 ? W : T, x = anchor + rel - w / 2;
       if (!(x > -w * 1.3 && x < innerWidth + T * 0.3)) { if (el.style.visibility !== 'hidden') el.style.visibility = 'hidden'; return; }
       el.style.visibility = '';

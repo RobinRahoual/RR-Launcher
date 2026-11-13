@@ -21,7 +21,27 @@ const BTN = {
   GUIDE: 0x0400,
   SHARE: 0x0800, // CAPTURE : bit libre d'XInput, pseudo-bouton « Share / Create / Capture » (manettes HID)
   A: 0x1000, B: 0x2000, X: 0x4000, Y: 0x8000,
+  RS: 0x0080, // clic du stick droit (XInput RIGHT_THUMB) : recherche
+  // NAV : bits hors du masque XInput 16 bits (jamais vus par les combinaisons ni l'anti-rebond Guide)
+  LT: 1 << 16, RT: 1 << 17, // gâchettes
+  SUP: 1 << 19, SDOWN: 1 << 20, SLEFT: 1 << 21, SRIGHT: 1 << 22, // stick gauche penché
 };
+// NAV : masque relayé au renderer pour naviguer dans le launcher (stick → croix, sans Guide ni Share)
+function toNav(m) {
+  let n = m & 0xffff & ~(BTN.GUIDE | BTN.SHARE);
+  if (m & BTN.SUP) n |= BTN.UP;
+  if (m & BTN.SDOWN) n |= BTN.DOWN;
+  if (m & BTN.SLEFT) n |= BTN.LEFT;
+  if (m & BTN.SRIGHT) n |= BTN.RIGHT;
+  return (n | (m & (BTN.LT | BTN.RT))) >>> 0;
+}
+// Stick → bits de direction. x, y normalisés −1…1 (y positif = vers le haut)
+function stickBits(x, y, dead = 0.5) {
+  let m = 0;
+  if (x <= -dead) m |= BTN.SLEFT; else if (x >= dead) m |= BTN.SRIGHT;
+  if (y >= dead) m |= BTN.SUP; else if (y <= -dead) m |= BTN.SDOWN;
+  return m;
+}
 // Boutons relayés au renderer quand le menu en jeu est ouvert mais que la fenêtre n'a pas le focus
 const REMOTE = [
   [BTN.UP, 'up'], [BTN.DOWN, 'down'], [BTN.LEFT, 'left'], [BTN.RIGHT, 'right'],
@@ -140,6 +160,47 @@ function decodeHidReport(kind, data) {
   return null;
 }
 
+// NAV : ce que la navigation utilise en plus des boutons — stick gauche, gâchettes (L2 / R2, ZL / ZR), clic du stick droit.
+// Séparé de decodeHidReport (dont le masque sert aux combinaisons Guide) ; mêmes formats de rapport.
+function hidExtras(kind, data) {
+  if (!data || data.length < 4) return 0;
+  const id = data[0], len = data.length;
+  let m = 0;
+  if (kind === 'ds4' || kind === 'dualsense') {
+    let o, sx;
+    if (kind === 'ds4') {
+      if (id === 0x01 && len >= 8) o = 5;
+      else if (id >= 0x11 && id <= 0x19 && len >= 10) o = 7;
+      sx = o - 4;
+    } else {
+      if (id === 0x01 && len > 12) { o = 8; sx = 1; } // USB complet
+      else if (id === 0x01 && len >= 8) { o = 5; sx = 1; } // BT réduit
+      else if (id === 0x31 && len >= 12) { o = 9; sx = 2; }
+    }
+    if (o == null) return 0;
+    m |= stickBits((data[sx] - 128) / 127, (128 - data[sx + 1]) / 127); // 0 = gauche / haut, 128 = centre
+    if (data[o + 1] & 0x04) m |= BTN.LT;
+    if (data[o + 1] & 0x08) m |= BTN.RT;
+    if (data[o + 1] & 0x80) m |= BTN.RS;
+    return m;
+  }
+  if (kind === 'switchpro') {
+    if (id === 0x30 && len >= 9) {
+      if (data[3] & 0x80) m |= BTN.RT; // ZR
+      if (data[5] & 0x80) m |= BTN.LT; // ZL
+      if (data[4] & 0x04) m |= BTN.RS;
+      // stick gauche sur 12 bits (centre ≈ 2048, haut = valeurs hautes)
+      const x = data[6] | ((data[7] & 0x0f) << 8), y = (data[7] >> 4) | (data[8] << 4);
+      m |= stickBits((x - 2048) / 1400, (y - 2048) / 1400);
+    } else if (id === 0x3f && len >= 4) {
+      if (data[1] & 0x40) m |= BTN.LT; // ZL
+      if (data[1] & 0x80) m |= BTN.RT; // ZR
+      if (data[2] & 0x08) m |= BTN.RS;
+    }
+  }
+  return m;
+}
+
 // ---------------------------------------------------------------- Anti-rebond
 // Détecteur de fronts par source : un appui = un événement, le maintien est ignoré.
 // Un nouvel appui du même bouton n'est accepté qu'après `minGapMs` depuis le précédent
@@ -236,7 +297,8 @@ function createComboMachine({ longMs = 1000, minGapMs = 150, guideCooldownMs = 1
 function createGuideWatcher({
   log = () => {}, onGuide, onRemote, wantRemote = () => false, onConnect,
   onCombo, combos = () => true, longMs = 1000, // CAPTURE
-  pollMs = 66, connectPollMs = 1000, hidScanMs = 2000, wakeCooldownMs = 10000,
+  onNav, wantNav = () => false, // NAV : navigation dans le launcher par la lecture native (XInput / HID)
+  pollMs = 40, connectPollMs = 1000, hidScanMs = 2000, wakeCooldownMs = 10000,
   loadNative: loadNativeOpt, loadHid: loadHidOpt,
 }) {
   const edges = makeEdges();
@@ -298,7 +360,32 @@ function createGuideWatcher({
     holdTimers.clear(); machines.clear();
   }
 
+  // NAV : état combiné de toutes les manettes → onNav(masque) à chaque changement (+ rappel toutes les 400 ms
+  // tant qu'un bouton est tenu, pour que le renderer ne garde jamais un appui « fantôme »)
+  const navState = new Map();
+  let navSent = 0, navAt = 0, navWas = false;
+  function navFlush(now = Date.now()) {
+    if (!onNav) return;
+    let want = false;
+    try { want = !!wantNav(); } catch { want = false; }
+    let m = 0;
+    if (want) for (const v of navState.values()) m |= v;
+    m >>>= 0;
+    if (!want && !navWas) return;
+    navWas = want;
+    if (m === navSent && !(m && now - navAt > 400)) return;
+    navSent = m; navAt = now;
+    try { onNav(m); } catch (e) { log(`nav : ${e.message}`); }
+  }
+  function navSet(source, mask) {
+    if (!onNav) return;
+    if (mask == null) navState.delete(source); else navState.set(source, toNav(mask));
+    navFlush();
+  }
+
   function handle(source, mask) {
+    navSet(source, mask); // NAV
+    mask &= 0xffff; // le reste (combinaisons, anti-rebond) ne voit que les boutons XInput
     const down = edges.feed(source, mask);
     let combo = false;
     try { combo = !!onCombo && !!combos(); } catch { combo = false; }
@@ -331,7 +418,7 @@ function createGuideWatcher({
     try { states = native.xinputButtons(); } catch (e) { log(`guide : XInput ${e.message}`); native.xinputOk = false; return; }
     if (guideOn) {
       for (let i = 0; i < 4; i++) {
-        if (states[i] == null) { edges.forget('xi' + i); machines.delete('xi' + i); } // CAPTURE
+        if (states[i] == null) { edges.forget('xi' + i); machines.delete('xi' + i); navSet('xi' + i, null); } // CAPTURE
         else handle('xi' + i, states[i]);
       }
     }
@@ -343,6 +430,7 @@ function createGuideWatcher({
     hidOpen.delete(p);
     edges.forget('hid:' + p);
     machines.delete('hid:' + p); // CAPTURE
+    navSet('hid:' + p, null); // NAV
     try { dev?.removeAllListeners?.('data'); dev?.close(); } catch {}
   }
   let scanning = false;
@@ -366,7 +454,7 @@ function createGuideWatcher({
           log(`guide : manette HID ouverte (${kind}, ${d.product || 'sans nom'})`);
           dev.on('data', (buf) => {
             const m = decodeHidReport(kind, buf);
-            if (m != null) handle(src, m);
+            if (m != null) handle(src, (m | hidExtras(kind, buf)) >>> 0); // NAV : stick et gâchettes en plus
           });
           dev.on('error', () => closeHid(d.path));
         } catch (e) {
@@ -391,7 +479,7 @@ function createGuideWatcher({
     }
     if (active && HID && !scanTimer) { scanTimer = setInterval(scanHid, hidScanMs); scanHid(); }
     if (!active && scanTimer) { clearInterval(scanTimer); scanTimer = null; }
-    if (!guideOn) { for (const p of [...hidOpen.keys()]) closeHid(p); edges.reset(); comboReset(); }
+    if (!guideOn) { for (const p of [...hidOpen.keys()]) closeHid(p); edges.reset(); comboReset(); navState.clear(); navFlush(); }
     if (!connectOn) presence.reset();
   }
 
@@ -407,6 +495,7 @@ function createGuideWatcher({
       if (on) { log('manette : surveillance des connexions active'); if (native?.xinputOk) pollXInput(); }
     },
     get running() { return guideOn; },
+    navFlush, // NAV : à appeler quand wantNav() change (fenêtre affichée / masquée)
     get connecting() { return connectOn; },
     // Pour les tests : injecter un masque comme s'il venait d'une source
     _feed: handle,
@@ -425,4 +514,4 @@ function createGuideWatcher({
   };
 }
 
-module.exports = { BTN, hidKind, decodeHidReport, makeEdges, createComboMachine, createGuideWatcher };
+module.exports = { BTN, toNav, stickBits, hidExtras, hidKind, decodeHidReport, makeEdges, createComboMachine, createGuideWatcher };

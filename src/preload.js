@@ -59,6 +59,7 @@ contextBridge.exposeInMainWorld('rr', {
   setIngame: call('guide:ingame'),
   onGuide: on('guide:press'),
   onPadRemote: on('pad:remote'),
+  onPadNav: on('pad:nav'), // NAV : état des manettes lu en natif (masque XInput + gâchettes)
   // WAKE : retour au premier plan (fin de la dernière session, manette allumée)
   onWake: on('win:wake'),
 });
