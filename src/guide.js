@@ -11,6 +11,7 @@
 // Tout est optionnel : si un module natif ne charge pas, la source est simplement désactivée (log).
 // Les boutons sont ramenés au format XInput (masque 16 bits) pour un traitement unique.
 'use strict';
+const { createPresence, createWakeGate, xinputKeys, hidPadKeys } = require('./padwake'); // WAKE
 
 // ---------------------------------------------------------------- Masques (format XInput)
 const BTN = {
@@ -154,16 +155,26 @@ function makeEdges({ minGapMs = 150 } = {}) {
 
 // ---------------------------------------------------------------- Surveillance
 /*
- * createGuideWatcher({ log, onGuide, onRemote, wantRemote })
- *   start() / stop() : sondage XInput (~66 ms) + ouverture des manettes HID (re-scan toutes les 3 s)
- *   status()         : { xinput, hid, devices } pour l'aide des réglages
+ * createGuideWatcher({ log, onGuide, onRemote, wantRemote, onConnect })
+ *   start() / stop()   : mode « Guide » — sondage XInput (~66 ms) + ouverture des manettes HID
+ *   setConnect(bool)   : WAKE, mode « connexion » — signale l'arrivée d'une manette (onConnect) :
+ *                        XInput sondé ~1 s si le mode Guide est arrêté, HID par devices() toutes les ~2 s
+ *                        SANS ouvrir les périphériques. Les deux modes partagent les mêmes boucles.
+ *   status()           : { xinput, hid, devices } pour l'aide des réglages
  * Plusieurs sources peuvent voir le même appui (ex. DualSense lue en HID + exposée en XInput par
  * Steam/DS4Windows) : on ne garde qu'un appui Guide toutes les 400 ms, toutes sources confondues.
  */
-function createGuideWatcher({ log = () => {}, onGuide, onRemote, wantRemote = () => false, pollMs = 66, loadNative: loadNativeOpt, loadHid: loadHidOpt }) {
+function createGuideWatcher({
+  log = () => {}, onGuide, onRemote, wantRemote = () => false, onConnect,
+  pollMs = 66, connectPollMs = 1000, hidScanMs = 2000, wakeCooldownMs = 10000,
+  loadNative: loadNativeOpt, loadHid: loadHidOpt,
+}) {
   const edges = makeEdges();
+  const presence = createPresence(); // WAKE
+  const gate = createWakeGate({ cooldownMs: wakeCooldownMs }); // WAKE
   let native = null, nativeErr = null, HID = null, hidErr = null;
-  let timer = null, scanTimer = null, running = false, lastGuide = 0;
+  let timer = null, timerMs = 0, scanTimer = null, lastGuide = 0;
+  let guideOn = false, connectOn = false;
   const hidOpen = new Map(); // path -> device (null = ouverture impossible, ne pas réessayer)
 
   function loadNative() {
@@ -196,14 +207,27 @@ function createGuideWatcher({ log = () => {}, onGuide, onRemote, wantRemote = ()
     if (wantRemote()) for (const [bit, name] of REMOTE) if (down & bit) onRemote?.(name, source);
   }
 
+  // WAKE : nouvelles manettes pour une source ('xinput' | 'hid')
+  function seen(source, keys) {
+    if (!connectOn) return;
+    const added = presence.update(source, keys);
+    if (!added.length) return;
+    if (!gate.tryWake()) { log(`manette : ${added.join(', ')} ignorée (réveil récent)`); return; }
+    log(`manette : connexion ${added.join(', ')} → ouverture du launcher`);
+    try { onConnect?.(added[0]); } catch (e) { log(`manette : ${e.message}`); }
+  }
+
   function pollXInput() {
     if (!native?.xinputOk) return;
     let states;
     try { states = native.xinputButtons(); } catch (e) { log(`guide : XInput ${e.message}`); native.xinputOk = false; return; }
-    for (let i = 0; i < 4; i++) {
-      if (states[i] == null) edges.forget('xi' + i);
-      else handle('xi' + i, states[i]);
+    if (guideOn) {
+      for (let i = 0; i < 4; i++) {
+        if (states[i] == null) edges.forget('xi' + i);
+        else handle('xi' + i, states[i]);
+      }
     }
+    seen('xinput', xinputKeys(states));
   }
 
   function closeHid(p) {
@@ -214,19 +238,20 @@ function createGuideWatcher({ log = () => {}, onGuide, onRemote, wantRemote = ()
   }
   let scanning = false;
   async function scanHid() {
-    if (!HID || !running || scanning) return;
+    if (!HID || !(guideOn || connectOn) || scanning) return;
     scanning = true;
     try {
       let list = [];
       try { list = HID.devicesAsync ? await HID.devicesAsync() : HID.devices(); } catch (e) { log(`guide : HID ${e.message}`); return; }
-      for (const d of list) {
+      seen('hid', hidPadKeys(list, hidKind)); // WAKE : liste seule, sans ouvrir
+      if (guideOn) for (const d of list) {
         const kind = hidKind(d.vendorId, d.productId);
-        if (!kind || !d.path || hidOpen.has(d.path) || !running) continue;
+        if (!kind || !d.path || hidOpen.has(d.path) || !guideOn) continue;
         // Interface « manette » uniquement (usage page 1, usage 4/5) quand l'info existe
         if (d.usagePage && (d.usagePage !== 1 || (d.usage !== 4 && d.usage !== 5))) continue;
         try {
           const dev = HID.HIDAsync ? await HID.HIDAsync.open(d.path) : new HID.HID(d.path);
-          if (!running) { try { dev.close(); } catch {} return; }
+          if (!guideOn) { try { dev.close(); } catch {} return; }
           const src = 'hid:' + d.path;
           hidOpen.set(d.path, dev);
           log(`guide : manette HID ouverte (${kind}, ${d.product || 'sans nom'})`);
@@ -246,26 +271,37 @@ function createGuideWatcher({ log = () => {}, onGuide, onRemote, wantRemote = ()
     } finally { scanning = false; }
   }
 
+  // Ajuste les boucles aux modes demandés (une seule boucle XInput, une seule boucle HID)
+  function apply() {
+    const active = guideOn || connectOn;
+    if (active) { loadNative(); loadHid(); }
+    const ms = guideOn ? pollMs : connectOn ? connectPollMs : 0;
+    if (ms !== timerMs || (ms && !timer && native?.xinputOk)) {
+      clearInterval(timer); timer = null; timerMs = ms;
+      if (ms && native?.xinputOk) timer = setInterval(pollXInput, ms);
+    }
+    if (active && HID && !scanTimer) { scanTimer = setInterval(scanHid, hidScanMs); scanHid(); }
+    if (!active && scanTimer) { clearInterval(scanTimer); scanTimer = null; }
+    if (!guideOn) { for (const p of [...hidOpen.keys()]) closeHid(p); edges.reset(); }
+    if (!connectOn) presence.reset();
+  }
+
   return {
-    start() {
-      if (running) return;
-      running = true;
-      loadNative();
-      loadHid();
-      if (native?.xinputOk) timer = setInterval(pollXInput, pollMs);
-      if (HID) { scanHid(); scanTimer = setInterval(scanHid, 3000); }
+    start() { if (guideOn) return; guideOn = true; apply(); if (HID) scanHid(); },
+    stop() { if (!guideOn) return; guideOn = false; apply(); },
+    // WAKE : surveillance des connexions (l'état présent au démarrage sert de référence)
+    setConnect(on) {
+      on = !!on;
+      if (on === connectOn) return;
+      connectOn = on;
+      apply();
+      if (on) { log('manette : surveillance des connexions active'); if (native?.xinputOk) pollXInput(); }
     },
-    stop() {
-      if (!running) return;
-      running = false;
-      clearInterval(timer); clearInterval(scanTimer);
-      timer = scanTimer = null;
-      for (const p of [...hidOpen.keys()]) closeHid(p);
-      edges.reset();
-    },
-    get running() { return running; },
+    get running() { return guideOn; },
+    get connecting() { return connectOn; },
     // Pour les tests : injecter un masque comme s'il venait d'une source
     _feed: handle,
+    _seen: seen,
     status() {
       loadNative(); loadHid();
       return {
@@ -273,6 +309,7 @@ function createGuideWatcher({ log = () => {}, onGuide, onRemote, wantRemote = ()
         xinput: !!native?.xinputOk,
         hid: !!HID,
         devices: [...hidOpen.values()].filter(Boolean).length,
+        connect: connectOn,
         error: nativeErr || native?.xinputError || hidErr || null,
       };
     },

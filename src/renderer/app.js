@@ -2597,6 +2597,38 @@ rr.onRunning(({ id, running }) => {
   if (!running && igIsOpen() && IG.id === id) closeAll(true); // le jeu s'est fermé tout seul
 });
 
+// ---------------------------------------------------------------- WAKE : retour au premier plan
+// Le processus principal ramène le launcher devant tout (fin de la dernière session, manette allumée)
+// puis envoie « win:wake » { reason: 'session-end' | 'pad', id, platform, wasHidden, wasFront }.
+function wakeQuiet(fn) { // navigation sans les sons intermédiaires : un seul son d'ouverture
+  const s = S.lib.settings || {};
+  Sfx.set(false);
+  try { fn(); } finally { Sfx.set(s.sounds, s.volume ?? 0.7); }
+}
+// Rangée de jeux de la console du jeu quitté, sélection sur ce jeu
+function wakeShowGame(id, pid) {
+  const g = S.lib.games.find((x) => x.id === id);
+  const p = g?.platform || pid;
+  if (!p || !S.home.items.some((x) => x.id === p)) return;
+  if (S.view !== 'games' || S.plat !== p) enterPlatform(p);
+  if (!g || S.view !== 'games') return;
+  let i = S.items.findIndex((x) => x.id === g.id);
+  if (i < 0 && S.tab !== 'all') { setTab('all'); i = S.items.findIndex((x) => x.id === g.id); }
+  if (i >= 0) select(i, { spin: false });
+}
+rr.onWake((w = {}) => {
+  if (shellSplashActive()) endSplash();
+  if (w.reason === 'session-end') {
+    if (igIsOpen()) closeAll(true); // fin de partie détectée menu en jeu ouvert : on le ferme
+    if (S.mode === 'main') wakeQuiet(() => wakeShowGame(w.id, w.platform));
+  } else if (w.reason === 'pad') {
+    wakeQuiet(() => { closeAll(true); if (S.topFocus >= 0) shellLeaveTop(true); goHome(); }); // accueil des consoles
+  }
+  // Fenêtre masquée : « win:visible » joue déjà le son d'ouverture ; déjà devant : pas de son
+  if (!w.wasHidden && !w.wasFront) sfx('open');
+  renderHints();
+});
+
 // ---------------------------------------------------------------- Démarrage
 (async function init() {
   initMotes();
