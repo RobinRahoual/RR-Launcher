@@ -73,16 +73,43 @@ function caseInfo(g) {
 }
 const sfx = (n) => Sfx.play(n);
 
-// ---------------------------------------------------------------- Toast
-let toastTimer;
-function toast(msg, error = false) {
-  const t = $('#toast');
-  t.textContent = msg;
-  t.classList.toggle('error', error);
-  t.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 3400);
-  if (error) sfx('error');
+// Chemins affichés en direction rtl (troncature à gauche) : on isole le texte en ltr pour garder les « / » à leur place
+const ltr = (s = '') => `‎${s}‎`;
+
+// ---------------------------------------------------------------- Toasts
+// toast(msg) → info ; toast(msg, true) → erreur ; toast(msg, 'success' | 'progress' | 'error' | 'info')
+const TOAST_ICON = {
+  success: '<svg viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
+  error: '<svg viewBox="0 0 24 24"><path d="M12 7.5v6M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>',
+  info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 11v5.5M12 7.5h.01"/></svg>',
+  progress: '<span class="spinner tiny"></span>',
+};
+function toast(msg, type = 'info') {
+  if (type === true) type = 'error';
+  if (!type || !TOAST_ICON[type]) type = 'info';
+  const box = $('#toast');
+  // Pas de doublon : un message identique déjà affiché est simplement prolongé
+  let t = $$('.toast', box).find((x) => x._msg === msg && !x.classList.contains('out'));
+  if (!t) {
+    t = document.createElement('div');
+    t._msg = msg;
+    t.className = `toast t-${type}`;
+    t.innerHTML = `<span class="t-ico" aria-hidden="true">${TOAST_ICON[type]}</span><span class="t-msg"></span>`;
+    $('.t-msg', t).textContent = msg;
+    box.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('show'));
+    const all = $$('.toast:not(.out)', box);
+    if (all.length > 3) dismissToast(all[0]);
+  }
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => dismissToast(t), type === 'error' ? 6000 : type === 'progress' ? 4200 : 3400);
+  if (type === 'error') sfx('error');
+}
+function dismissToast(t) {
+  clearTimeout(t._timer);
+  t.classList.add('out');
+  t.classList.remove('show');
+  setTimeout(() => t.remove(), reduceMotion ? 0 : 260);
 }
 
 // ---------------------------------------------------------------- Roue des consoles (accueil)
@@ -499,7 +526,7 @@ function updateProgressText(id) {
   const el = slots.get(id);
   const m = el && $('.lv-msg', el);
   if (m) m.textContent = S.progress[id] || '';
-  if (S.view === 'games' && S.items[S.sel]?.id === id) $('#subtitle').textContent = S.progress[id] || '';
+  if (S.view === 'games' && S.items[S.sel]?.id === id) renderCapBadges(S.items[S.sel]);
 }
 let sweepT;
 function scheduleSweep() {
@@ -741,7 +768,7 @@ function updateChrome(force = false) {
   updateBrand();
   const g = S.items[S.sel];
   $('#counter').textContent = S.items.length ? `${S.sel + 1} / ${S.items.length}` : '';
-  if (!g) { setBackground('', S.plat !== 'all' ? plat(S.plat).color : ''); return; }
+  if (!g) { setBackground('', S.plat !== 'all' ? plat(S.plat).color : ''); $('#capBadges').innerHTML = ''; return; }
   setCapLogo(null);
   if (force || $('#title').dataset.id !== g.id) {
     const cap = $('#caption');
@@ -750,9 +777,27 @@ function updateChrome(force = false) {
     $('#title').dataset.id = g.id;
   }
   const p = plat(g.platform);
-  const bits = [S.plat === 'all' ? p.name : '', g.developer?.split(',')[0], yearOf(g), g.playtime ? fmtTime(g.playtime) + ' de jeu' : ''].filter(Boolean);
-  $('#subtitle').textContent = g.metaStatus === 'loading' ? (S.progress[g.id] || 'Recherche des infos…') : bits.join(' · ') || p.name;
+  const bits = [S.plat === 'all' ? p.name : '', g.developer?.split(',')[0], yearOf(g), (g.genres || [])[0]].filter(Boolean);
+  $('#subtitle').textContent = bits.join(' · ') || p.name;
+  renderCapBadges(g);
   setBackground(heroOf(g), p.color);
+}
+// Puces d'état sous le titre du jeu : en cours, récupération des infos, favori, dernière session
+const BADGE_ICON = {
+  fav: '<svg viewBox="0 0 24 24" class="fill"><path d="M12 20.5s-7.5-4.6-9.6-9.2C.9 7.9 3 4 6.7 4c2.1 0 3.6 1.2 4.3 2.4h2C13.7 5.2 15.2 4 17.3 4 21 4 23.1 7.9 21.6 11.3 19.5 15.9 12 20.5 12 20.5z"/></svg>',
+  time: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  emu: '<svg viewBox="0 0 24 24"><path d="M12 7.5v6M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>',
+};
+function renderCapBadges(g) {
+  const box = $('#capBadges');
+  if (!g) { box.innerHTML = ''; return; }
+  const b = [];
+  if (S.lib.running.includes(g.id)) b.push('<span class="badge live"><i class="dot"></i>En cours</span>');
+  if (g.metaStatus === 'loading') b.push(`<span class="badge busy"><span class="spinner tiny"></span>${esc(S.progress[g.id] || 'Récupération des infos…')}</span>`);
+  if (g.favorite) b.push(`<span class="badge fav">${BADGE_ICON.fav}Favori</span>`);
+  if (g.kind === 'rom' && !S.lib.settings.emulators?.[g.platform]) b.push(`<span class="badge warn">${BADGE_ICON.emu}Émulateur à configurer</span>`);
+  b.push(`<span class="badge time">${BADGE_ICON.time}${g.lastPlayed ? `${esc(fmtLast(g.lastPlayed))}${g.playtime ? ` · ${esc(fmtTime(g.playtime))}` : ''}` : 'Jamais lancé'}</span>`);
+  box.innerHTML = b.slice(0, 4).join('');
 }
 
 function renderTabs() {
@@ -812,13 +857,14 @@ async function play(id = S.items[S.sel]?.id) {
   sfx('launch');
   const f = $('#launchFlash');
   f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-  toast(`Lancement de ${g.name}…`);
+  toast(`Lancement de ${g.name}…`, 'progress');
 }
 function askEmulator(pid, gameId) {
   const p = plat(pid);
   const names = (p.emulators || []).map((e) => e.name).join(', ');
   openPrompt({
     title: `Aucun émulateur pour ${p.name}`,
+    icon: 'emu',
     body: `<p class="dim">Choisis l’exécutable de ton émulateur ${names ? `(${esc(names)})` : ''}. Les bons paramètres de lancement sont appliqués automatiquement.</p>`,
     actions: [
       { label: 'Annuler', onClick: () => closeOverlay() },
@@ -826,7 +872,7 @@ function askEmulator(pid, gameId) {
         const conf = await rr.pickEmulator(pid);
         if (!conf) return;
         closeOverlay();
-        toast(`${conf.name} configuré pour ${p.name}`);
+        toast(`${conf.name} configuré pour ${p.name}`, 'success');
         if (gameId) play(gameId);
       } },
     ],
@@ -837,16 +883,33 @@ async function toggleFav(id = S.items[S.sel]?.id) {
   if (!g) return;
   await rr.updateGame(id, { favorite: !g.favorite });
   sfx('toggle');
-  toast(!g.favorite ? 'Ajouté aux favoris' : 'Retiré des favoris');
+  toast(!g.favorite ? 'Ajouté aux favoris' : 'Retiré des favoris', 'success');
 }
 
 // ---------------------------------------------------------------- Overlays & focus spatial
 const OVERLAYS = { details: '#details', add: '#addDialog', hub: '#addHub', scan: '#scan', menu: '#menu', settings: '#settings', prompt: '#prompt' };
+// Affichage / masquage des overlays avec une courte sortie animée (plus rapide que l'entrée)
+function showOverlayEl(el) {
+  clearTimeout(el._closeT);
+  el.classList.remove('is-closing');
+  el.hidden = false;
+}
+function hideOverlayEl(el, animate) {
+  if (el.hidden) return;
+  clearTimeout(el._closeT);
+  if (!animate || reduceMotion) { el.classList.remove('is-closing'); el.hidden = true; return; }
+  el.classList.add('is-closing');
+  el._closeT = setTimeout(() => { el.hidden = true; el.classList.remove('is-closing'); }, 170);
+}
+const returnFocus = {};
 function openOverlay(mode) {
   if (S.mode === mode) return;
-  if (S.mode !== 'main') S.stack.push(S.mode);
+  if (S.mode !== 'main') { S.stack.push(S.mode); returnFocus[S.mode] = document.activeElement; }
   S.mode = mode;
-  for (const [m, sel] of Object.entries(OVERLAYS)) $(sel).hidden = !(m === mode || S.stack.includes(m));
+  for (const [m, sel] of Object.entries(OVERLAYS)) {
+    if (m === mode || S.stack.includes(m)) showOverlayEl($(sel)); else hideOverlayEl($(sel), false);
+  }
+  document.body.classList.add('has-overlay');
   setTimeout(() => focusFirst(), 30);
   renderHints();
   sfx('confirm');
@@ -854,14 +917,22 @@ function openOverlay(mode) {
 function closeOverlay(silent = false) {
   if (S.mode === 'main') return;
   if (S.mode === 'scan') rr.cancelScan();
-  $(OVERLAYS[S.mode]).hidden = true;
+  hideOverlayEl($(OVERLAYS[S.mode]), true);
   S.mode = S.stack.pop() || 'main';
-  if (S.mode !== 'main') setTimeout(() => focusFirst(), 30);
-  else document.activeElement?.blur();
+  if (S.mode !== 'main') {
+    const back = returnFocus[S.mode];
+    delete returnFocus[S.mode];
+    setTimeout(() => (back && navables().includes(back) ? setFocus(back) : focusFirst()), 30);
+  } else { document.activeElement?.blur(); document.body.classList.remove('has-overlay'); }
   renderHints();
   if (!silent) sfx('back');
 }
 function closeAll() { while (S.mode !== 'main') closeOverlay(true); }
+// Retour contextuel : ferme d'abord un sous-menu ouvert, sinon l'overlay
+function overlayBack() {
+  if (S.mode === 'details' && !$('#dSub').hidden) return toggleImageMenu(false);
+  closeOverlay();
+}
 function navables() {
   const root = $(OVERLAYS[S.mode]) || $('#empty');
   return $$('[data-nav]', root).filter((el) => el.offsetParent !== null && !el.disabled);
@@ -875,7 +946,7 @@ function setFocus(el) {
 }
 function focusFirst() {
   const list = navables();
-  const pref = list.find((el) => el.matches('.primary, [aria-selected="true"]')) || list[0];
+  const pref = list.find((el) => el.matches('[data-default]')) || list.find((el) => el.matches('.primary, [aria-selected="true"]')) || list[0];
   setFocus(S.mode === 'add' && !$('#addStep2').hidden ? $('#addConfirm') : pref);
 }
 function spatial(dir) {
@@ -904,8 +975,9 @@ function spatial(dir) {
 // ---------------------------------------------------------------- Détails
 function openDetails() {
   if (!S.items[S.sel]) return;
-  renderDetails();
   $('#dSub').hidden = true;
+  $('[data-act="images"]').setAttribute('aria-expanded', 'false');
+  renderDetails();
   openOverlay('details');
 }
 function renderDetails() {
@@ -925,11 +997,49 @@ function renderDetails() {
   $('#dStats').innerHTML = `
     <div><b>${fmtTime(g.playtime)}</b><span>Temps de jeu</span></div>
     <div><b>${fmtLast(g.lastPlayed)}</b><span>Dernière session</span></div>
-    <div><b>${g.playCount || 0}</b><span>Lancements</span></div>`;
-  $('#dFav').textContent = g.favorite ? 'Retirer des favoris' : 'Favori';
+    <div><b>${g.playCount || 0}</b><span>Lancement${(g.playCount || 0) > 1 ? 's' : ''}</span></div>`;
+  $('#dDesc').classList.toggle('is-loading', g.metaStatus === 'loading');
+  requestAnimationFrame(() => { const d = $('#dDesc'); d.classList.toggle('is-overflow', d.scrollHeight > d.clientHeight + 2); });
+  const fav = $('#dFav');
+  fav.setAttribute('aria-pressed', !!g.favorite);
+  $('.d-fav-label', fav).textContent = g.favorite ? 'Favori' : 'Ajouter aux favoris';
+  fav.title = g.favorite ? 'Retirer des favoris' : '';
   const running = S.lib.running.includes(g.id);
-  $('[data-act="play"] span:last-child').textContent = running ? 'En cours…' : 'Jouer';
-  $('#dShots').innerHTML = (g.screenshots || []).slice(0, 3).map((s) => `<div style="background-image:url('${mediaUrl(g, s)}')"></div>`).join('');
+  $('.d-play-label').textContent = running ? 'En cours…' : 'Jouer';
+  $('.d-play').classList.toggle('is-running', running);
+  const shots = (g.screenshots || []).slice(0, 3);
+  $('#dShots').classList.toggle('cover-only', !shots.length);
+  $('#dShots').innerHTML = shots.length
+    ? shots.map((s) => `<div class="d-shot" style="background-image:url('${mediaUrl(g, s)}')"></div>`).join('')
+    : g.media?.cover ? `<img class="d-cover" src="${mediaUrl(g, g.media.cover)}" alt="" />` : '';
+  if (!$('#dSub').hidden) renderImageMenu(g);
+}
+const IMG_KINDS = [
+  { k: 'cover', l: 'Jaquette', h: 'Avant de la boîte' },
+  { k: 'back', l: 'Dos', h: 'Arrière de la boîte' },
+  { k: 'hero', l: 'Fond', h: 'Image plein écran' },
+  { k: 'logo', l: 'Logo', h: 'Titre détouré' },
+];
+function renderImageMenu(g) {
+  const fileOf = (k) => (k === 'hero' ? g.media?.hero || g.media?.header : g.media?.[k]);
+  $('#dSub').innerHTML = `
+    <div class="d-sub-head"><strong id="dSubTitle">Remplacer une image</strong><span class="dim">Choisis un fichier sur ton PC (PNG, JPG, WebP)</span></div>
+    <div class="img-grid">${IMG_KINDS.map(({ k, l, h }) => {
+      const f = fileOf(k);
+      const prev = f ? `<span class="img-prev ${k}" style="background-image:url('${mediaUrl(g, f)}')"></span>` : '<span class="img-prev none">Aucune</span>';
+      return `<button class="img-tile" data-img="${k}" data-nav>${prev}<span class="img-l">${l}</span><span class="img-h">${h}</span></button>`;
+    }).join('')}</div>`;
+}
+function toggleImageMenu(open) {
+  const sub = $('#dSub');
+  const btn = $('[data-act="images"]');
+  const g = S.items[S.sel];
+  open = open ?? sub.hidden;
+  if (open && g) renderImageMenu(g);
+  sub.hidden = !open;
+  btn.setAttribute('aria-expanded', open);
+  if (open) { setFocus($('[data-img]', sub)); sfx('toggle'); } else setFocus(btn);
+  renderHints();
 }
 $('#dActions').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-act]');
@@ -943,27 +1053,32 @@ $('#dActions').addEventListener('click', async (e) => {
   if (act === 'folder') rr.openFolder(g.id);
   if (act === 'remove') confirmRemove(g);
   if (act === 'edit') openEdit(g);
-  if (act === 'images') {
-    const sub = $('#dSub');
-    sub.hidden = !sub.hidden;
-    sub.innerHTML = ['cover:Jaquette', 'back:Dos de la boîte', 'hero:Image de fond', 'logo:Logo'].map((x) => {
-      const [k, l] = x.split(':');
-      return `<button class="btn small" data-img="${k}" data-nav>${l}…</button>`;
-    }).join('');
-    if (!sub.hidden) setFocus($('[data-img]', sub));
-  }
+  if (act === 'images') toggleImageMenu();
 });
 $('#dSub').addEventListener('click', async (e) => {
   const b = e.target.closest('[data-img]');
   if (!b) return;
-  const r = await rr.setImage(S.items[S.sel].id, b.dataset.img);
-  if (r) toast('Image mise à jour');
+  b.classList.add('is-busy');
+  const r = await rr.setImage(S.items[S.sel].id, b.dataset.img).catch(() => null);
+  b.classList.remove('is-busy');
+  if (r) toast(`Image « ${IMG_KINDS.find((x) => x.k === b.dataset.img)?.l || ''} » mise à jour`, 'success');
 });
 
 // ---------------------------------------------------------------- Invites
-function openPrompt({ title, body = '', actions }) {
+const PROMPT_ICON = {
+  danger: '<svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg>',
+  power: '<svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>',
+  emu: '<svg viewBox="0 0 24 24"><path d="M6 11h4M8 9v4M15 12h.01M18 10h.01"/><path d="M17.3 5H6.7a4 4 0 0 0-3.95 3.4l-.9 6.1A2.9 2.9 0 0 0 6.6 16.8L8.5 15h7l1.9 1.8a2.9 2.9 0 0 0 4.75-2.3l-.9-6.1A4 4 0 0 0 17.3 5z"/></svg>',
+  edit: '<svg viewBox="0 0 24 24"><path d="M13 20h8"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  refresh: '<svg viewBox="0 0 24 24"><path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 3.5V8H16"/></svg>',
+};
+function openPrompt({ title, body = '', actions, icon = null, tone = '' }) {
   $('#pTitle').textContent = title;
   $('#pBody').innerHTML = body;
+  const ic = $('#pIcon');
+  ic.hidden = !icon;
+  ic.className = 'p-icon' + (tone ? ' ' + tone : '');
+  ic.innerHTML = icon ? PROMPT_ICON[icon] || '' : '';
   const box = $('#pActions');
   box.innerHTML = '';
   actions.forEach((a) => {
@@ -971,19 +1086,21 @@ function openPrompt({ title, body = '', actions }) {
     b.className = 'btn' + (a.primary ? ' primary' : '') + (a.danger ? ' danger' : '');
     b.textContent = a.label;
     b.dataset.nav = '';
+    if (a.focus) b.dataset.default = '';
     b.addEventListener('click', a.onClick);
     box.appendChild(b);
   });
-  if (S.mode === 'prompt') { $('#prompt').hidden = false; setTimeout(focusFirst, 30); }
+  if (S.mode === 'prompt') { showOverlayEl($('#prompt')); setTimeout(focusFirst, 30); }
   else openOverlay('prompt');
 }
 function confirmRemove(g) {
   openPrompt({
     title: `Retirer « ${g.name} » ?`,
-    body: `<p class="dim">Le jeu est seulement retiré du launcher. Ses fichiers restent sur ton disque.</p>`,
+    icon: 'danger', tone: 'danger',
+    body: `<p class="dim">Le jeu est seulement retiré du launcher : ses fichiers et ses sauvegardes restent sur ton disque. Tu pourras le rajouter à tout moment.</p>`,
     actions: [
-      { label: 'Annuler', onClick: () => closeOverlay() },
-      { label: 'Retirer', danger: true, primary: true, onClick: async () => { await rr.removeGame(g.id); closeAll(); toast('Jeu retiré'); } },
+      { label: 'Annuler', focus: true, onClick: () => closeOverlay() },
+      { label: 'Retirer du launcher', danger: true, primary: true, onClick: async () => { await rr.removeGame(g.id); closeAll(); toast(`« ${g.name} » retiré`, 'success'); } },
     ],
   });
 }
@@ -991,11 +1108,12 @@ function quitAsk() {
   closeAll();
   openPrompt({
     title: 'Quitter RR Launcher ?',
+    icon: 'power',
     body: `<p class="dim">« Réduire » le garde prêt en arrière-plan (icône près de l’horloge Windows, ou <b>Ctrl+Alt+L</b>).</p>`,
     actions: [
       { label: 'Annuler', onClick: () => closeOverlay() },
       { label: 'Réduire', onClick: () => { closeAll(); rr.minimize(); } },
-      { label: 'Quitter', primary: true, danger: true, onClick: () => rr.quit() },
+      { label: 'Quitter', primary: true, onClick: () => rr.quit() },
     ],
   });
 }
@@ -1003,12 +1121,13 @@ function openEdit(g) {
   const isRom = g.kind === 'rom';
   const file = g.romPath || g.exePath || g.launchUri || '';
   openPrompt({
-    title: 'Modifier',
+    title: `Modifier « ${g.name} »`,
+    icon: 'edit',
     body: `
       <div class="field"><label for="eName">Nom affiché</label><input id="eName" type="text" value="${esc(g.name)}" data-nav /></div>
       <div class="field"><label for="ePlat">Console</label><select id="ePlat" data-nav>${platformOptions(g.platform)}</select></div>
       ${g.kind === 'exe' ? `<div class="field"><label for="eArgs">Arguments de lancement <span class="dim">(optionnel)</span></label><input id="eArgs" type="text" value="${esc(g.args || '')}" placeholder="-fullscreen -novid" data-nav /></div>` : ''}
-      <div class="field"><label>${isRom ? 'ROM' : g.kind === 'exe' ? 'Exécutable' : 'Lancement'}</label><div class="path-row"><code id="eExe">${esc(file)}&lrm;</code>${g.kind === 'exe' || isRom ? '<button class="btn small" id="eRepick" data-nav>Changer</button>' : ''}</div></div>`,
+      <div class="field"><label>${isRom ? 'ROM' : g.kind === 'exe' ? 'Exécutable' : 'Lancement'}</label><div class="path-row"><code id="eExe" title="${esc(file)}">${esc(ltr(file))}</code>${g.kind === 'exe' || isRom ? '<button class="btn small" id="eRepick" data-nav>Changer</button>' : ''}</div></div>`,
     actions: [
       { label: 'Annuler', onClick: () => closeOverlay() },
       { label: 'Enregistrer', primary: true, onClick: async () => {
@@ -1017,13 +1136,13 @@ function openEdit(g) {
         if ($('#eExe').dataset.changed) patch[isRom ? 'romPath' : 'exePath'] = $('#eExe').textContent.replace(/\u200E/g, '');
         await rr.updateGame(g.id, patch);
         closeOverlay();
-        toast('Modifications enregistrées');
+        toast('Modifications enregistrées', 'success');
       } },
     ],
   });
   $('#eRepick')?.addEventListener('click', async () => {
     const r = await rr.pickFile();
-    if (r) { $('#eExe').textContent = r.path; $('#eExe').dataset.changed = '1'; }
+    if (r) { $('#eExe').textContent = ltr(r.path); $('#eExe').title = r.path; $('#eExe').dataset.changed = '1'; }
   });
 }
 function platformOptions(sel) {
@@ -1036,24 +1155,37 @@ async function openAdd({ path, rematch } = {}) {
   add.rematch = rematch || null;
   add.file = rematch ? (rematch.romPath || rematch.exePath) : '';
   $('#addTitle').textContent = rematch ? `Corriger « ${rematch.name} »` : 'Ajouter un jeu ou une ROM';
-  $('#addConfirm').textContent = rematch ? 'Mettre à jour' : 'Ajouter';
+  $('#addConfirm').textContent = rematch ? 'Mettre à jour' : 'Ajouter le jeu';
   $('#addRepick').hidden = !!rematch;
   $('#addPlatform').innerHTML = platformOptions(rematch ? rematch.platform : S.plat !== 'all' ? S.plat : 'pc');
   $('#addPlatform').disabled = !!rematch;
   $('#addStep1').hidden = !!rematch || !!path;
   $('#addStep2').hidden = !rematch && !path;
+  $('#addStepper').hidden = !!rematch;
+  setAddStep(rematch || path ? 2 : 1);
   if (S.mode !== 'add') openOverlay('add');
   if (rematch) toStep2({ path: add.file || rematch.launchUri || '', name: rematch.name, platform: rematch.platform });
   else if (path) toStep2(await rr.inspectFile(path));
+}
+function setAddStep(n) {
+  $$('#addStepper li').forEach((li) => {
+    const k = +li.dataset.step;
+    li.classList.toggle('is-current', k === n);
+    li.classList.toggle('is-done', k < n);
+    if (k === n) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+  });
 }
 function toStep2(info) {
   add.file = info.path;
   $('#addStep1').hidden = true;
   $('#addStep2').hidden = false;
-  $('#addPath').textContent = info.path + '\u200E';
+  setAddStep(2);
+  $('#addPath').textContent = ltr(info.path);
+  $('#addPath').title = info.path || '';
   $('#addName').value = info.name || '';
   $('#addPlatform').value = info.platform || 'pc';
-  if (info.ambiguous) toast('Console non reconnue : vérifie le choix de la console');
+  $('#addPlatform').classList.toggle('needs-check', !!info.ambiguous);
+  if (info.ambiguous) toast('Console non reconnue : vérifie le choix de la console', 'info');
   runSearch();
   setTimeout(() => setFocus($('#addConfirm')), 30);
 }
@@ -1068,8 +1200,10 @@ function runSearch() {
   clearTimeout(add.timer);
   const term = $('#addName').value.trim();
   const box = $('#addResults');
-  if (!term) { box.innerHTML = ''; return; }
-  $('#addStatus').textContent = '· recherche…';
+  if (!term) { box.innerHTML = '<p class="results-empty">Saisis le nom du jeu pour chercher sa fiche.</p>'; $('#addStatus').textContent = ''; return; }
+  $('#addStatus').innerHTML = '<span class="spinner tiny"></span> recherche…';
+  box.setAttribute('aria-busy', 'true');
+  if (!box.querySelector('.result')) box.innerHTML = '<span class="result skeleton"></span>'.repeat(3);
   add.timer = setTimeout(async () => {
     const tok = ++add.token;
     const platform = $('#addPlatform').value;
@@ -1078,7 +1212,9 @@ function runSearch() {
     const auto = platform !== 'pc' ? [{ source: 'auto', name: term }] : [];
     add.results = [...auto, ...r.results, { source: 'none', name: term }];
     add.chosen = 0;
-    $('#addStatus').textContent = r.ok ? (r.results.length ? `· ${r.results.length} résultat${r.results.length > 1 ? 's' : ''}` : '· aucun résultat en ligne') : '· hors ligne ?';
+    $('#addStatus').textContent = r.ok ? (r.results.length ? `· ${r.results.length} résultat${r.results.length > 1 ? 's' : ''}` : '· aucun résultat en ligne') : '· recherche impossible (hors ligne ?)';
+    $('#addStatus').classList.toggle('is-error', !r.ok);
+    box.removeAttribute('aria-busy');
     renderResults();
   }, 350);
 }
@@ -1111,7 +1247,7 @@ async function confirmAdd() {
   if (add.rematch) {
     const id = add.rematch.id;
     closeAll();
-    toast('Mise à jour des infos…');
+    toast('Mise à jour des infos…', 'progress');
     rr.refetch(id, match || (platform === 'pc' ? { source: 'none', name } : { source: 'auto', name }));
     return;
   }
@@ -1120,7 +1256,7 @@ async function confirmAdd() {
   if (!r.ok) { toast(r.error, true); return; }
   closeAll();
   sfx('confirm');
-  toast('Jeu ajouté — récupération des visuels…');
+  toast('Jeu ajouté — récupération des visuels…', 'success');
   S.selId = r.id;
   S.home.selId = platform;
   setTimeout(() => { if (S.view === 'games' && S.plat === platform) return; enterPlatform(platform); }, 150);
@@ -1151,13 +1287,14 @@ async function runScan(mode) {
   $('#scanTitle').textContent = { launchers: 'Import Steam, Epic & GOG', folders: 'Scan des dossiers', pc: 'Scan de tout le PC' }[mode];
   $('#scanRunning').hidden = false;
   $('#scanResults').hidden = true;
-  $('#scanFound').textContent = '0'; $('#scanDirs').textContent = '0'; $('#scanPath').textContent = '';
+  $('#scanFound').textContent = '0'; $('#scanDirs').textContent = '0'; $('#scanPath').textContent = 'Préparation…';
+  $('#scanStop').disabled = false;
   openOverlay('scan');
   const res = await rr.scan(mode, folders);
   if (S.mode !== 'scan') return;
   if (!res.items.length && !res.emulators.length) {
     closeOverlay(true);
-    return toast(res.error || 'Aucun jeu trouvé.', true);
+    return toast(res.error || 'Aucun jeu trouvé.', res.error ? 'error' : 'info');
   }
   scan.items = res.items;
   scan.emulators = res.emulators;
@@ -1168,18 +1305,19 @@ async function runScan(mode) {
 rr.onScanProgress((p) => {
   $('#scanFound').textContent = p.found;
   $('#scanDirs').textContent = p.dirs.toLocaleString('fr-FR');
-  $('#scanPath').textContent = p.current + '\u200E';
+  $('#scanPath').textContent = ltr(p.current);
 });
 function renderScanResults(res) {
   $('#scanRunning').hidden = true;
   $('#scanResults').hidden = false;
   const fresh = scan.items.filter((x) => !x.exists).length;
-  $('#scanSummary').textContent = `${fresh} nouveau${fresh > 1 ? 'x' : ''} jeu${fresh > 1 ? 'x' : ''} trouvé${fresh > 1 ? 's' : ''}` + (scan.items.length - fresh ? ` · ${scan.items.length - fresh} déjà dans la bibliothèque` : '') + (res.cancelled ? ' · scan interrompu' : '');
+  $('#scanTitle').textContent = 'Résultats du scan';
+  $('#scanSummary').innerHTML = `<b>${fresh} nouveau${fresh > 1 ? 'x' : ''} jeu${fresh > 1 ? 'x' : ''}</b> trouvé${fresh > 1 ? 's' : ''}` + (scan.items.length - fresh ? `<span class="dim"> · ${scan.items.length - fresh} déjà dans la bibliothèque</span>` : '') + (res.cancelled ? '<span class="dim"> · scan interrompu</span>' : '');
   const emuBox = $('#scanEmus');
   if (scan.emulators.length) {
     const names = [...new Set(scan.emulators.flatMap((e) => e.matches.map((m) => m.emulator)))];
     emuBox.hidden = false;
-    emuBox.innerHTML = `<span><b>${names.length} émulateur${names.length > 1 ? 's' : ''} détecté${names.length > 1 ? 's' : ''}</b> : ${esc(names.join(', '))} — configurer automatiquement</span><button class="toggle" id="emuAuto" role="switch" aria-checked="true" data-nav></button>`;
+    emuBox.innerHTML = `<span><b>${names.length} émulateur${names.length > 1 ? 's' : ''} détecté${names.length > 1 ? 's' : ''}</b> : ${esc(names.join(', '))} — configurer automatiquement</span><button class="toggle" id="emuAuto" role="switch" aria-checked="true" aria-label="Configurer automatiquement les émulateurs détectés" data-nav></button>`;
     $('#emuAuto').addEventListener('click', (e) => { const b = e.currentTarget; b.setAttribute('aria-checked', b.getAttribute('aria-checked') !== 'true'); sfx('toggle'); });
   } else emuBox.hidden = true;
   const groups = new Map();
@@ -1193,15 +1331,19 @@ function renderScanResults(res) {
     ${list.map((it) => `
       <button class="scan-item ${it.exists ? 'exists' : ''}" role="checkbox" aria-checked="${scan.checked.has(it.key)}" data-key="${it.key}" data-nav>
         <span class="chk"></span>
-        <span><span class="si-name">${esc(it.name)}</span><span class="si-path">${esc(it.romPath || it.exePath || it.installDir || '')}&lrm;</span></span>
+        <span><span class="si-name">${esc(it.name)}</span><span class="si-path">${esc(ltr(it.romPath || it.exePath || it.installDir || ''))}</span></span>
         <span class="si-src">${it.exists ? 'DÉJÀ AJOUTÉ' : src(it)}</span>
-      </button>`).join('')}`).join('') || '<p class="dim">Aucun nouveau jeu.</p>';
+      </button>`).join('')}`).join('') || '<p class="results-empty">Aucun jeu trouvé dans ces dossiers. Les émulateurs détectés peuvent quand même être configurés.</p>';
   updateScanButton();
+  renderHints();
   setTimeout(() => setFocus($('#scanImport')), 30);
 }
 function updateScanButton() {
   const n = scan.checked.size;
   $('#scanImport').textContent = n ? `Ajouter ${n} jeu${n > 1 ? 'x' : ''}` : 'Terminer';
+  const total = scan.items.filter((x) => !x.exists).length;
+  $('#scanAll').disabled = !total || scan.items.every((x) => x.exists || scan.checked.has(x.key));
+  $('#scanNone').disabled = !n;
 }
 $('#scanList').addEventListener('click', (e) => {
   const b = e.target.closest('[data-key]');
@@ -1214,16 +1356,16 @@ $('#scanList').addEventListener('click', (e) => {
 });
 $('#scanAll').addEventListener('click', () => { scan.items.filter((x) => !x.exists).forEach((x) => scan.checked.add(x.key)); $$('#scanList [data-key]').forEach((b) => b.setAttribute('aria-checked', scan.checked.has(+b.dataset.key))); updateScanButton(); });
 $('#scanNone').addEventListener('click', () => { scan.checked.clear(); $$('#scanList [data-key]').forEach((b) => b.setAttribute('aria-checked', false)); updateScanButton(); });
-$('#scanStop').addEventListener('click', () => { rr.cancelScan(); $('#scanPath').textContent = 'Arrêt…'; });
+$('#scanStop').addEventListener('click', () => { rr.cancelScan(); $('#scanPath').textContent = 'Arrêt en cours…'; $('#scanStop').disabled = true; });
 $('#scanImport').addEventListener('click', async () => {
   const items = scan.items.filter((x) => scan.checked.has(x.key)).map(({ key, exists, ...rest }) => rest);
   let emus = 0;
   if (scan.emulators.length && $('#emuAuto')?.getAttribute('aria-checked') === 'true') emus = await rr.applyDetectedEmulators(scan.emulators);
   closeAll();
-  if (!items.length) { if (emus) toast(`${emus} émulateur${emus > 1 ? 's' : ''} configuré${emus > 1 ? 's' : ''}`); return; }
+  if (!items.length) { if (emus) toast(`${emus} émulateur${emus > 1 ? 's' : ''} configuré${emus > 1 ? 's' : ''}`, 'success'); return; }
   const r = await rr.addMany(items);
   sfx('confirm');
-  toast(`${r.count} jeu${r.count > 1 ? 'x' : ''} ajouté${r.count > 1 ? 's' : ''}${emus ? ` · ${emus} émulateur${emus > 1 ? 's' : ''} configuré${emus > 1 ? 's' : ''}` : ''} — récupération des visuels…`);
+  toast(`${r.count} jeu${r.count > 1 ? 'x' : ''} ajouté${r.count > 1 ? 's' : ''}${emus ? ` · ${emus} émulateur${emus > 1 ? 's' : ''} configuré${emus > 1 ? 's' : ''}` : ''} — récupération des visuels…`, 'success');
   goHome();
 });
 
@@ -1233,6 +1375,10 @@ function renderSettings() {
   const s = S.lib.settings;
   $$('#settings .seg').forEach((seg) => $$('button', seg).forEach((b) => b.setAttribute('aria-pressed', String(s[seg.dataset.setting]) === b.dataset.value)));
   $$('#settings [data-toggle]').forEach((b) => b.setAttribute('aria-checked', !!s[b.dataset.toggle]));
+  // Le volume n'a de sens que si les sons sont activés
+  const vol = $('#settings [data-setting="volume"]');
+  vol.classList.toggle('is-off', !s.sounds);
+  $$('button', vol).forEach((b) => { b.disabled = !s.sounds; });
   if (document.activeElement !== $('#sgdbKey')) $('#sgdbKey').value = s.sgdbKey || '';
   if (document.activeElement !== $('#tgdbKey')) $('#tgdbKey').value = s.tgdbKey || '';
   $$('.set-tab').forEach((t) => t.setAttribute('aria-selected', t.dataset.settab === setPage));
@@ -1246,13 +1392,13 @@ function renderEmus() {
   list.innerHTML = S.lib.platforms.filter((p) => p.id !== 'pc').map((p) => {
     const c = emus[p.id];
     const conf = c
-      ? `<span>${esc(c.name || 'Émulateur')}</span><code>${esc(c.path)}&lrm;</code><input type="text" value="${esc(c.args || '')}" data-args="${p.id}" spellcheck="false" data-nav />`
+      ? `<span class="e-ok"><i class="dot"></i>${esc(c.name || 'Émulateur')}</span><code title="${esc(c.path)}">${esc(ltr(c.path))}</code><input type="text" value="${esc(c.args || '')}" data-args="${p.id}" spellcheck="false" aria-label="Arguments de lancement pour ${esc(p.name)}" data-nav />`
       : `<span class="e-none">Aucun émulateur${p.emulators.length ? ` · conseillé : ${esc(p.emulators.map((e) => e.name).join(', '))}` : ''}</span>`;
     return `<div class="emu-row">
       <div class="e-name"><i style="background:${p.color}"></i>${esc(p.name)}</div>
       <div class="e-conf">${conf}</div>
       <div class="e-actions">
-        <button class="btn small" data-emupick="${p.id}" data-nav>${c ? 'Changer' : 'Choisir…'}</button>
+        <button class="btn small ${c ? '' : 'accent'}" data-emupick="${p.id}" data-nav>${c ? 'Changer' : 'Choisir…'}</button>
         <button class="btn small" data-platimg="${p.id}" data-nav title="Image de la console sur l’accueil">Image</button>
         <button class="btn small" data-platlogo="${p.id}" data-nav title="Logo de la console">Logo</button>
         ${c ? `<button class="btn small danger" data-emudel="${p.id}" data-nav>Retirer</button>` : ''}
@@ -1269,32 +1415,49 @@ $('#settings').addEventListener('click', async (e) => {
   const del = e.target.closest('[data-emudel]');
   const pimg = e.target.closest('[data-platimg]');
   const plogo = e.target.closest('[data-platlogo]');
-  if (plogo) { const f = await rr.setPlatformLogo(plogo.dataset.platlogo); if (f) { S.platLogo[plogo.dataset.platlogo] = f; syncCards(); syncSlots(); updateBrand(); toast('Logo mis à jour'); } return; }
-  if (tab) { setPage = tab.dataset.settab; renderSettings(); sfx('tab'); return; }
+  if (plogo) { const f = await rr.setPlatformLogo(plogo.dataset.platlogo); if (f) { S.platLogo[plogo.dataset.platlogo] = f; syncCards(); syncSlots(); updateBrand(); toast('Logo mis à jour', 'success'); } return; }
+  if (tab) { setSettingsPage(tab.dataset.settab); return; }
   if (seg) { const k = seg.parentElement.dataset.setting; const v = k === 'volume' ? parseFloat(seg.dataset.value) : seg.dataset.value; await rr.setSettings({ [k]: v }); }
   if (tg) await rr.setSettings({ [tg.dataset.toggle]: !S.lib.settings[tg.dataset.toggle] });
   if (link) { e.preventDefault(); rr.openExternal(link.dataset.link); }
-  if (pick) { const c = await rr.pickEmulator(pick.dataset.emupick); if (c) toast(`${c.name} configuré`); }
+  if (pick) { const c = await rr.pickEmulator(pick.dataset.emupick); if (c) toast(`${c.name} configuré`, 'success'); }
   if (del) await rr.setEmulator(del.dataset.emudel, null);
-  if (pimg) { const f = await rr.setPlatformImage(pimg.dataset.platimg); if (f) { S.platImg[pimg.dataset.platimg] = f; syncCards(); toast('Image de la console mise à jour'); } }
+  if (pimg) { const f = await rr.setPlatformImage(pimg.dataset.platimg); if (f) { S.platImg[pimg.dataset.platimg] = f; syncCards(); toast('Image de la console mise à jour', 'success'); } }
   if (seg || tg) sfx('toggle');
+  // Clic sur le libellé d'un réglage à interrupteur unique : bascule l'interrupteur
+  const row = !seg && !tg && !link && !e.target.closest('button, input, a') && e.target.closest('.setting');
+  const only = row && $$('[data-toggle]', row);
+  if (only?.length === 1 && !$('.seg', row)) only[0].click();
 });
 $('#settings').addEventListener('change', (e) => {
   const a = e.target.closest('[data-args]');
   if (a) rr.setEmulator(a.dataset.args, { args: a.value.trim() });
 });
-$('#sgdbKey').addEventListener('change', () => rr.setSettings({ sgdbKey: $('#sgdbKey').value.trim() }));
-$('#tgdbKey').addEventListener('change', () => rr.setSettings({ tgdbKey: $('#tgdbKey').value.trim() }));
+$('#sgdbKey').addEventListener('change', () => { const v = $('#sgdbKey').value.trim(); rr.setSettings({ sgdbKey: v }); toast(v ? 'Clé SteamGridDB enregistrée' : 'Clé SteamGridDB retirée', 'success'); });
+$('#tgdbKey').addEventListener('change', () => { const v = $('#tgdbKey').value.trim(); rr.setSettings({ tgdbKey: v }); toast(v ? 'Clé TheGamesDB enregistrée' : 'Clé TheGamesDB retirée', 'success'); });
 $('#refetchAll').addEventListener('click', () => {
   openPrompt({
     title: 'Re-télécharger tous les visuels ?',
+    icon: 'refresh',
     body: `<p class="dim">Jaquettes, dos, fonds, logos et descriptions de tous les jeux sont récupérés à nouveau avec les sources actuelles. Les images choisies à la main sont conservées.</p>`,
     actions: [
       { label: 'Annuler', onClick: () => closeOverlay() },
-      { label: 'Re-télécharger', primary: true, onClick: async () => { const n = await rr.refetchAll(); closeAll(); toast(`Mise à jour des visuels de ${n} jeu${n > 1 ? 'x' : ''}…`); } },
+      { label: 'Re-télécharger', primary: true, onClick: async () => { const n = await rr.refetchAll(); closeAll(); toast(`Mise à jour des visuels de ${n} jeu${n > 1 ? 'x' : ''}…`, 'progress'); } },
     ],
   });
 });
+
+function setSettingsPage(id, focusTab = false) {
+  if (id === setPage) return;
+  setPage = id;
+  renderSettings();
+  sfx('tab');
+  if (focusTab) setFocus($(`[data-settab="${id}"]`));
+}
+function cycleSettingsPage(d) {
+  const ids = $$('.set-tab').map((t) => t.dataset.settab);
+  setSettingsPage(ids[(ids.indexOf(setPage) + d + ids.length) % ids.length], true);
+}
 
 // ---------------------------------------------------------------- Actions
 async function action(name) {
@@ -1314,12 +1477,14 @@ async function action(name) {
     case 'quit': rr.quit(); break;
     case 'close': closeOverlay(); break;
     case 'checkUpdate': checkUpdate(); break;
-    case 'installUpdate': if (S.update?.state === 'ready') { toast('Installation de la mise à jour…'); rr.installUpdate(); } break;
+    case 'installUpdate': if (S.update?.state === 'ready') { toast('Installation de la mise à jour…', 'progress'); rr.installUpdate(); } break;
     case 'play': play(); break;
     case 'details': openDetails(); break;
     case 'flip': flip(); break;
     case 'tabNext': cycleTab(1); break;
     case 'open': openHomeItem(); break;
+    case 'closeSub': toggleImageMenu(false); break;
+    case 'setNext': cycleSettingsPage(1); break;
   }
 }
 document.addEventListener('click', (e) => {
@@ -1343,13 +1508,19 @@ function glyph(btn) {
     const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB', view: ps ? 'SHARE' : 'VIEW', menu: ps ? 'OPTIONS' : 'MENU', lr: ICON.lr, ud: ICON.ud }[btn];
     return `<span class="glyph pill">${pill}</span>`;
   }
-  const keys = { a: 'Entrée', b: S.mode === 'main' ? 'Échap' : 'Échap', x: 'I', y: 'Espace', lb: 'Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
+  const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
   return keys[btn] ? `<span class="glyph">${keys[btn]}</span>` : '';
 }
 function renderHints() {
   const H = [];
   const h = (btns, label, act) => H.push({ btns, label, act });
-  if (S.mode !== 'main') { h(['a'], 'Valider', null); h(['b'], 'Retour', 'close'); }
+  if (S.mode !== 'main') {
+    h(['ud'], 'Se déplacer', null);
+    h(['a'], S.mode === 'scan' && !$('#scanResults').hidden ? 'Cocher / valider' : 'Valider', null);
+    if (S.mode === 'details') { h(['y'], 'Jouer', 'play'); if (!$('#dSub').hidden) { h(['b'], 'Fermer les images', 'closeSub'); } }
+    if (S.mode === 'settings') h(S.device === 'pad' ? ['lb', 'rb'] : ['tab'], 'Sections', 'setNext');
+    if (!(S.mode === 'details' && !$('#dSub').hidden)) h(['b'], S.mode === 'menu' ? 'Fermer' : 'Retour', 'close');
+  }
   else if (!S.lib.games.length) { h(['a'], 'Importer', 'scanLaunchers'); h(['view'], 'Ajouter des jeux', 'addHub'); h(['menu'], 'Menu', 'menu'); }
   else if (S.view === 'home') {
     h(['ud'], 'Consoles', null);
@@ -1369,8 +1540,14 @@ function renderHints() {
   }
   $('#hints').innerHTML = H.map((x, i) => `<button class="hint" data-hint="${i}" ${x.act ? '' : 'tabindex="-1"'}>${x.btns.map(glyph).join('')}${esc(x.label)}</button>`).join('');
   $$('#hints .hint').forEach((b) => b.addEventListener('click', () => { const a = H[+b.dataset.hint].act; if (a) action(a); }));
-  $$('[data-glyph]').forEach((el) => { el.innerHTML = S.device === 'pad' ? glyph({ menu: 'menu', a: 'a' }[el.dataset.glyph] || 'a').replace(/<\/?span[^>]*>/g, '') : ''; });
-  $('#inputInd').innerHTML = ICON[S.device === 'pad' ? 'pad' : S.device === 'mouse' ? 'mouse' : 'kbd'];
+  $$('[data-glyph]').forEach((el) => {
+    const k = ['menu', 'a', 'lb', 'rb'].includes(el.dataset.glyph) ? el.dataset.glyph : 'a';
+    el.innerHTML = S.device === 'pad' ? glyph(k).replace(/<\/?span[^>]*>/g, '') : '';
+    el.classList.toggle('is-a', S.device === 'pad' && k === 'a');
+  });
+  const dev = S.device === 'pad' ? 'pad' : S.device === 'mouse' ? 'mouse' : 'kbd';
+  $('#inputInd').innerHTML = ICON[dev];
+  $('#inputInd').title = { pad: 'Manette active', mouse: 'Souris active', kbd: 'Clavier actif' }[dev];
 }
 function setDevice(d) {
   if (S.device === d) return;
@@ -1387,7 +1564,18 @@ addEventListener('keydown', (e) => {
   if (e.key === 'F11') { e.preventDefault(); action('fullscreen'); return; }
   if (e.ctrlKey && (e.key === 'q' || e.key === 'Q')) { e.preventDefault(); rr.quit(); return; }
   if (S.mode !== 'main') {
-    if (e.key === 'Escape') { e.preventDefault(); closeOverlay(); return; }
+    if (e.key === 'Escape') { e.preventDefault(); overlayBack(); return; }
+    // Piège de focus : Tab / Maj+Tab restent dans l'overlay ; Ctrl+Tab change de section dans les réglages
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      if (S.mode === 'settings' && e.ctrlKey) return cycleSettingsPage(e.shiftKey ? -1 : 1);
+      const list = navables();
+      if (!list.length) return;
+      const i = list.indexOf(document.activeElement);
+      setFocus(list[i < 0 ? 0 : (i + (e.shiftKey ? -1 : 1) + list.length) % list.length]);
+      return;
+    }
+    if (S.mode === 'details' && e.key === 'Enter' && e.ctrlKey) { e.preventDefault(); play(); return; }
     const dirs = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
     if (dirs[e.key] && !(inInput && (e.key === 'ArrowLeft' || e.key === 'ArrowRight' || e.target.tagName === 'SELECT'))) { e.preventDefault(); spatial(dirs[e.key]); }
     return;
@@ -1503,11 +1691,19 @@ function onPadBtn(btn) {
     return m && m();
   }
   if (btn === 'a') { const el = document.activeElement; if (el && el !== document.body) el.click(); }
-  else if (btn === 'b') closeOverlay();
+  else if (btn === 'b') overlayBack();
   else if (btn === 'menu') action('menu');
   else if (btn === 'y' && S.mode === 'details') play();
+  else if (S.mode === 'settings' && (btn === 'lb' || btn === 'rb')) cycleSettingsPage(btn === 'lb' ? -1 : 1);
 }
-addEventListener('gamepadconnected', () => { setDevice('pad'); toast('Manette connectée'); });
+addEventListener('gamepadconnected', () => { setDevice('pad'); toast('Manette connectée', 'success'); });
+
+// ---------------------------------------------------------------- Échelle des panneaux (1280×720 → 2560×1440)
+function uiScale() {
+  document.documentElement.style.setProperty('--ui', clamp(Math.min(innerHeight / 900, innerWidth / 1600), 1, 1.6).toFixed(3));
+}
+addEventListener('resize', uiScale);
+uiScale();
 
 // ---------------------------------------------------------------- Horloge
 function tick() {
@@ -1522,24 +1718,28 @@ function renderUpdate(u) {
   const chip = $('#btnUpdate');
   $('#menuVersion').textContent = 'v' + (u.current || '');
   $('#menuInstall').hidden = u.state !== 'ready';
-  if (u.state === 'ready') { chip.hidden = false; chip.classList.remove('busy'); chip.textContent = `Mise à jour ${u.version} · Redémarrer`; }
-  else if (u.state === 'downloading') { chip.hidden = false; chip.classList.add('busy'); chip.textContent = `Téléchargement v${u.version || ''} · ${u.progress || 0} %`; }
-  else chip.hidden = true;
+  const dl = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>';
+  if (u.state === 'ready') { chip.hidden = false; chip.classList.remove('busy'); chip.innerHTML = `${dl}<span>v${esc(u.version || '')} prête · Redémarrer</span>`; }
+  else if (u.state === 'downloading') {
+    chip.hidden = false; chip.classList.add('busy');
+    chip.style.setProperty('--p', (u.progress || 0) + '%');
+    chip.innerHTML = `<span class="spinner tiny"></span><span>Téléchargement v${esc(u.version || '')} · ${u.progress || 0} %</span>`;
+  } else chip.hidden = true;
 }
 let manualCheck = false;
 async function checkUpdate() {
   manualCheck = true;
-  toast('Recherche de mises à jour…');
+  toast('Recherche de mises à jour…', 'progress');
   const u = await rr.checkUpdate();
   if (u.state === 'dev') toast('Mises à jour désactivées en mode développement');
 }
 rr.onUpdate((u) => {
   const prev = S.update?.state;
   renderUpdate(u);
-  if (u.state === 'ready' && prev !== 'ready') toast(`Version ${u.version} prête : « Redémarrer » en haut à droite`);
-  if (manualCheck && u.state === 'uptodate') { toast(`Tu as la dernière version (v${u.current})`); manualCheck = false; }
+  if (u.state === 'ready' && prev !== 'ready') toast(`Version ${u.version} prête : « Redémarrer » en haut à droite`, 'success');
+  if (manualCheck && u.state === 'uptodate') { toast(`Tu as la dernière version (v${u.current})`, 'success'); manualCheck = false; }
   if (manualCheck && u.state === 'error') { toast('Impossible de vérifier les mises à jour', true); manualCheck = false; }
-  if (u.state === 'downloading' && prev !== 'downloading') toast(`Nouvelle version ${u.version} : téléchargement…`);
+  if (u.state === 'downloading' && prev !== 'downloading') toast(`Nouvelle version ${u.version} : téléchargement…`, 'progress');
 });
 
 // ---------------------------------------------------------------- Événements du processus principal
