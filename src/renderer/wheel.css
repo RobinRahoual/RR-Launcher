@@ -148,7 +148,7 @@
   text-transform: uppercase; color: var(--disc-ink-3); padding-left: .32em;
 }
 .w-emblem strong {
-  font-family: var(--font-display); font-weight: 400; font-size: calc(var(--R) * .095); letter-spacing: .01em; max-width: calc(var(--R) * .42); overflow-wrap: anywhere;
+  font-family: var(--font-display); font-weight: 400; font-size: calc(var(--R) * .095 * var(--fit, 1)); letter-spacing: .01em; white-space: nowrap;
   color: var(--disc-ink); text-shadow: 0 1px 0 rgba(255, 255, 255, .9), 0 -1px 0 rgba(0, 0, 0, .08);
 }
 .w-emblem strong::after { /* filet de la couleur de la console */

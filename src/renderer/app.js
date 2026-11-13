@@ -159,7 +159,7 @@ function wheelItemHTML(it) {
     else if (S.platLogo[it.id]) { kind = 'logo'; visual = `<img class="w-logo-img" src="${platUrl(S.platLogo[it.id])}" alt="" />`; }
     else {
       kind = 'emblem';
-      visual = `<div class="w-emblem">${p.maker ? `<small>${esc(p.maker)}</small>` : ''}<strong>${esc(p.short || p.name)}</strong></div>`;
+      visual = `<div class="w-emblem">${p.maker ? `<small>${esc(p.maker)}</small>` : ''}<strong style="--fit:${Math.min(1, 7 / Math.max(4, (p.short || p.name).length)).toFixed(2)}">${esc(p.short || p.name)}</strong></div>`;
     }
   }
   const name = it.id === 'add' ? 'Ajouter' : it.id === 'all' ? 'Tous les jeux' : p.name;
