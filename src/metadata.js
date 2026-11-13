@@ -274,21 +274,132 @@ async function platformImage(wikiTitle, dir, id) {
   return null;
 }
 
-// Logo officiel de la console (fichier SVG de l'article Wikipédia, rendu en PNG par Wikimedia).
-async function platformLogo(wikiTitle, dir, id) {
-  const media = await getJson(`https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(wikiTitle)}`);
-  const items = (media?.items || []).filter((it) => it.type === 'image' && /logo|wordmark/i.test(it.title || '') && !/controller|icon|button|symbol|company|corporation|sony_logo|nintendo_logo|microsoft_logo|sega_logo/i.test(it.title || ''));
-  items.sort((a, b) => (/\.svg/i.test(b.title) ? 1 : 0) - (/\.svg/i.test(a.title) ? 1 : 0));
-  for (const it of items.slice(0, 3)) {
-    const name = String(it.title).replace(/^File:/i, '');
-    const urls = [`https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(name)}?width=900`];
-    if (it.srcset?.length) {
-      const best = [...it.srcset].sort((a, b) => parseFloat(b.scale) - parseFloat(a.scale))[0];
-      urls.push(best.src.startsWith('//') ? 'https:' + best.src : best.src);
-    }
-    const file = await downloadFirst(urls, dir, `${id}-logo`);
-    if (file) return file;
+// ---------- Logo officiel de la console ----------
+// Les logos ne sont jamais dans le dépôt : ils sont téléchargés depuis Wikimedia Commons sur le PC
+// de l'utilisateur (rendu PNG du SVG par Wikimedia), puis mis en cache dans media/_platforms.
+const LOGOS_VERSION = 2; // à incrémenter quand la liste platforms[].logos ou l'algorithme change
+const LOGO_WIDTH = 900;
+const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
+const LOGO_UA = 'RRLauncher/1.0 (https://github.com/RobinRahoual/RR-Launcher; logos de consoles) Electron';
+
+function commonsName(name) {
+  return String(name || '').replace(/^(File|Fichier|Image):/i, '').trim().replace(/ /g, '_');
+}
+
+// URL de l'API imageinfo de Commons (thumburl = rendu PNG à LOGO_WIDTH px).
+function commonsInfoUrl(name) {
+  const title = 'File:' + commonsName(name);
+  return `${COMMONS_API}?action=query&format=json&formatversion=2&redirects=1&prop=imageinfo&iiprop=url%7Cmime%7Csize`
+    + `&iiurlwidth=${LOGO_WIDTH}&titles=${encodeURIComponent(title)}`;
+}
+function commonsFilePathUrl(name) {
+  return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(commonsName(name))}?width=${LOGO_WIDTH}`;
+}
+
+// Interroge Commons : renvoie l'URL d'une image matricielle (PNG de préférence) ou null si le fichier n'existe pas.
+async function commonsImageUrl(name) {
+  const url = commonsInfoUrl(name);
+  log(`logo imageinfo ${url}`);
+  const json = await getJson(url, { 'User-Agent': LOGO_UA });
+  const page = (json?.query?.pages || [])[0];
+  if (!page || page.missing || page.invalid) { log(`logo absent de Commons : ${name}`); return null; }
+  const ii = (page.imageinfo || [])[0];
+  if (!ii) { log(`logo sans imageinfo : ${name}`); return null; }
+  // SVG → toujours le rendu PNG (thumburl). Image matricielle plus petite que LOGO_WIDTH → original.
+  return ii.thumburl || ii.url || null;
+}
+
+// Télécharge une image de logo ; le SVG brut est refusé (l'app affiche des PNG).
+async function downloadLogo(url, dir, baseName) {
+  try {
+    const res = await net.fetch(url, { headers: { 'User-Agent': LOGO_UA, Accept: 'image/png,image/*;q=0.8' }, signal: AbortSignal.timeout(20000) });
+    if (!res.ok) { log(`logo HTTP ${res.status} ${url}`); return null; }
+    const type = (res.headers.get('content-type') || '').split(';')[0].trim();
+    if (!type.startsWith('image/') || type === 'image/svg+xml') { log(`logo type refusé ${type || '?'} ${url}`); return null; }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 300) { log(`logo trop petit (${buf.length} o) ${url}`); return null; }
+    fs.mkdirSync(dir, { recursive: true });
+    const raw = `${baseName}-raw${EXT_BY_TYPE[type] || '.png'}`;
+    fs.writeFileSync(path.join(dir, raw), buf);
+    // Rend transparent un éventuel fond blanc plein (sans effet sur un PNG déjà transparent).
+    const out = `${baseName}.png`;
+    try {
+      if (removeWhiteBackground(path.join(dir, raw), path.join(dir, out))) {
+        fs.rmSync(path.join(dir, raw), { force: true });
+        return out;
+      }
+    } catch (e) { log(`logo détourage ${baseName}: ${e.message}`); }
+    // Image illisible par nativeImage (ex. webp/gif) : on garde le fichier tel quel.
+    const keep = `${baseName}${EXT_BY_TYPE[type] || '.png'}`;
+    fs.renameSync(path.join(dir, raw), path.join(dir, keep));
+    return keep;
+  } catch (e) {
+    log(`logo erreur ${e.message} ${url}`);
+    return null;
   }
+}
+
+// Supprime les anciens logos téléchargés de la console (jamais les logos personnalisés).
+function cleanOldLogos(dir, id, keep) {
+  try {
+    for (const f of fs.readdirSync(dir)) {
+      if (f !== keep && f.startsWith(`${id}-logo`) && !f.includes('-custom-')) fs.rmSync(path.join(dir, f), { force: true });
+    }
+  } catch {}
+}
+
+/**
+ * Logo officiel de la console.
+ * 1) fichiers Commons listés dans platform.logos (API imageinfo → thumburl PNG),
+ * 2) repli Special:FilePath pour chacun,
+ * 3) en dernier recours, ancienne heuristique sur la media-list de l'article Wikipédia.
+ * @param {object} platform  { id, wiki, logos[] }
+ * @returns nom du fichier dans dir, ou null
+ */
+async function platformLogo(platform, dir) {
+  const id = platform.id;
+  const base = `${id}-logo-v${LOGOS_VERSION}`;
+  const names = (platform.logos || []).map(commonsName).filter(Boolean);
+  log(`logo ${id} : ${names.length} candidat(s) Commons ${names.join(', ')}`);
+  let networkOk = false;
+
+  for (const name of names) {
+    try {
+      const url = await commonsImageUrl(name);
+      networkOk = true;
+      if (!url) continue;
+      log(`logo ${id} : téléchargement ${url}`);
+      const file = await downloadLogo(url, dir, base);
+      if (file) { log(`logo ${id} : OK ${name} → ${file}`); cleanOldLogos(dir, id, file); return file; }
+    } catch (e) { log(`logo ${id} : imageinfo échec ${name} : ${e.message}`); }
+  }
+
+  for (const name of names) {
+    const url = commonsFilePathUrl(name);
+    log(`logo ${id} : repli FilePath ${url}`);
+    const file = await downloadLogo(url, dir, base);
+    if (file) { log(`logo ${id} : OK (FilePath) ${name} → ${file}`); cleanOldLogos(dir, id, file); return file; }
+  }
+
+  if (platform.wiki) {
+    try {
+      const media = await getJson(`https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(platform.wiki)}`, { 'User-Agent': LOGO_UA });
+      networkOk = true;
+      const items = (media?.items || []).filter((it) => it.type === 'image' && /logo|wordmark/i.test(it.title || '')
+        && !/controller|icon|button|symbol|company|corporation|sony_logo|nintendo_logo|microsoft_logo|sega_logo/i.test(it.title || ''));
+      items.sort((a, b) => (/\.svg/i.test(b.title) ? 1 : 0) - (/\.svg/i.test(a.title) ? 1 : 0));
+      for (const it of items.slice(0, 3)) {
+        const name = commonsName(it.title);
+        log(`logo ${id} : heuristique media-list ${name}`);
+        let url = null;
+        try { url = await commonsImageUrl(name); } catch {}
+        const file = await downloadLogo(url || commonsFilePathUrl(name), dir, base);
+        if (file) { log(`logo ${id} : OK (heuristique) ${name} → ${file}`); cleanOldLogos(dir, id, file); return file; }
+      }
+    } catch (e) { log(`logo ${id} : media-list échec ${e.message}`); }
+  }
+
+  log(`logo ${id} : aucun logo trouvé${networkOk ? '' : ' (réseau inaccessible ?)'}`);
   return null;
 }
 
@@ -436,4 +547,4 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   return out;
 }
 
-module.exports = { search, fetchAll, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst };
+module.exports = { search, fetchAll, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };

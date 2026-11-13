@@ -35,10 +35,24 @@ const DEFAULT_SETTINGS = {
   emulators: {}, // platformId -> { path, args, name }
   platformImages: {}, // platformId -> fichier
   platformLogos: {}, // platformId -> fichier (téléchargé localement, jamais dans le dépôt)
+  platformLogoFails: {}, // platformId -> date (ms) du dernier échec ; nouvel essai après 24 h
+  logosVersion: 0, // version de l'algorithme / de la liste de logos ayant rempli platformLogos
 };
 const store = new JsonStore(path.join(DATA, 'library.json'), { games: [], settings: DEFAULT_SETTINGS });
 store.data.settings = { ...DEFAULT_SETTINGS, ...store.data.settings };
 store.data.settings.platformLogos ||= {};
+store.data.settings.platformLogoFails ||= {};
+// Logos de consoles : si la liste ou l'algorithme a changé, on oublie les logos téléchargés
+// (et les échecs mémorisés), sauf les logos choisis par l'utilisateur.
+if (store.data.settings.logosVersion !== meta.LOGOS_VERSION) {
+  const s = store.data.settings;
+  const kept = {};
+  for (const [id, f] of Object.entries(s.platformLogos)) if (typeof f === 'string' && f.includes('-custom-')) kept[id] = f;
+  s.platformLogos = kept;
+  s.platformLogoFails = {};
+  s.logosVersion = meta.LOGOS_VERSION;
+  store.save();
+}
 if ('minimizeOnLaunch' in store.data.settings) { store.data.settings.hideOnLaunch = store.data.settings.minimizeOnLaunch; delete store.data.settings.minimizeOnLaunch; }
 // Migration 1.0.x → 1.1 : plateforme et type de lancement
 for (const g of store.data.games) {
@@ -456,20 +470,23 @@ ipcMain.handle('platform:image', async (_e, id) => {
   return file;
 });
 const logoFetching = new Map();
+const LOGO_RETRY_MS = 24 * 3600 * 1000;
 ipcMain.handle('platform:logo', async (_e, id) => {
   const s = store.data.settings;
   const known = s.platformLogos[id];
-  if (known === '') return null; // déjà cherché sans succès
   if (known && fs.existsSync(path.join(PLATFORM_MEDIA, known))) return known;
   const p = BY_ID[id];
-  if (!p || !p.wiki) return null;
+  if (!p || (!p.wiki && !(p.logos || []).length)) return null;
+  const failedAt = s.platformLogoFails[id];
+  if (failedAt && Date.now() - failedAt < LOGO_RETRY_MS) return null; // échec récent : on réessaiera plus tard
   if (!logoFetching.has(id)) {
-    logoFetching.set(id, meta.platformLogo(p.wiki, PLATFORM_MEDIA, id).catch((e) => { meta.log(`logo ${id}: ${e.message}`); return undefined; }));
+    logoFetching.set(id, meta.platformLogo(p, PLATFORM_MEDIA).catch((e) => { meta.log(`logo ${id}: ${e.message}`); return null; }));
   }
   const file = await logoFetching.get(id);
   logoFetching.delete(id);
-  if (file) { s.platformLogos[id] = file; store.save(); }
-  else if (file === null) { s.platformLogos[id] = ''; store.save(); }
+  if (file) { s.platformLogos[id] = file; delete s.platformLogoFails[id]; }
+  else { if (known && !known.includes('-custom-')) delete s.platformLogos[id]; s.platformLogoFails[id] = Date.now(); }
+  store.save();
   return file || null;
 });
 ipcMain.handle('platform:setLogo', async (_e, id) => {
@@ -479,6 +496,7 @@ ipcMain.handle('platform:setLogo', async (_e, id) => {
   const file = `${id}-logo-custom-${Date.now()}${path.extname(r.filePaths[0]).toLowerCase()}`;
   fs.copyFileSync(r.filePaths[0], path.join(PLATFORM_MEDIA, file));
   store.data.settings.platformLogos[id] = file;
+  delete store.data.settings.platformLogoFails[id];
   commit();
   return file;
 });
