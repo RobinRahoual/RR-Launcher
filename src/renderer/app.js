@@ -36,6 +36,16 @@ const S = {
   update: null,
   topFocus: -1, // SHELL : index de l'icône focalisée dans la barre du haut (-1 = aucune)
 };
+// ---------------------------------------------------------------- Points d'accroche des modules (features/*.js)
+// RR.on(évènement, fn) / RR.emit(évènement, …) ; RR.actions[nom] = fn étend action() ;
+// RR.hints.push((h) => …) ajoute des aides à la barre du bas (h(['a'], 'Libellé', 'action')).
+// Évènements : 'library' (state), 'selection' (jeu), 'view' (home|games), 'mode' (mode), 'play' (jeu),
+// 'session' ({ id, running }), 'input' (source) — toute entrée clavier / manette / souris.
+const RR = {
+  _h: {}, actions: {}, hints: [],
+  on(e, f) { (this._h[e] ||= []).push(f); },
+  emit(e, ...a) { for (const f of this._h[e] || []) { try { f(...a); } catch (err) { console.error('RR.' + e, err); } } },
+};
 const slots = new Map();
 const cards = new Map();
 
@@ -850,6 +860,7 @@ function updateBrand() {
       + `<span class="brand-name">${esc(p.name)}</span>`;
 }
 function updateChrome(force = false) {
+  queueMicrotask(emitSelection);
   updateBrand();
   const g = S.items[S.sel];
   if (typeof setFootInfo === 'function') setFootInfo(S.items.length ? `${S.sel + 1} / ${S.items.length}` : '');
@@ -997,6 +1008,14 @@ function select(i, { spin = true } = {}) {
   sfx('move');
   scheduleSweep();
 }
+// Sélection courante (écran jeux) → RR 'selection' (appelé à chaque changement de jeu affiché)
+let lastSelEmit = null;
+function emitSelection() {
+  const g = S.view === 'games' ? S.items[S.sel] || null : null;
+  if (g?.id === lastSelEmit) return;
+  lastSelEmit = g?.id || null;
+  RR.emit('selection', g);
+}
 const move = (d) => select(S.sel + d, { spin: Math.abs(d) === 1 });
 let slotClickT;
 function onSlotClick(id) {
@@ -1013,6 +1032,7 @@ function flip() { if (S.items.length) { S.flip = S.flip ? 0 : 1; sfx('flip'); } 
 async function play(id = S.items[S.sel]?.id, opts = {}) {
   const g = S.lib.games.find((x) => x.id === id);
   if (!g) return;
+  RR.emit('play', g, opts);
   if (!opts.force && guideBeforePlay(g)) return; // GUIDE : jeu déjà en cours → reprendre ; autre jeu en cours → demander
   if (LD.active) return; // LOADING : un lancement est déjà en cours
   if (!(await ldShow(g))) return; // LOADING : écran de chargement ; false = annulé (B / Échap)
@@ -1949,6 +1969,7 @@ async function action(name) {
     case 'setNext': cycleSettingsPage(1); break;
     case 'power': openPowerMenu(); break; // GUIDE
     case 'igBack': igBack(); break; // GUIDE
+    default: if (RR.actions[name]) await RR.actions[name](); // modules
   }
 }
 document.addEventListener('click', (e) => {
@@ -2024,6 +2045,7 @@ function renderHints() {
       h(['a'], 'Ouvrir', 'details'); // BOXOPEN : A ouvre la page du jeu (Jouer y est focalisé)
     }
   }
+  if (S.mode === 'main') for (const f of RR.hints) { try { f(h); } catch (err) { console.error(err); } }
   $('#hintList').innerHTML = H.map((x, i) => `<button class="hint" data-hint="${i}" ${x.act ? '' : 'tabindex="-1"'}>${x.btns.map(glyph).join('')}<span class="hint-label">${esc(x.label)}</span></button>`).join('');
   $$('#hints .hint').forEach((b) => b.addEventListener('click', () => { const a = H[+b.dataset.hint].act; if (a) action(a); }));
   $$('[data-glyph]').forEach((el) => {
@@ -2161,6 +2183,7 @@ function pollPad(t) {
   pad.prev = b;
 }
 function onPadDir(dir, repeat) {
+  RR.emit('input', 'pad', dir);
   if (LD.active) return; // LOADING
   if (shellSplashActive()) return endSplash(); // SHELL
   if (BO.kind === 'open' || BO.kind === 'cancel') return; // BOXOPEN
@@ -2185,6 +2208,7 @@ function onPadDir(dir, repeat) {
   else if (dir === 'up' && !repeat) shellFocusTop();
 }
 function onPadBtn(btn) {
+  RR.emit('input', 'pad', btn);
   if (LD.active) { if (btn === 'b') ldCancel(); return; } // LOADING
   if (shellSplashActive()) return endSplash(); // SHELL
   if (BO.kind === 'open') { if (btn === 'a') boSkip(); else if (btn === 'b') boCancel(); return; } // BOXOPEN
@@ -2428,8 +2452,16 @@ function applyLib(state) {
   Sfx.set(state.settings.sounds, state.settings.volume ?? 0.7);
   refresh();
   if (S.mode === 'settings') renderSettings();
+  RR.emit('library', state);
 }
 rr.onLibrary(applyLib);
+// view / mode : observés sur <body data-view> et S.mode
+new MutationObserver(() => { RR.emit('view', document.body.dataset.view); queueMicrotask(emitSelection); }).observe(document.body, { attributes: true, attributeFilter: ['data-view'] });
+{ let m = S.mode; setInterval(() => { if (S.mode !== m) { m = S.mode; RR.emit('mode', m); } }, 120); }
+rr.onRunning((x) => RR.emit('session', x));
+addEventListener('keydown', () => RR.emit('input', 'kbd'), true);
+addEventListener('pointerdown', () => RR.emit('input', 'mouse'), true);
+addEventListener('wheel', () => RR.emit('input', 'mouse'), { capture: true, passive: true });
 rr.onProgress(({ id, msg, done }) => {
   if (done) delete S.progress[id];
   else { S.progress[id] = msg; updateProgressText(id); }

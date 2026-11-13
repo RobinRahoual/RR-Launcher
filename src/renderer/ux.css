@@ -423,3 +423,4 @@ body[data-view="home"] .cap-badges { display: none; }
 .caption p { font-size: calc(13px * var(--ui)); }
 .cap-badges { zoom: var(--ui); }
 .brand-sub { font-size: calc(11px * var(--ui)); }
+.set-sep:empty { display: none; } #set-media:empty, #set-capture:empty, #set-library:empty, #set-stats:empty, #set-extras:empty, #set-polish:empty { display: none; }

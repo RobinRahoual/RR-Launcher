@@ -210,6 +210,7 @@ app.whenReady().then(() => {
     return net.fetch(pathToFileURL(full).toString());
   });
   createWindow();
+  loadFeatures();
   createTray();
   setupUpdater();
   // Raccourci global pour faire revenir le launcher depuis n'importe où
@@ -659,6 +660,7 @@ function tooBroad(dir) {
 }
 
 function onSessionStart(id) {
+  hub?.emit('session:start', id, { start: running.get(id)?.start || Date.now() });
   send('game:running', { id, running: true });
   commit();
   updatePadWake(); // WAKE : pendant un jeu, seul le sondage Guide reste actif
@@ -667,6 +669,7 @@ function onSessionStart(id) {
 function finishSession(id) {
   const r = running.get(id);
   if (!r) return;
+  try { const end = Date.now(); hub.emit('session:end', id, { start: r.start, end, seconds: Math.round((end - r.start) / 1000) }); } catch (e) { meta.log(`hub : ${e.message}`); }
   clearInterval(r.timer);
   running.delete(id);
   const g = findGame(id);
@@ -1005,3 +1008,20 @@ ipcMain.handle('power:action', async (_e, act) => {
     resolve(err ? { ok: false, error: String(err.message || err) } : { ok: true });
   }));
 });
+
+// ---------------------------------------------------------------- Modules (src/features/*.js)
+// Chaque module exporte init(ctx) ; IPC sur des canaux préfixés « x: » (rr.x / rr.onX côté renderer).
+// hub : évènements 'session:start' (id, { start }), 'session:end' (id, { start, end, seconds }).
+const hub = new (require('events'))();
+function loadFeatures() {
+  const dir = path.join(__dirname, 'features');
+  if (!fs.existsSync(dir)) return;
+  const ctx = {
+    app, ipcMain, store, meta, hub, running, DATA, MEDIA,
+    commit, send, findGame, showWindow, bringToFront, hideToTray,
+    getWin: () => win, winNative: () => winNative(), log: (m) => meta.log(m),
+  };
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) {
+    try { require(path.join(dir, f)).init?.(ctx); } catch (e) { meta.log(`module ${f} : ${e.stack || e.message}`); }
+  }
+}

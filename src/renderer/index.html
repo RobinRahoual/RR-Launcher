@@ -13,6 +13,12 @@
   <link rel="stylesheet" href="shell.css" />
   <link rel="stylesheet" href="boxopen.css" /><!-- BOXOPEN : ouverture de la boîte + page du jeu -->
   <link rel="stylesheet" href="launching.css" /><!-- LOADING : écran de lancement -->
+  <link rel="stylesheet" href="features/media.css" />
+  <link rel="stylesheet" href="features/capture.css" />
+  <link rel="stylesheet" href="features/library.css" />
+  <link rel="stylesheet" href="features/stats.css" />
+  <link rel="stylesheet" href="features/extras.css" />
+  <link rel="stylesheet" href="features/polish.css" />
   <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="guide.css" />
 </head>
@@ -347,6 +353,7 @@
         <button class="set-tab" role="tab" data-settab="general" aria-selected="true" data-nav>Général</button>
         <button class="set-tab" role="tab" data-settab="emus" data-nav>Consoles & émulateurs</button>
         <button class="set-tab" role="tab" data-settab="data" data-nav>Métadonnées</button>
+        <button class="set-tab" role="tab" data-settab="more" data-nav>Fonctions</button>
         <span class="key-mini set-bumper" data-glyph="rb" aria-hidden="true"></span>
       </div>
 
@@ -414,6 +421,21 @@
       <section class="set-page" data-page="emus" role="tabpanel" hidden>
         <p class="set-intro">Choisis l’exécutable de chaque émulateur. Les arguments sont préremplis pour les émulateurs connus ; <code>{rom}</code> est remplacé par le chemin du jeu. Astuce : « Scanner des dossiers » détecte aussi les émulateurs.</p>
         <div class="emu-list" id="emuList"></div>
+      </section>
+
+      <section class="set-page" data-page="more" role="tabpanel" hidden>
+        <!-- Réglages des modules : chaque module insère son bloc dans son conteneur -->
+        <div id="set-media"></div>
+        <div class="set-sep"></div>
+        <div id="set-capture"></div>
+        <div class="set-sep"></div>
+        <div id="set-library"></div>
+        <div class="set-sep"></div>
+        <div id="set-stats"></div>
+        <div class="set-sep"></div>
+        <div id="set-extras"></div>
+        <div class="set-sep"></div>
+        <div id="set-polish"></div>
       </section>
 
       <section class="set-page" data-page="data" role="tabpanel" hidden>
@@ -515,5 +537,17 @@
 
   <script src="sounds.js"></script>
   <script src="app.js"></script>
+  <!-- Modules (un fichier par fonctionnalité, voir RR dans app.js) -->
+  <script src="features/media.js"></script>
+  <!-- · -->
+  <script src="features/capture.js"></script>
+  <!-- · -->
+  <script src="features/library.js"></script>
+  <!-- · -->
+  <script src="features/stats.js"></script>
+  <!-- · -->
+  <script src="features/extras.js"></script>
+  <!-- · -->
+  <script src="features/polish.js"></script>
 </body>
 </html>

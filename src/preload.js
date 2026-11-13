@@ -47,6 +47,9 @@ contextBridge.exposeInMainWorld('rr', {
   onScanProgress: on('scan:progress'),
   onVisible: on('win:visible'),
   onFullscreen: on('win:fullscreen'),
+  // Modules (src/features/*.js) : canaux préfixés « x: »
+  x: (channel, ...args) => (String(channel).startsWith('x:') ? ipcRenderer.invoke(channel, ...args) : Promise.reject(new Error('canal refusé'))),
+  onX: (channel, cb) => { if (!String(channel).startsWith('x:')) return () => {}; const f = (_e, d) => cb(d); ipcRenderer.on(channel, f); return () => ipcRenderer.removeListener(channel, f); },
   // GUIDE : bouton Xbox / PS / Home, menu en jeu, alimentation
   resumeGame: call('game:resume'),
   quitGame: call('game:quit'),
