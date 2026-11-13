@@ -2495,6 +2495,8 @@ function guidePress(info = {}) {
   IG.lastGuide = now;
   if (shellSplashActive()) endSplash();
   const g = runningGame(info.running || S.lib.running || []);
+  // CAPTURE : Guide + B → « Quitter le jeu ? », Guide maintenu → Alimentation (menu en jeu ouvert directement dessus)
+  if (g && (info.intent === 'quit' || info.intent === 'power')) { openIngame(g); if (info.intent === 'power') igShowList('power'); else igQuit(); return; }
   if (g) {
     if (S.mode === 'ingame' && !info.summoned) return igResume(); // rappuyer sur Guide = retour au jeu
     return openIngame(g);

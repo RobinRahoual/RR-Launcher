@@ -14,7 +14,7 @@ const guide = require('./guide'); // GUIDE : bouton Xbox / PS / Home (natif opti
 const padwake = require('./padwake'); // WAKE : manette allumée → launcher au premier plan
 
 protocol.registerSchemesAsPrivileged([
-  { scheme: 'rr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
+  { scheme: 'rr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }, // CAPTURE : stream (lecture des clips)
 ]);
 
 if (process.env.RR_DATA) app.setPath('userData', process.env.RR_DATA);
@@ -78,6 +78,7 @@ let win = null;
 let tray = null;
 let quitting = false;
 const running = new Map(); // id -> { start, child?, watchDir?, timer? }
+const protoRoutes = {}; // CAPTURE : hôte rr://<hôte>/… → gestionnaire fourni par un module (ctx.protoRoute)
 
 // ---------------------------------------------------------------- Fenêtre
 function createWindow() {
@@ -202,6 +203,7 @@ app.whenReady().then(() => {
   protocol.handle('rr', (req) => {
     // rr://media/<gameId|_platforms>/<fichier>
     const u = new URL(req.url);
+    if (protoRoutes[u.hostname]) return protoRoutes[u.hostname](req, u); // CAPTURE : routes des modules (rr://capture/…)
     const parts = decodeURIComponent(u.pathname).split('/').filter(Boolean);
     if (u.hostname !== 'media' || parts.length !== 2) return new Response('Not found', { status: 404 });
     const [id, file] = parts.map((p) => path.basename(p));
@@ -863,6 +865,9 @@ const guideWatch = guide.createGuideWatcher({
   onRemote: (btn) => send('pad:remote', btn),
   // WAKE : une manette vient de s'allumer / d'être branchée (launcher masqué ou réduit, aucun jeu)
   onConnect: () => { if (running.size === 0) bringToFront('pad'); },
+  // CAPTURE : pendant un jeu (launcher pas au premier plan), Guide + RB / LB / B, Guide maintenu et Share
+  combos: () => store.data.settings.padShortcuts !== false && running.size > 0 && !(win && !win.isDestroyed() && win.isVisible() && win.isFocused()),
+  onCombo: (name, src) => { if (name === 'quit' || name === 'power') summon('guide', name); else hub.emit('pad:combo', name, src); },
 });
 function updateGuideWatch() {
   if (store.data.settings.guideButton !== false) guideWatch.start(); else guideWatch.stop();
@@ -881,7 +886,7 @@ function updatePadWake() {
 
 // Fait revenir le launcher devant tout (y compris un jeu en plein écran fenêtré) et prévient le renderer.
 // Fenêtre déjà active et visible : le renderer décide seul (ouvrir / fermer le menu en jeu ou le menu).
-function summon(source) {
+function summon(source, intent) { // CAPTURE : intent 'quit' | 'power' → menu en jeu ouvert sur ce sous-menu
   if (!win || win.isDestroyed()) return;
   const front = win.isVisible() && !win.isMinimized() && win.isFocused();
   if (!front) {
@@ -891,7 +896,7 @@ function summon(source) {
     const n = winNative();
     if (n && !win.isFocused()) n.focusWindow(n.hwndOf(win.getNativeWindowHandle()));
   }
-  send('guide:press', { source, summoned: !front, running: [...running.keys()] });
+  send('guide:press', { source, summoned: !front, running: [...running.keys()], intent: intent || null });
 }
 
 // ---------- Processus d'un jeu en cours
@@ -1020,6 +1025,7 @@ function loadFeatures() {
     app, ipcMain, store, meta, hub, running, DATA, MEDIA,
     commit, send, findGame, showWindow, bringToFront, hideToTray,
     getWin: () => win, winNative: () => winNative(), log: (m) => meta.log(m),
+    protoRoute: (host, fn) => { protoRoutes[host] = fn; }, // CAPTURE
   };
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) {
     try { require(path.join(dir, f)).init?.(ctx); } catch (e) { meta.log(`module ${f} : ${e.stack || e.message}`); }
