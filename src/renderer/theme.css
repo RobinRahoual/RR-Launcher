@@ -94,9 +94,30 @@ html, body { background: var(--bg); color: var(--fg); }
 [data-theme="dark"] .h-logo-img.is-light { filter: drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .5)); }
 [data-theme="dark"] .h-pbg { filter: grayscale(1) contrast(.9) brightness(.7); }
 
-/* Fonds en basse définition (captures rétro) : flou d'ambiance plutôt qu'un agrandissement pixelisé */
-.bg-layer.is-lowres, .h-bg.is-lowres, #dBg.is-lowres, #launching .ld-bg.is-lowres, #igBg.is-lowres {
-  filter: blur(clamp(10px, 1.6vw, 34px)) saturate(1.15) !important; transform: scale(1.08); image-rendering: auto;
+/* Fonds en basse définition (captures rétro) : capture nette (facteur entier, pixel art) dans un cadre écran,
+   sur un dégradé aux couleurs du jeu — ni agrandissement baveux, ni flou. --lr-w/--lr-h/--lr-img posés en JS. */
+.bg-layer.is-lowres, #dBg.is-lowres, #launching .ld-bg.is-lowres, #igBg.is-lowres {
+  filter: none !important; transform: none !important; animation: none !important; inset: 0 !important;
+  background-image:
+    var(--lr-img),
+    radial-gradient(ellipse 70% 80% at 72% 48%, color-mix(in srgb, var(--lr-tint, var(--accent)) 38%, var(--bg)) 0%, transparent 70%),
+    linear-gradient(120deg, var(--bg) 25%, color-mix(in srgb, var(--lr-tint, var(--accent)) 22%, var(--bg)) 100%) !important;
+  background-size: var(--lr-w) var(--lr-h), cover, cover !important;
+  background-position: right 7vw center, center, center !important;
+  background-repeat: no-repeat !important;
+  image-rendering: pixelated;
 }
+/* cadre « écran » autour de la capture */
+.bg-layer.is-lowres { background-position: right 5vw bottom var(--lr-bottom, 12vh), center, center !important; }
+.bg-layer.is-lowres::after { top: auto !important; right: 5vw !important; bottom: var(--lr-bottom, 12vh); transform: none !important; }
+.bg-layer.is-lowres::after, #dBg.is-lowres::after {
+  content: ''; position: absolute; right: 7vw; top: 50%; width: var(--lr-w); height: var(--lr-h); transform: translateY(-50%);
+  border-radius: 14px; pointer-events: none;
+  box-shadow: 0 0 0 10px rgba(var(--fg-rgb), .08), 0 0 0 11px rgba(var(--fg-rgb), .14), 0 30px 80px rgba(0, 0, 0, .35);
+}
+#launching .ld-bg.is-lowres, #igBg.is-lowres { background-position: center, center, center !important; }
+/* accueil : la bannière reste en fond d'ambiance (floutée) */
+.h-bg.is-lowres { filter: blur(clamp(10px, 1.6vw, 34px)) saturate(1.15) !important; transform: scale(1.08); }
 .h-pbg.is-lowres { filter: grayscale(1) contrast(.85) brightness(1.08) blur(clamp(8px, 1.2vw, 26px)); transform: scale(1.06); }
-[data-theme="dark"] .bg-layer.is-lowres, [data-theme="dark"] #dBg.is-lowres { filter: blur(clamp(10px, 1.6vw, 34px)) saturate(1.1) brightness(.8) !important; }
+/* capture rétro encadrée : seul le voile de gauche reste (le cadre n'est pas délavé) */
+body.bg-lowres[data-view="games"] .bg-shade { background: linear-gradient(90deg, rgba(var(--bg-rgb), .55) 0%, rgba(var(--bg-rgb), .15) 40%, transparent 55%) !important; }

@@ -851,16 +851,41 @@ let bgFlip = false, bgCurrent = null, bgTimer;
 // agrandissement pixelisé, on les floute en fond d'ambiance (classe .is-lowres). Mesure mise en cache par URL.
 const LOWRES_W = 960;
 const imgWidthCache = new Map();
+// Fond en basse définition (capture rétro 240×160…) : au lieu de l'agrandir (pixels baveux) ou de le flouter,
+// on l'affiche net, agrandi d'un facteur ENTIER (pixel art propre), dans un cadre façon écran, sur un fond
+// aux couleurs du jeu. Variables posées sur l'élément : --lr-w / --lr-h (taille affichée), --lr-img.
+const imgSizeCache = new Map();
 function markLowRes(el, url) {
   if (!el) return;
-  if (!url) return el.classList.remove('is-lowres');
-  const set = (w) => { el.classList.toggle('is-lowres', w > 0 && w < LOWRES_W); };
-  if (imgWidthCache.has(url)) return set(imgWidthCache.get(url));
+  if (!url) { el.classList.remove('is-lowres'); if (el.matches('.bg-layer')) document.body.classList.remove('bg-lowres'); return; }
+  const set = (w, h) => {
+    const low = w > 0 && w < LOWRES_W;
+    el.classList.toggle('is-lowres', low);
+    if (el.matches('.bg-layer')) document.body.classList.toggle('bg-lowres', low); // voiles allégés (capture encadrée)
+    if (!low) return;
+    let maxW = innerWidth * 0.5, maxH = innerHeight * 0.62;
+    if (el.matches('.bg-layer')) {
+      // écran jeux : en bas à droite, sous la rangée de boîtes et à droite du bloc d'infos
+      const top = (S.dims.rowTop || innerHeight * 0.2) + (S.dims.H || innerHeight * 0.3) + innerHeight * 0.05;
+      const bottom = ($('#hints')?.getBoundingClientRect().height || 80) + innerHeight * 0.05;
+      maxW = innerWidth * 0.42; maxH = Math.max(innerHeight * 0.2, innerHeight - top - bottom);
+      el.style.setProperty('--lr-bottom', `${bottom}px`);
+    }
+    // facteur entier si possible (pixels réguliers) ; au-delà de ×3, un facteur fractionnaire reste propre en « pixelated »
+    const fit = Math.min(maxW / w, maxH / h);
+    const k = Math.max(1, fit >= 3 ? Math.round(fit * 4) / 4 - (Math.round(fit * 4) / 4 > fit ? 0.25 : 0) : Math.floor(fit));
+    el.style.setProperty('--lr-w', `${w * k}px`);
+    el.style.setProperty('--lr-h', `${h * k}px`);
+    el.style.setProperty('--lr-img', `url("${url}")`);
+  };
+  if (imgSizeCache.has(url)) return set(...imgSizeCache.get(url));
   const im = new Image();
-  im.onload = () => { imgWidthCache.set(url, im.naturalWidth); set(im.naturalWidth); };
+  im.onload = () => { imgSizeCache.set(url, [im.naturalWidth, im.naturalHeight]); set(im.naturalWidth, im.naturalHeight); };
   im.src = url;
 }
+let bgTintColor = '';
 function setBackground(url, tint) {
+  bgTintColor = tint;
   $('#bgTint').style.background = `radial-gradient(ellipse 34% 48% at var(--glow-x, 50%) 50%, ${tint || 'transparent'}, transparent 100%)`;
   if (url === bgCurrent) return;
   bgCurrent = url;
@@ -869,7 +894,7 @@ function setBackground(url, tint) {
     const next = bgFlip ? $('#bgA') : $('#bgB');
     const prev = bgFlip ? $('#bgB') : $('#bgA');
     bgFlip = !bgFlip;
-    const apply = () => { next.style.backgroundImage = url ? `url("${url}")` : 'none'; markLowRes(next, url); next.classList.add('on'); prev.classList.remove('on'); };
+    const apply = () => { next.style.backgroundImage = url ? `url("${url}")` : 'none'; next.style.setProperty('--lr-tint', bgTintColor || 'var(--accent)'); markLowRes(next, url); next.classList.add('on'); prev.classList.remove('on'); };
     if (!url) return apply();
     const img = new Image();
     img.onload = apply; img.onerror = apply;
@@ -944,7 +969,7 @@ function updateChrome(force = false) {
   $('#subtitle').textContent = bits.join(' · ');
   renderCapBadges(g);
   renderCapActions(g);
-  setBackground(heroOf(g), p.color);
+  setBackground(heroOf(g), g.color || p.color);
 }
 // Puces d'état sous le titre du jeu : en cours, récupération des infos, temps de jeu, dernière session, favori
 const BADGE_ICON = {
