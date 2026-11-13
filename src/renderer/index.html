@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" data-theme="light">
 <head>
   <meta charset="utf-8" />
   <meta http-equiv="Content-Security-Policy"
@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="home.css" />
   <link rel="stylesheet" href="games.css" />
   <link rel="stylesheet" href="shell.css" />
+  <link rel="stylesheet" href="theme.css" />
 </head>
 <body data-view="home">
   <!-- Fond -->
@@ -362,6 +363,12 @@
               <button data-value="0.35" data-nav>Doux</button><button data-value="0.7" data-nav>Normal</button><button data-value="1" data-nav>Fort</button>
             </div>
             <button class="toggle" data-toggle="sounds" role="switch" aria-labelledby="lbSounds" data-nav></button>
+          </div>
+        </div>
+        <div class="setting">
+          <div><strong id="lbTheme">Thème</strong><span class="dim">« Auto » suit le mode clair / sombre de Windows</span></div>
+          <div class="seg" data-setting="theme" role="group" aria-labelledby="lbTheme">
+            <button data-value="light" data-nav><i class="swatch" style="background:#FFFFFF;box-shadow:inset 0 0 0 1px #CBD3DD"></i>Clair</button><button data-value="dark" data-nav><i class="swatch" style="background:#101010"></i>Sombre</button><button data-value="system" data-nav>Auto</button>
           </div>
         </div>
         <div class="setting">

@@ -73,4 +73,4 @@ npm start          # lancer en dev
 npm run dist       # construire l'installateur Windows (dist/)
 ```
 
-Stack : Electron, HTML/CSS 3D (sans framework), Gamepad API. Direction visuelle issue du skill UI/UX Pro Max (style « 3D & Hyperrealism », Russo One + Chakra Petch, accent rose #F43F5E).
+Stack : Electron, HTML/CSS 3D (sans framework), Gamepad API. Direction visuelle issue du skill UI/UX Pro Max (Russo One + Chakra Petch). Palette : accent #3C91E6, navy #0C335A, thème clair (fond #FFFFFF, texte #101010) ou sombre (fond #101010, texte #FFFFFF) — Réglages → Thème.

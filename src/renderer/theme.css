@@ -1,0 +1,95 @@
+/* RR Launcher — palette et thèmes (chargé en dernier).
+   Palette : Bright Ocean #3C91E6 (accent), Oxford Navy #0C335A (accent foncé),
+   fond blanc #FFFFFF + texte #101010 (clair) / fond Onyx #101010 + texte #FFFFFF (sombre).
+   Le thème est posé sur <html data-theme="light|dark"> par app.js (réglage Apparence → Thème). */
+
+:root {
+  --ocean: #3C91E6;
+  --navy: #0C335A;
+  --onyx: #101010;
+
+  --accent: var(--ocean);
+  --accent-deep: var(--navy);
+  --color-accent: var(--accent);
+  --color-ring: var(--accent);
+  --rose-500: var(--accent);   /* anciens noms conservés pour compatibilité */
+  --rose-600: var(--accent);
+  --accent-fill: var(--accent);
+  --accent-fill-hover: var(--accent-deep);
+  --accent-soft: rgba(60, 145, 230, .14);
+  --accent-line: rgba(60, 145, 230, .55);
+}
+
+/* ---------------------------------------------------------------- Sombre */
+:root, [data-theme="dark"] {
+  --bg: #101010; --bg-rgb: 16, 16, 16;
+  --fg: #FFFFFF; --fg-rgb: 255, 255, 255;
+  --shade-rgb: 0, 0, 0;                 /* ombres de texte (lisibilité sur image) */
+  --surface-0: #0a0a0a;
+  --surface-1: #1a1a1a;
+  --color-bg: var(--bg);
+  --color-fg: var(--fg);
+  --color-muted-fg: rgba(255, 255, 255, .64);
+  --color-surface: rgba(26, 26, 26, .78);
+  --color-surface-solid: #1a1a1a;
+  --color-border: rgba(255, 255, 255, .12);
+  --surface-2: rgba(255, 255, 255, .045);
+  --surface-3: rgba(255, 255, 255, .08);
+  --line: rgba(255, 255, 255, .1);
+  --line-strong: rgba(255, 255, 255, .18);
+  --text-2: rgba(255, 255, 255, .78);
+  --text-3: rgba(255, 255, 255, .64);
+  --accent-text: #6FAEEC;              /* texte d'accent sur fond sombre (≥ 4.5:1) */
+  --ok-fg: #86EFAC; --warn-fg: #FDE68A; --err-fg: #FCA5A5;
+  --shadow-panel: 0 40px 100px rgba(0, 0, 0, .65), 0 0 0 1px rgba(255, 255, 255, .04);
+  /* Barre du bas de l'accueil (ES-DE) */
+  --light-bar: #101010; --bar-rgb: 16, 16, 16; --light-ink: #FFFFFF;
+  --key-bg: #262626; --key-line: #3d3d3d; --key-pill: var(--navy);
+  --home-band-1: #161616; --home-band-2: #101010;
+  --brand-bg-1: var(--navy); --brand-bg-2: #101010;
+  --sel-bg: #FFFFFF; --sel-fg: #101010;   /* élément sélectionné / focus plein */
+  color-scheme: dark;
+}
+
+/* ---------------------------------------------------------------- Clair */
+[data-theme="light"] {
+  --bg: #FFFFFF; --bg-rgb: 255, 255, 255;
+  --fg: #101010; --fg-rgb: 16, 16, 16;
+  --shade-rgb: 255, 255, 255;
+  --surface-0: #F1F4F8;
+  --surface-1: #FFFFFF;
+  --color-muted-fg: rgba(16, 16, 16, .66);
+  --color-surface: rgba(255, 255, 255, .82);
+  --color-surface-solid: #FFFFFF;
+  --color-border: rgba(16, 16, 16, .12);
+  --surface-2: rgba(16, 16, 16, .04);
+  --surface-3: rgba(16, 16, 16, .07);
+  --line: rgba(16, 16, 16, .1);
+  --line-strong: rgba(16, 16, 16, .18);
+  --text-2: rgba(16, 16, 16, .78);
+  --text-3: rgba(16, 16, 16, .66);
+  --accent-text: var(--navy);           /* #3C91E6 sur blanc = 3.4:1 → texte d'accent en navy */
+  --ok-fg: #166534; --warn-fg: #92400E; --err-fg: #B91C1C;
+  --shadow-panel: 0 30px 80px rgba(12, 51, 90, .18), 0 0 0 1px rgba(16, 16, 16, .06);
+  --light-bar: #FFFFFF; --bar-rgb: 255, 255, 255; --light-ink: #101010;
+  --key-bg: #EEF2F7; --key-line: #CBD3DD; --key-pill: var(--navy);
+  --home-band-1: #F3F6FA; --home-band-2: #FFFFFF;
+  --brand-bg-1: #D6E8FA; --brand-bg-2: #FFFFFF;
+  --sel-bg: var(--navy); --sel-fg: #FFFFFF;
+  color-scheme: light;
+}
+
+html, body { background: var(--bg); color: var(--fg); }
+.panel { background: var(--surface-1); }
+[data-theme="dark"] .panel { background: linear-gradient(180deg, #202020 0%, var(--surface-1) 140px); }
+
+/* Boutons pleins d'accent : texte blanc (gros boutons, texte gras), survol en navy */
+.btn.primary, .cap-play { background: var(--accent); color: #fff; }
+.btn.primary:hover, .cap-play:hover { background: var(--accent-deep); }
+
+/* Mode clair : les ombres portées sont plus douces et teintées navy */
+[data-theme="light"] .sys-btn { box-shadow: 0 2px 8px rgba(12, 51, 90, .12); }
+[data-theme="light"] .h-logo-img { filter: drop-shadow(0 .6vh 1vh rgba(12, 51, 90, .22)); }
+/* Mode sombre : logos de console clairs gardés tels quels, pas d'assombrissement */
+[data-theme="dark"] .h-logo-img.is-light { filter: drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .5)); }
+[data-theme="dark"] .h-pbg { filter: grayscale(1) contrast(.9) brightness(.7); }

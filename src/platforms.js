@@ -9,7 +9,7 @@
 const P = (o) => o;
 
 const PLATFORMS = [
-  P({ id: 'pc', tgdb: 1, name: 'PC', short: 'PC', maker: 'Windows', year: '', color: '#F43F5E', wiki: null, libretro: null, logos: [],
+  P({ id: 'pc', tgdb: 1, name: 'PC', short: 'PC', maker: 'Windows', year: '', color: '#3C91E6', wiki: null, libretro: null, logos: [],
     case: { style: 'dvd', ratio: 0.64 }, exts: [], hints: [], emulators: [] }),
 
   P({ id: 'switch', tgdb: 4971, name: 'Nintendo Switch', short: 'SWITCH', maker: 'Nintendo', year: '2017', color: '#e60012', wiki: 'Nintendo Switch', libretro: null,

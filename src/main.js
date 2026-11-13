@@ -1,5 +1,5 @@
 // RR Launcher — processus principal Electron
-const { app, BrowserWindow, ipcMain, dialog, protocol, net, shell, Menu, Tray, nativeImage, globalShortcut } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, protocol, net, shell, Menu, Tray, nativeImage, globalShortcut, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -30,7 +30,8 @@ const DEFAULT_SETTINGS = {
   openAtLogin: false,
   sounds: true,
   volume: 0.7,
-  caseStyle: 'red', // boîtes PC : red | black | blue | auto
+  caseStyle: 'blue', // boîtes PC : red | black | blue | auto
+  theme: 'light', // light | dark | system
   sort: 'recent',
   emulators: {}, // platformId -> { path, args, name }
   platformImages: {}, // platformId -> fichier
@@ -51,6 +52,12 @@ if (store.data.settings.logosVersion !== meta.LOGOS_VERSION) {
   s.platformLogos = kept;
   s.platformLogoFails = {};
   s.logosVersion = meta.LOGOS_VERSION;
+  store.save();
+}
+// 1.5 : nouvelle palette (bleu #3C91E6) — les boîtes PC rouges par défaut passent en bleu, une seule fois
+if (!store.data.settings.paletteV2) {
+  if (store.data.settings.caseStyle === 'red') store.data.settings.caseStyle = 'blue';
+  store.data.settings.paletteV2 = true;
   store.save();
 }
 if ('minimizeOnLaunch' in store.data.settings) { store.data.settings.hideOnLaunch = store.data.settings.minimizeOnLaunch; delete store.data.settings.minimizeOnLaunch; }
@@ -78,7 +85,7 @@ function createWindow() {
     minHeight: 560,
     frame: false,
     fullscreen: !!s.fullscreen,
-    backgroundColor: '#07070f',
+    backgroundColor: (s.theme === 'dark' || (s.theme === 'system' && nativeTheme.shouldUseDarkColors)) ? '#101010' : '#FFFFFF',
     show: false,
     icon: path.join(__dirname, 'renderer', 'assets', 'icon.png'),
     title: 'RR Launcher',

@@ -39,7 +39,7 @@ const S = {
 const slots = new Map();
 const cards = new Map();
 
-const CASES = { red: '#d4142c', black: '#1c1c24', blue: '#1b55c9' };
+const CASES = { red: '#d4142c', black: '#1c1c24', blue: '#3C91E6' };
 const DEPTH = { dvd: 0.085, bluray: 0.07, small: 0.07, card: 0.17, jewel: 0.075 };
 
 // ---------------------------------------------------------------- Utilitaires
@@ -47,7 +47,7 @@ const mediaUrl = (g, file) => (file ? `rr://media/${g.id}/${encodeURIComponent(f
 const logoCss = (id) => (S.platLogo[id] ? `--logo:url('rr://media/_platforms/${encodeURIComponent(S.platLogo[id])}')` : '');
 const platUrl = (file) => (file ? `rr://media/_platforms/${encodeURIComponent(file)}` : '');
 const yearOf = (g) => (String(g.releaseDate || '').match(/\d{4}/) || [])[0] || '';
-const plat = (id) => S.P[id] || S.P.pc || { id: 'pc', name: 'PC', short: 'PC', color: '#F43F5E', case: { style: 'dvd', ratio: 0.64 } };
+const plat = (id) => S.P[id] || S.P.pc || { id: 'pc', name: 'PC', short: 'PC', color: '#3C91E6', case: { style: 'dvd', ratio: 0.64 } };
 function fmtTime(sec = 0) {
   const m = Math.round(sec / 60);
   if (m < 1) return '0 min';
@@ -188,7 +188,7 @@ function tileHTML(it) {
   const logo = S.platLogo[it.id];
   const mark = logo ? `<img class="t-logo" src="${platUrl(logo)}" alt="" />`
     : `<b class="t-name" style="--fit:${Math.min(1, 6 / Math.max(3, (p.short || p.name).length)).toFixed(2)}">${esc(p.short || p.name)}</b>`;
-  return `<div class="t-in" style="--pc:${p.color || '#F43F5E'}">${a.tile ? `<img class="t-art" src="${a.tile}" alt="" decoding="async" />` : ''}`
+  return `<div class="t-in" style="--pc:${p.color || '#3C91E6'}">${a.tile ? `<img class="t-art" src="${a.tile}" alt="" decoding="async" />` : ''}`
     + `<div class="t-tint"></div><div class="t-shade"></div>${mark}</div>`;
 }
 // Logo très clair (blanc sur transparent) : illisible sur le panneau clair → on le fonce
@@ -806,8 +806,8 @@ function drawMotes(t) {
     if (m.y < -0.02) { m.y = 1.02; m.x = Math.random(); }
     const a = 0.25 + 0.35 * Math.sin(t / 900 + m.p * 3);
     const gr = c.createRadialGradient(m.x * w, m.y * h, 0, m.x * w, m.y * h, m.r * 6);
-    gr.addColorStop(0, `rgba(255, 214, 170, ${a})`);
-    gr.addColorStop(1, 'rgba(255, 214, 170, 0)');
+    gr.addColorStop(0, `rgba(156, 200, 242, ${a})`);
+    gr.addColorStop(1, 'rgba(156, 200, 242, 0)');
     c.fillStyle = gr;
     c.beginPath(); c.arc(m.x * w, m.y * h, m.r * 6, 0, 6.283); c.fill();
   }
@@ -2061,8 +2061,17 @@ rr.onUpdate((u) => {
 });
 
 // ---------------------------------------------------------------- Événements du processus principal
+// Thème clair / sombre (réglage « theme » : light | dark | system)
+const darkQuery = matchMedia('(prefers-color-scheme: dark)');
+function applyTheme() {
+  const pref = S.lib.settings?.theme || 'light';
+  const t = pref === 'system' ? (darkQuery.matches ? 'dark' : 'light') : pref;
+  if (document.documentElement.dataset.theme !== t) document.documentElement.dataset.theme = t;
+}
+darkQuery.addEventListener('change', applyTheme);
 function applyLib(state) {
   S.lib = state;
+  applyTheme();
   S.P = Object.fromEntries(state.platforms.map((p) => [p.id, p]));
   Sfx.set(state.settings.sounds, state.settings.volume ?? 0.7);
   refresh();

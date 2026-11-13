@@ -14,7 +14,7 @@ body[data-view="games"] #home { display: block; visibility: hidden; pointer-even
 body[data-view="games"] #home * { pointer-events: none !important; }
 
 /* Fond clair (bande ES-DE) */
-#home::before { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, #e9e9ee, #f4f4f7); transition: opacity 300ms ease-out; }
+#home::before { content: ''; position: absolute; inset: 0; background: linear-gradient(to bottom, var(--home-band-1), var(--home-band-2)); transition: opacity 300ms ease-out; }
 
 /* ---------- Bannière plein écran ---------- */
 .h-scene, .h-panel-wrap { position: absolute; left: 0; right: 0; top: 0; bottom: var(--art-b); }
@@ -26,17 +26,17 @@ body[data-view="games"] #home * { pointer-events: none !important; }
 .h-bg.out, .h-pbg.out { z-index: -1; }
 .h-bg.is-brand {
   background:
-    radial-gradient(ellipse 55% 70% at 72% 38%, rgba(244, 63, 94, .55), transparent 70%),
-    radial-gradient(ellipse 40% 50% at 95% 90%, rgba(124, 58, 237, .35), transparent 70%),
-    linear-gradient(135deg, #1d0f1d, #0b0b12);
+    radial-gradient(ellipse 55% 70% at 72% 38%, rgba(60, 145, 230, .55), transparent 70%),
+    radial-gradient(ellipse 40% 50% at 95% 90%, rgba(12, 51, 90, .35), transparent 70%),
+    linear-gradient(135deg, var(--brand-bg-1), var(--brand-bg-2));
 }
 
 /* ---------- Panneau en biais (même image, désaturée et voilée de blanc) ---------- */
 .h-panel-wrap { filter: drop-shadow(1vw 0 1.6vw rgba(0, 0, 0, .28)); }
 .h-panel { position: absolute; inset: 0; clip-path: polygon(0 0, 36.5vw 0, 27vw 100%, 0 100%); overflow: hidden; }
 .h-pbg { filter: grayscale(1) contrast(.85) brightness(1.08); }
-.h-pbg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, rgba(246, 246, 249, .72), rgba(236, 236, 241, .58)); }
-.h-pbg.is-brand { background: linear-gradient(160deg, #f4f4f7, #d9d9df); }
+.h-pbg::after { content: ''; position: absolute; inset: 0; background: linear-gradient(100deg, rgba(var(--bg-rgb), .72), rgba(var(--bg-rgb), .58)); }
+.h-pbg.is-brand { background: linear-gradient(160deg, var(--home-band-2), var(--home-band-1)); }
 
 /* ---------- Grand logo de la console ---------- */
 .h-logo {
@@ -51,12 +51,12 @@ body[data-view="games"] #home * { pointer-events: none !important; }
 .h-logo-img.is-light { filter: brightness(0) opacity(.86) drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .25)); }
 .h-name {
   font-family: var(--font-display); font-size: calc(8.5vw * var(--fit, 1)); line-height: .95; text-align: center;
-  text-transform: uppercase; color: #1b1b22; overflow-wrap: anywhere;
+  text-transform: uppercase; color: var(--fg); overflow-wrap: anywhere;
   text-shadow: 0 .5vh 1.2vh rgba(0, 0, 0, .18);
 }
 .h-brand { display: flex; flex-direction: column; align-items: center; gap: 1.6vh; text-align: center; }
-.h-brand-t { font-family: var(--font-display); font-size: 3.5vw; line-height: 1; color: #17171d; text-shadow: 0 .5vh 1.2vh rgba(0, 0, 0, .15); white-space: nowrap; }
-.h-brand-s { font-family: var(--font-body); font-weight: 700; font-size: clamp(14px, 1.45vw, 30px); letter-spacing: .28em; text-transform: uppercase; color: #3d3d47; }
+.h-brand-t { font-family: var(--font-display); font-size: 3.5vw; line-height: 1; color: var(--fg); text-shadow: 0 .5vh 1.2vh rgba(var(--shade-rgb), .15); white-space: nowrap; }
+.h-brand-s { font-family: var(--font-body); font-weight: 700; font-size: clamp(14px, 1.45vw, 30px); letter-spacing: .28em; text-transform: uppercase; color: var(--text-2); }
 
 /* ---------- Rangée de tuiles ---------- */
 .h-row { position: absolute; left: 0; right: 0; bottom: var(--row-b); height: var(--tile); }
@@ -74,7 +74,7 @@ body[data-view="games"] #home * { pointer-events: none !important; }
 .h-tile.is-sel .t-in { opacity: 1; transform: scale(1.166); box-shadow: 0 1.6vh 3.2vh rgba(0, 0, 0, .34), 0 .4vh .8vh rgba(0, 0, 0, .2); }
 .h-tile.is-sel .t-in::after {
   content: ''; position: absolute; inset: 0; border-radius: inherit; z-index: 5;
-  border: max(4px, .46vw) solid var(--color-accent, #F43F5E);
+  border: max(4px, .46vw) solid var(--color-accent, #3C91E6);
 }
 .t-art { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: saturate(.85); }
 .t-tint { position: absolute; inset: 0; background: var(--pc, #26262e); mix-blend-mode: multiply; opacity: .5; }
@@ -92,7 +92,7 @@ body[data-view="games"] #home * { pointer-events: none !important; }
 }
 .t-all { background: #17171d; }
 .t-all .t-name { font-size: calc(var(--tile) * .13); }
-.t-all .t-shade { background: linear-gradient(150deg, rgba(244, 63, 94, .55), rgba(20, 10, 30, .7)); }
+.t-all .t-shade { background: linear-gradient(150deg, rgba(60, 145, 230, .55), rgba(20, 10, 30, .7)); }
 .t-mosaic { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; }
 .t-mosaic img { width: 100%; height: 100%; object-fit: cover; }
 .t-add {
@@ -104,7 +104,7 @@ body[data-view="games"] #home * { pointer-events: none !important; }
   width: 34%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center;
   border: max(2px, .22vw) dashed rgba(255, 255, 255, .55);
 }
-.t-plus svg { width: 52%; height: 52%; fill: none; stroke: var(--color-accent, #F43F5E); stroke-width: 2.6; stroke-linecap: round; }
+.t-plus svg { width: 52%; height: 52%; fill: none; stroke: var(--color-accent, #3C91E6); stroke-width: 2.6; stroke-linecap: round; }
 
 /* ---------- Transition accueil ↔ jeux ---------- */
 .h-scene, .h-panel-wrap, .h-logo, .h-row { transition: transform 300ms var(--h-ease), opacity 300ms ease-out; }
