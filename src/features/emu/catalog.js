@@ -27,6 +27,10 @@ const EMULATORS = {
   vita3k: { name: 'Vita3K', source: { type: 'github', repo: 'Vita3K/Vita3K', asset: /windows.*\.zip$/i }, exe: /^vita3k\.exe$/i, site: 'https://vita3k.org/' },
   dolphin: { name: 'Dolphin', source: { type: 'site' }, site: 'https://dolphin-emu.org/download/' },
   ppsspp: { name: 'PPSSPP', source: { type: 'site' }, site: 'https://www.ppsspp.org/download/' },
+  // Switch 2 : Fritchii (fork de Lichii par Frizti, réglé pour Ocarina of Time) et Lichii (zortos293). Archive
+  // « …-Windows-x64.zip » / « lichii-windows-x86_64.zip », exécutable lichii.exe. Données dans %APPDATA%\fritchii.
+  fritchii: { name: 'Fritchii', source: { type: 'github', repo: 'Frizti/Fritchii', asset: /windows-x64\.zip$/i, prerelease: true }, exe: /^lichii\.exe$/i, site: 'https://github.com/Frizti/Fritchii/releases' },
+  lichii: { name: 'Lichii', source: { type: 'github', repo: 'zortos293/Lichii', asset: /^lichii-windows-x86_64\.zip$/i, prerelease: true }, exe: /^lichii\.exe$/i, site: 'https://github.com/zortos293/Lichii/releases' },
   eden: { name: 'Eden', source: { type: 'site' }, site: 'https://eden-emu.dev/' },
   citron: { name: 'Citron', source: { type: 'site' }, site: 'https://citron-emu.org/' },
   ryujinx: { name: 'Ryujinx', source: { type: 'site' }, site: 'https://ryujinx.app/' },
@@ -45,7 +49,7 @@ const RECO = {
   ps2: [{ emu: 'pcsx2' }], ps3: [{ emu: 'rpcs3' }], psp: [{ emu: 'ppsspp' }], vita: [{ emu: 'vita3k' }],
   gc: [{ emu: 'dolphin' }], wii: [{ emu: 'dolphin' }], wiiu: [{ emu: 'cemu' }],
   switch: [{ emu: 'eden' }, { emu: 'citron' }, { emu: 'ryujinx' }],
-  switch2: [{ emu: 'eden' }, { emu: 'citron' }, { emu: 'ryujinx' }], // pas encore d'émulateur Switch 2 abouti : les mêmes, au choix
+  switch2: [{ emu: 'fritchii' }, { emu: 'lichii' }, { emu: 'eden' }], // émulateurs Switch 2 expérimentaux (nov. 2026)
   '3ds': [{ emu: 'azahar' }], nds: [{ emu: 'melonds' }],
   xbox: [{ emu: 'xemu' }], x360: [{ emu: 'xenia' }],
 };
@@ -68,7 +72,11 @@ const BIOS = {
   vita3k: { vita: [{ note: true, label: 'Firmware PS Vita (PSVUPDAT.PUP) à installer depuis Vita3K au premier lancement' }] },
   melonds: { nds: [{ any: ['bios7.bin'], optional: true, label: 'BIOS DS bios7.bin / bios9.bin / firmware.bin (facultatifs, à indiquer dans melonDS)' }] },
   xemu: { xbox: [{ note: true, label: 'MCPX boot ROM, BIOS Xbox et disque dur (xbox_hdd.qcow2) à indiquer dans xemu → Paramètres → Système' }] },
-  eden: { switch: [{ note: true, label: 'Clés prod.keys et firmware de ta console à installer depuis l’émulateur' }] },
+  // eden : aussi Fritchii / Lichii / Eglantine (lichii.exe → même famille, voir launch.js/emuKind)
+  eden: {
+    switch: [{ note: true, label: 'Clés prod.keys et firmware de ta console à installer depuis l’émulateur' }],
+    switch2: [{ note: true, label: 'Clés et firmware de ta Switch 2 à installer depuis l’émulateur (Outils → Installer les clés, puis le firmware)' }],
+  },
   citron: { switch: [{ note: true, label: 'Clés prod.keys et firmware de ta console à installer depuis l’émulateur' }] },
   ryujinx: { switch: [{ note: true, label: 'Clés prod.keys et firmware de ta console à installer depuis Ryujinx' }] },
 };

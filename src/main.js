@@ -1153,6 +1153,15 @@ function loadFeatures() {
     commit, send, findGame, showWindow, bringToFront, hideToTray,
     getWin: () => win, winNative: () => winNative(), log: (m) => meta.log(m),
     protoRoute: (host, fn) => { protoRoutes[host] = fn; }, // CAPTURE
+    // RECOMP : ajoute un jeu à la bibliothèque et lance la récupération des visuels (null si déjà présent)
+    addGame: (data) => {
+      if (alreadyHave(data)) return games().find((g) => gameKey(g) === gameKey(data)) || null;
+      const g = newGame(data);
+      games().push(g);
+      commit();
+      enqueue(g, null);
+      return g;
+    },
   };
   for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) {
     try { require(path.join(dir, f)).init?.(ctx); } catch (e) { meta.log(`module ${f} : ${e.stack || e.message}`); }

@@ -203,3 +203,19 @@ test('installation : RetroArch + cœur, PCSX2 (GitHub), annulation, archive corr
   await assert.rejects(download(`${base}/nope.zip`, path.join(work, 'n')), /introuvable/);
   srv.close();
 });
+
+test('Switch 2 : Fritchii / Lichii reconnus, .nup, -f -g, suivi du dossier après relance', () => {
+  const { detectEmulator, platformForFile } = require('../src/platforms');
+  assert.strictEqual(platformForFile('D:/Jeux/Ocarina.nup'), 'switch2');
+  const d = detectEmulator('C:\\Emu\\Fritchii-v5.8.4\\lichii.exe').find((x) => x.platform === 'switch2');
+  assert.strictEqual(d.args, '-f -g "{rom}"');
+  assert.strictEqual(L.emuKind('C:\\Emu\\Fritchii-v5.8.4\\lichii.exe'), 'eden');
+  const g = { kind: 'rom', platform: 'switch2', romPath: 'D:\\Jeux\\Switch 2\\oot.nup' };
+  const c = L.command(g, { path: 'C:\\Emu\\Fritchii\\lichii.exe', args: d.args }, { splitArgs: split });
+  assert.deepStrictEqual(c.args, ['-f', '-g', 'D:\\Jeux\\Switch 2\\oot.nup']);
+  assert.strictEqual(c.followDir, 'C:\\Emu\\Fritchii');
+  const C = require('../src/features/emu/catalog');
+  assert.strictEqual(C.RECO.switch2[0].emu, 'fritchii');
+  assert.ok(C.EMULATORS.fritchii.exe.test('lichii.exe'));
+  assert.ok(bios.check('switch2', { path: 'C:\\Emu\\Fritchii\\lichii.exe' })[0].note);
+});

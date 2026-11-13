@@ -18,13 +18,21 @@ function init(ctx) {
   const S = () => store.data.settings;
   store.data.emu ||= { installs: {} };
   store.data.emu.installs ||= {};
+  // Fritchii / Lichii choisis avant que le launcher les reconnaisse : arguments par défaut « "{rom}" » → preset (-f -g)
+  for (const [pid, conf] of Object.entries(S().emulators || {})) {
+    if (/^switch2?$/.test(pid) && /lichii|fritchii|eglantine/i.test(path.basename(conf?.path || '')) && (!conf.args || conf.args.trim() === '"{rom}"')) {
+      conf.args = '-f -g "{rom}"'; conf.name = 'Fritchii / Lichii';
+      log(`emu : arguments Fritchii/Lichii mis à jour pour ${pid}`);
+    }
+  }
   const root = process.env.RR_EMU_ROOT || (process.platform === 'win32' && process.env.LOCALAPPDATA
     ? path.join(process.env.LOCALAPPDATA, 'RR Launcher', 'emulators') : path.join(ctx.DATA, 'emulators'));
 
   // ---------------------------------------------------------------- A. Configuration / installation
-  function overview() {
+  function overview({ all = false } = {}) {
     const games = store.data.games.filter((g) => g.kind === 'rom');
-    const ids = [...new Set([...games.map((g) => g.platform), ...Object.keys(S().emulators || {})])].filter((id) => BY_ID[id] && id !== 'pc');
+    // all : toutes les consoles qui ont un émulateur conseillé (installer avant d'ajouter des ROMs)
+    const ids = [...new Set([...games.map((g) => g.platform), ...Object.keys(S().emulators || {}), ...(all ? Object.keys(C.RECO) : [])])].filter((id) => BY_ID[id] && id !== 'pc');
     const order = Object.keys(BY_ID);
     ids.sort((a, b) => order.indexOf(a) - order.indexOf(b));
     return {
@@ -82,7 +90,7 @@ function init(ctx) {
       queue.shift();
     }
   }
-  ipcMain.handle('x:emu:overview', () => overview());
+  ipcMain.handle('x:emu:overview', (_e, o = {}) => overview({ all: !!o?.all }));
   ipcMain.handle('x:emu:install', (_e, req = {}) => {
     if (!BY_ID[req.platform] || !C.EMULATORS[req.emu]) return { ok: false, error: 'Requête invalide' };
     if (req.emu === 'retroarch' && !req.core) req.core = C.CORES[req.platform];

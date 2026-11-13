@@ -7,7 +7,7 @@ const dirname = (p) => (String(p).includes('\\') ? path.win32 : path).dirname(p)
 // Identifiant d'émulateur d'après le nom de l'exécutable
 const KINDS = [
   ['retroarch', /retroarch/i], ['dolphin', /dolphin/i], ['pcsx2', /pcsx2/i], ['duckstation', /duckstation/i],
-  ['ppsspp', /ppsspp/i], ['cemu', /cemu/i], ['eden', /eden|citron|sudachi|yuzu|suyu/i], ['ryujinx', /ryujinx/i],
+  ['ppsspp', /ppsspp/i], ['cemu', /cemu/i], ['eden', /eden|citron|sudachi|yuzu|suyu|lichii|fritchii|eglantine/i], ['ryujinx', /ryujinx/i],
   ['mgba', /mgba/i], ['melonds', /melonds/i], ['azahar', /azahar|citra|lime3ds/i], ['xemu', /xemu/i], ['xenia', /xenia/i],
   ['rpcs3', /rpcs3/i], ['mesen', /mesen/i], ['snes9x', /snes9x/i], ['project64', /project64/i], ['flycast', /flycast/i],
   ['ares', /^ares/i], ['vita3k', /vita3k/i], ['blastem', /blastem/i], ['simple64', /simple64/i],
@@ -93,6 +93,9 @@ function command(g, emu, { splitArgs, env = process.env } = {}) {
     const res = Number(L.resolution) || 0;
     if (res && RESOLUTION[kind]) pre.push(...RESOLUTION[kind](res));
     args = [...pre, ...extra, ...t].map((a) => a.replace('{rom}', g.romPath).replace('{romdir}', dirname(g.romPath)));
+    // Fritchii / Lichii / Eden peuvent se mettre à jour au démarrage et se relancer : on suit leur dossier
+    // pour ne pas croire la partie finie quand le premier processus se ferme.
+    if (kind === 'eden') followDir = cwd;
   } else {
     cwd = dirname(g.exePath);
     const ext = path.extname(g.exePath).toLowerCase();

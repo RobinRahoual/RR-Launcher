@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "note": "Catalogue de la boutique de recomp. Le launcher lit d'abord la copie de la branche main (src/features/recomp/recomps.json) pour qu'un ajout ici soit visible sans nouvelle version. Dépôts relevés sur recomplauncher.com (nov. 2026). rom.codes : code produit N64 (octets 0x3B-0x3E de l'en-tête) ou identifiant GameCube (4 premiers octets), expression régulière. rom.place : copy (copiée dans le dossier de la recomp, target = nom/chemin relatif) | select (choisie dans la recomp au premier lancement) | installer (assistant de la recomp) .",
+  "recomps": [
+    {
+      "id": "zelda64recomp", "name": "Zelda 64: Recompiled", "game": "The Legend of Zelda: Majora's Mask", "platform": "n64",
+      "kind": "Recomp", "repo": "Zelda64Recomp/Zelda64Recomp",
+      "desc": "Majora's Mask recompilé nativement : 60 fps et plus, écran large, gyroscope, mods, graphismes modernes (RT64).",
+      "rom": { "system": "n64", "codes": "^NZSE$", "label": "The Legend of Zelda: Majora's Mask (USA), .z64", "place": "select" }
+    },
+    {
+      "id": "2ship2harkinian", "name": "2 Ship 2 Harkinian", "game": "The Legend of Zelda: Majora's Mask", "platform": "n64",
+      "kind": "Port", "repo": "HarbourMasters/2ship2harkinian",
+      "desc": "Portage PC de Majora's Mask par les HarbourMasters (décompilation) : améliorations, randomizer, options de confort.",
+      "rom": { "system": "n64", "codes": "^NZSE$", "label": "The Legend of Zelda: Majora's Mask (USA), .z64", "place": "copy" }
+    },
+    {
+      "id": "shipwright", "name": "Ship of Harkinian", "game": "The Legend of Zelda: Ocarina of Time", "platform": "n64",
+      "kind": "Port", "repo": "HarbourMasters/Shipwright",
+      "desc": "Ocarina of Time en natif : haute résolution, 60 fps, randomizer, mods, éditeur de manette.",
+      "rom": { "system": "n64", "codes": "^[CN]ZL[EJP]$", "label": "The Legend of Zelda: Ocarina of Time (N64 ou version GameCube), .z64", "place": "copy" }
+    },
+    {
+      "id": "spaghettikart", "name": "SpaghettiKart", "game": "Mario Kart 64", "platform": "n64",
+      "kind": "Port", "repo": "HarbourMasters/SpaghettiKart",
+      "desc": "Mario Kart 64 en natif : haute résolution, écran large, éditeur de circuits et mods.",
+      "rom": { "system": "n64", "codes": "^NKTE$", "label": "Mario Kart 64 (USA), .z64", "place": "copy" }
+    },
+    {
+      "id": "starship", "name": "Starship", "game": "Star Fox 64", "platform": "n64",
+      "kind": "Port", "repo": "HarbourMasters/Starship",
+      "desc": "Star Fox 64 en natif par les HarbourMasters : écran large, haute fréquence d'images, mods.",
+      "rom": { "system": "n64", "codes": "^NFXE$", "label": "Star Fox 64 (USA) 1.1, .z64", "place": "copy" }
+    },
+    {
+      "id": "ghostship", "name": "Ghostship", "game": "Super Mario 64", "platform": "n64",
+      "kind": "Port", "repo": "HarbourMasters/Ghostship",
+      "desc": "Super Mario 64 en natif par les HarbourMasters : haute résolution, 60 fps, mods.",
+      "rom": { "system": "n64", "codes": "^NSME$", "label": "Super Mario 64 (USA), .z64", "place": "copy" }
+    },
+    {
+      "id": "starfox64recomp", "name": "Star Fox 64: Recompiled", "game": "Star Fox 64", "platform": "n64",
+      "kind": "Recomp", "repo": "sonicdcer/Starfox64Recomp",
+      "desc": "Recompilation statique de Star Fox 64 (N64Recomp + RT64).",
+      "rom": { "system": "n64", "codes": "^NFXE$", "label": "Star Fox 64 (USA) 1.1, .z64", "place": "select" }
+    },
+    {
+      "id": "banjorecomp", "name": "Banjo: Recompiled", "game": "Banjo-Kazooie", "platform": "n64",
+      "kind": "Recomp", "repo": "BanjoRecomp/BanjoRecomp",
+      "desc": "Banjo-Kazooie recompilé nativement : écran large, haute fréquence d'images, mods.",
+      "rom": { "system": "n64", "codes": "^NBKE$", "label": "Banjo-Kazooie (USA), .z64", "place": "select" }
+    },
+    {
+      "id": "dk64recomp", "name": "Donkey Kong 64: Recompiled", "game": "Donkey Kong 64", "platform": "n64",
+      "kind": "Recomp", "repo": "Rainchus/Donkey-Kong-64-Recompiled",
+      "desc": "Donkey Kong 64 recompilé nativement (N64Recomp).",
+      "rom": { "system": "n64", "codes": "^NDOE$", "label": "Donkey Kong 64 (USA), .z64", "place": "select" }
+    },
+    {
+      "id": "snap64recomp", "name": "Snap 64 Recomp", "game": "Pokémon Snap", "platform": "n64",
+      "kind": "Recomp", "repo": "JackandBeans/Snap64Recomp",
+      "desc": "Pokémon Snap recompilé nativement sur PC.",
+      "rom": { "system": "n64", "codes": "^NPFE$", "label": "Pokémon Snap (USA), .z64", "place": "select" }
+    },
+    {
+      "id": "perfect-dark", "name": "Perfect Dark Port", "game": "Perfect Dark", "platform": "n64",
+      "kind": "Port", "repo": "fgsfdsfgs/perfect_dark", "prerelease": true,
+      "desc": "Portage PC de Perfect Dark (décompilation) : souris et clavier, haute résolution, écran large.",
+      "rom": { "system": "n64", "codes": "^NPDE$", "label": "Perfect Dark (USA) 1.1, .z64", "place": "copy", "target": "data/pd.ntsc-final.z64" }
+    },
+    {
+      "id": "unleashedrecomp", "name": "Unleashed Recompiled", "game": "Sonic Unleashed", "platform": "x360",
+      "kind": "Recomp", "repo": "hedge-dev/UnleashedRecomp",
+      "desc": "La version Xbox 360 de Sonic Unleashed recompilée pour PC : 60 fps et plus, écran ultra-large, mods.",
+      "rom": { "system": "folder", "label": "Dump de ton disque Xbox 360 (dossier du jeu ou .iso), plus la mise à jour et les DLC si tu les as", "place": "installer" }
+    },
+    {
+      "id": "dusklight", "name": "Dusklight", "game": "The Legend of Zelda: Twilight Princess", "platform": "gc",
+      "kind": "Port", "repo": "TwilitRealm/dusklight",
+      "desc": "Twilight Princess en natif sur PC, avec corrections et améliorations.",
+      "rom": { "system": "gc", "codes": "^GZ2E$", "label": "The Legend of Zelda: Twilight Princess (GameCube, USA), .iso", "place": "select" }
+    }
+  ]
+}

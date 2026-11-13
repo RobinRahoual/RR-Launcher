@@ -110,6 +110,8 @@ async function checkRom(file, ext, hint = null) {
       case 'wad': return has(head, 0, [0x00, 0x00, 0x00, 0x20]) && ['Is', 'ib', 'Bk'].includes(ascii(head, 4, 2)) ? 'wii' : null; // pas les WAD de Doom (IWAD/PWAD)
       case 'nsp': case 'nsz': return ascii(head, 0, 4) === 'PFS0' ? 'switch' : null;
       case 'xci': case 'xcz': return ascii(head, 0x100, 4) === 'HEAD' ? 'switch' : null;
+      // .nup (Fritchii / Lichii) : format maison sans en-tête documenté → reconnu par l'extension, jamais vide
+      case 'nup': return size > 0x10000 ? 'switch2' : null;
       case '3ds': case 'cci': return ascii(head, 0x100, 4) === 'NCSD' ? '3ds' : null;
       case 'cxi': return ascii(head, 0x100, 4) === 'NCCH' ? '3ds' : null;
       case 'cia': return head.readUInt32LE(0) === 0x2020 ? '3ds' : null;

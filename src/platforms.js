@@ -17,8 +17,11 @@ const PLATFORMS = [
   P({ id: 'switch2', tgdb: null, name: 'Nintendo Switch 2', short: 'SWITCH 2', maker: 'Nintendo', year: '2025', color: '#e60012', wiki: 'Nintendo Switch 2', libretro: null,
     logos: ['Nintendo_Switch_2_logo.svg', 'Nintendo_Switch_2_Logo.svg', 'Nintendo_Switch_2_wordmark.svg'],
     case: { style: 'small', ratio: 0.62, body: '#c40d1b', band: '#e60012', fg: '#ffffff', label: 'NINTENDO SWITCH 2' },
-    exts: ['nsp', 'xci', 'nsz', 'xcz'], sharedExts: true, hints: [/switch ?2|\bns2\b/i],
+    // .nup : archive « un seul fichier » de Fritchii / Lichii (jeu + mise à jour + DLC), propre à la Switch 2.
+    exts: ['nsp', 'xci', 'nsz', 'xcz', 'nup'], ownExts: ['nup'], sharedExts: true, hints: [/switch ?2|\bns2\b/i],
     emulators: [
+      // Fritchii (lichii.exe), Lichii, Eglantine : forks d'Eden/yuzu → mêmes options (-f plein écran, -g jeu)
+      { name: 'Fritchii / Lichii', match: /lichii|fritchii|eglantine/i, args: '-f -g "{rom}"' },
       { name: 'Ryujinx', match: /ryujinx/i, args: '"{rom}"' },
       { name: 'Eden / Citron / Sudachi (yuzu)', match: /eden|citron|sudachi|yuzu|suyu/i, args: '-f -g "{rom}"' },
     ] }),
@@ -30,6 +33,7 @@ const PLATFORMS = [
     emulators: [
       { name: 'Ryujinx', match: /ryujinx/i, args: '"{rom}"' },
       { name: 'Eden / Citron / Sudachi (yuzu)', match: /eden|citron|sudachi|yuzu|suyu/i, args: '-f -g "{rom}"' },
+      { name: 'Fritchii / Lichii', match: /lichii|fritchii|eglantine/i, args: '-f -g "{rom}"' },
     ] }),
 
   P({ id: 'wiiu', tgdb: 38, name: 'Wii U', short: 'Wii U', maker: 'Nintendo', year: '2012', color: '#1d9bd8', wiki: 'Wii U', libretro: null,
@@ -202,6 +206,7 @@ function platformForFile(filePath) {
   if (base === 'eboot.bin' && /usrdir/.test(lower)) return 'ps3';
   if (ext === 'bin') return /mega ?drive|genesis/i.test(lower) ? 'md' : AMBIGUOUS_CANDIDATES.bin.some((id) => BY_ID[id].hints.some((h) => h.test(lower))) ? 'ps1' : null;
   if (ext === 'exe') return null;
+  for (const p of PLATFORMS) if (p.ownExts?.includes(ext)) return p.id; // extension propre malgré sharedExts (.nup → Switch 2)
   for (const p of PLATFORMS) {
     if (!p.exts.includes(ext) || p.sharedExts) continue;
     // Switch / Switch 2 : même format, le dossier tranche

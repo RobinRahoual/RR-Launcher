@@ -31,17 +31,19 @@
   };
 
   // ================================================================ A. Assistant « Configurer les émulateurs »
-  const EW = { data: null, choice: {}, prog: {}, busy: new Set(), focusPlat: null };
+  const EW = { data: null, choice: {}, prog: {}, busy: new Set(), focusPlat: null, all: false };
   const wiz = mkOverlay('emuWiz', 'wide emu-wiz', 'ewTitle');
   OVERLAYS.emuwiz = '#emuWiz';
 
-  async function openWizard(focusPlat = null) {
+  async function openWizard(focusPlat = null, { all = null } = {}) {
     EW.focusPlat = focusPlat;
+    // Bibliothèque sans ROM (ou ouverture depuis la boutique) : toutes les consoles d'emblée
+    EW.all = all ?? (EW.all || !S.lib?.games?.some((g) => g.kind === 'rom'));
     if (S.mode !== 'emuwiz') { $('.panel', wiz).innerHTML = '<h2 id="ewTitle">Configurer les émulateurs</h2><p class="panel-lead"><span class="spinner tiny"></span> Analyse de ta bibliothèque…</p>'; openOverlay('emuwiz'); await new Promise((r) => setTimeout(r, 45)); } // après le focusFirst d'openOverlay
     await refresh();
   }
   async function refresh() {
-    EW.data = await rr.x('x:emu:overview').catch(() => null);
+    EW.data = await rr.x('x:emu:overview', { all: EW.all }).catch(() => null);
     renderWizard();
   }
   function rowState(p) {
@@ -98,9 +100,10 @@
     panel.innerHTML = `
       <h2 id="ewTitle">Configurer les émulateurs</h2>
       <p class="panel-lead">Pour chaque console de ta bibliothèque, l’émulateur conseillé est installé dans <code>${esc(ltr(d.root))}</code> et configuré avec les bons paramètres. Les BIOS ne sont jamais téléchargés : le launcher vérifie seulement leur présence.</p>
-      <div class="ew-list">${d.platforms.length ? d.platforms.map(rowHtml).join('') : '<p class="dim">Aucune ROM dans la bibliothèque.</p>'}</div>
+      <div class="ew-list">${d.platforms.length ? d.platforms.map(rowHtml).join('') : '<p class="dim">Aucune ROM dans la bibliothèque. « Toutes les consoles » pour installer un émulateur à l’avance.</p>'}</div>
       <div class="ew-foot">
         <button class="btn" data-ew-close data-nav>Fermer</button>
+        <button class="btn" data-ew-all-plat aria-pressed="${EW.all}" data-nav>${EW.all ? 'Seulement mes consoles' : 'Toutes les consoles'}</button>
         ${todo.length ? `<button class="btn primary" data-ew-all data-nav ${EW.busy.size ? 'disabled' : ''}>Tout installer (${todo.length})</button>` : ''}
       </div>`;
     let f = keep ? $(`[${keep}="${CSS.escape(keepVal)}"]`, panel) : null;
@@ -138,6 +141,7 @@
     if ((b = t('[data-ew-opt]'))) { const [pid, k] = b.dataset.ewOpt.split(':'); EW.choice[pid] = +k; sfx('toggle'); return renderWizard(); }
     if ((b = t('[data-ew-install]'))) return installRow(b.dataset.ewInstall);
     if ((b = t('[data-ew-update]'))) return installRow(b.dataset.ewUpdate, true);
+    if (t('[data-ew-all-plat]')) { EW.all = !EW.all; sfx('toggle'); return refresh(); }
     if (t('[data-ew-cancel]')) { await rr.x('x:emu:cancel'); return; }
     if ((b = t('[data-ew-site]'))) { rr.openExternal(b.dataset.ewSite); toast('Site officiel ouvert dans le navigateur'); return; }
     if ((b = t('[data-ew-folder]'))) { rr.x('x:emu:openFolder', b.dataset.ewFolder); return; }
@@ -148,6 +152,8 @@
     }
   });
   RR.actions.emuWizard = () => openWizard();
+  RR.actions.emuWizardAll = () => { closeAll(); openWizard(null, { all: true }); }; // RECOMP : onglet « Émulateurs » de la boutique
+  window.openEmuWizard = openWizard;
 
   // Prompt « Aucun émulateur » (A sur un jeu sans émulateur) : installation automatique en premier choix
   wrap('askEmulator', (orig, pid, gameId) => {

@@ -32,10 +32,17 @@ async function resolveSource(emuId, { signal, fetchImpl } = {}) {
   }
   if (E.source.type === 'github') {
     let rel;
-    try { rel = await json(`${C.GITHUB_API}/repos/${E.source.repo}/releases/latest`, { signal, fetchImpl }); } catch (e) {
-      if (e.name === 'AbortError') throw e;
-      const list = await json(`${C.GITHUB_API}/repos/${E.source.repo}/releases?per_page=5`, { signal, fetchImpl });
-      rel = (list || []).find((r) => !r.draft && C.pickAsset(r, E.source.asset));
+    const fromList = async () => {
+      const list = await json(`${C.GITHUB_API}/repos/${E.source.repo}/releases?per_page=10`, { signal, fetchImpl });
+      return (list || []).find((r) => !r.draft && C.pickAsset(r, E.source.asset));
+    };
+    // source.prerelease : projets qui ne publient que des pré-versions (Fritchii, Lichii) → /latest les ignore
+    if (E.source.prerelease) rel = await fromList();
+    else {
+      try { rel = await json(`${C.GITHUB_API}/repos/${E.source.repo}/releases/latest`, { signal, fetchImpl }); } catch (e) {
+        if (e.name === 'AbortError') throw e;
+        rel = await fromList();
+      }
     }
     const a = C.pickAsset(rel, E.source.asset);
     if (!a) throw new Error(`Pas d'archive Windows dans la dernière version de ${E.name} : installe-le depuis ${E.site}`);
