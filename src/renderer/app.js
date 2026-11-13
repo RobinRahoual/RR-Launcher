@@ -110,9 +110,10 @@ function cardHTML(it) {
   const p = plat(it.id);
   const img = S.platImg[it.id];
   const inner = img ? `<img src="${platUrl(img)}" alt="${esc(p.name)}" />`
+    : it.id === 'pc' ? `<img src="assets/pc.svg" alt="PC" />`
     : S.platLogo[it.id] ? `<div class="c-fallback"><span class="c-logo" style="${logoCss(it.id)}" role="img" aria-label="${esc(p.name)}"></span></div>`
     : `<div class="c-fallback">${esc(p.short)}</div>`;
-  const mask = img ? `style="--mask:url('${platUrl(img)}')"` : '';
+  const mask = img ? `style="--mask:url('${platUrl(img)}')"` : it.id === 'pc' ? `style="--mask:url('assets/pc.svg')"` : '';
   return `<div class="c-glow"></div><div class="c-floor"></div><div class="c-img">${inner}</div><div class="sweep" ${mask}></div><div class="c-count">${it.n}</div><div class="c-name">${esc(p.name)}</div>`;
 }
 function syncCards() {
