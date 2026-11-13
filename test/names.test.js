@@ -47,3 +47,17 @@ test('navigation native : stick → croix, sans Guide ni Share', () => {
   put(2048, 3600);
   assert.strictEqual(hidExtras('switchpro', sp), BTN.SUP);
 });
+
+test('logo sur plaque de couleur : la plaque disparaît, le motif reste ; un texte seul est intact', () => {
+  const { keyPlate } = require('../src/logomask');
+  const W = 100, H = 100;
+  const img = (fill) => { const b = Buffer.alloc(W * H * 4); for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fill(b, (y * W + x) * 4, x, y); return b; };
+  // Carré rouge plein avec un motif blanc au centre (logo Switch)
+  const plate = img((b, i, x, y) => { const w = x > 30 && x < 70 && y > 30 && y < 70; b[i] = w ? 255 : 18; b[i + 1] = w ? 255 : 0; b[i + 2] = w ? 255 : 230; b[i + 3] = 255; });
+  assert.strictEqual(keyPlate(plate, W, H), true);
+  assert.strictEqual(plate[(5 * W + 5) * 4 + 3], 0);
+  assert.strictEqual(plate[(50 * W + 50) * 4 + 3], 255);
+  // Mot-symbole noir sur fond transparent : rien à faire
+  const text = img((b, i, x, y) => { const on = (x % 10 < 4) && y > 40 && y < 60; b[i + 3] = on ? 255 : 0; });
+  assert.strictEqual(keyPlate(text, W, H), false);
+});

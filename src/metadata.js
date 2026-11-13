@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { net, nativeImage, app } = require('electron');
 const names = require('./names');
+const { keyPlate } = require('./logomask');
 
 let logFile = null;
 function setLogFile(f) { logFile = f; }
@@ -388,6 +389,9 @@ function removeWhiteBackground(file, outFile) {
       if (n) bmp[i + 3] = Math.round(255 * (1 - n * 0.2));
     }
   }
+  // Logo sur une plaque de couleur (Switch : carré rouge, texte et icône blancs) : on retire la plaque,
+  // sinon le masque CSS n'affiche qu'un rectangle plein
+  if (keyPlate(bmp, width, height)) log(`logo : plaque de couleur retirée (${path.basename(outFile)})`);
   const outImg = nativeImage.createFromBitmap(bmp, { width, height });
   fs.writeFileSync(outFile, outImg.toPNG());
   return true;
@@ -417,7 +421,7 @@ async function platformImage(wikiTitle, dir, id, opts = { minWidth: 1280 }) {
 // ---------- Logo officiel de la console ----------
 // Les logos ne sont jamais dans le dépôt : ils sont téléchargés depuis Wikimedia Commons sur le PC
 // de l'utilisateur (rendu PNG du SVG par Wikimedia), puis mis en cache dans media/_platforms.
-const LOGOS_VERSION = 2; // à incrémenter quand la liste platforms[].logos ou l'algorithme change
+const LOGOS_VERSION = 3; // à incrémenter quand la liste platforms[].logos ou l'algorithme change
 const LOGO_WIDTH = 900;
 const COMMONS_API = 'https://commons.wikimedia.org/w/api.php';
 const LOGO_UA = 'RRLauncher/1.0 (https://github.com/RobinRahoual/RR-Launcher; logos de consoles) Electron';
