@@ -8,20 +8,26 @@
   <title>RR Launcher</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-<body>
-  <!-- Fond : image du jeu assombrie -->
+<body data-view="home">
+  <!-- Fond -->
   <div id="bg" aria-hidden="true">
     <div class="bg-layer" id="bgA"></div>
     <div class="bg-layer" id="bgB"></div>
+    <div class="bg-tint" id="bgTint"></div>
     <canvas id="motes"></canvas>
     <div class="bg-shade"></div>
   </div>
 
   <header class="topbar">
-    <div class="brand">
-      <div class="brand-title"><span class="brand-rr">RR</span> LAUNCHER</div>
-      <div class="brand-sub" id="brandSub">PC · 0 JEUX</div>
-      <div class="brand-sub dim" id="brandSort"></div>
+    <div class="brand" id="brand">
+      <button class="back-btn" id="btnBack" data-action="home" title="Retour aux consoles" hidden>
+        <svg viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"/></svg>
+      </button>
+      <div>
+        <div class="brand-title" id="brandTitle"><span class="brand-rr">RR</span> LAUNCHER</div>
+        <div class="brand-sub" id="brandSub"></div>
+        <div class="brand-sub dim" id="brandSort"></div>
+      </div>
     </div>
 
     <nav class="tabs" id="tabs" role="tablist" aria-label="Catégories"></nav>
@@ -30,33 +36,50 @@
       <div class="status-row">
         <span class="input-ind" id="inputInd" title="Périphérique actif"></span>
         <span class="clock"><span id="date"></span> <strong id="time"></strong></span>
+        <div class="win-ctrl">
+          <button class="icon-btn" data-action="minimize" title="Réduire (le launcher reste en arrière-plan)" aria-label="Réduire">
+            <svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
+          </button>
+          <button class="icon-btn quit" data-action="quitAsk" title="Quitter RR Launcher" aria-label="Quitter">
+            <svg viewBox="0 0 24 24"><path d="M12 3v9"/><path d="M6.4 6.4a8 8 0 1 0 11.2 0"/></svg>
+          </button>
+        </div>
       </div>
-      <div class="counter" id="counter">0 / 0</div>
-      <button class="chip-btn update-chip" id="btnUpdate" data-action="installUpdate" hidden></button>
-      <button class="chip-btn" id="btnMenu" data-action="menu"><span class="key-mini" data-glyph="menu"></span>Menu</button>
+      <div class="counter" id="counter"></div>
+      <div class="status-row">
+        <button class="chip-btn update-chip" id="btnUpdate" data-action="installUpdate" hidden></button>
+        <button class="chip-btn" id="btnMenu" data-action="menu"><span class="key-mini" data-glyph="menu"></span>Menu</button>
+      </div>
     </div>
   </header>
 
-  <main id="stage" aria-live="polite">
-    <div id="carousel" class="carousel"></div>
-
-    <div id="empty" class="empty" hidden>
-      <div class="empty-box" aria-hidden="true">
-        <div class="empty-plus"></div>
-      </div>
-      <h2>Ta bibliothèque est vide</h2>
-      <p>Ajoute un jeu en choisissant son fichier <b>.exe</b>.<br/>Jaquette, logo, fond et description sont récupérés automatiquement.</p>
-      <button class="btn primary" data-action="add" data-nav>
-        <span class="key-mini" data-glyph="add"></span> Ajouter un jeu
-      </button>
-      <p class="dim small">Astuce : tu peux aussi glisser-déposer un .exe sur la fenêtre.</p>
-    </div>
+  <!-- Accueil : choix de la console -->
+  <main id="home" class="view">
+    <div id="consoles" class="consoles"></div>
+    <section class="caption home-caption" id="homeCaption">
+      <h1 id="homeTitle"></h1>
+      <p id="homeSub"></p>
+    </section>
   </main>
 
+  <!-- Jeux d'une console -->
+  <main id="stage" class="view" aria-live="polite">
+    <div id="carousel" class="carousel"></div>
+  </main>
   <section class="caption" id="caption">
     <h1 id="title"></h1>
     <p id="subtitle"></p>
   </section>
+
+  <div id="empty" class="empty" hidden>
+    <div class="empty-box" aria-hidden="true"><div class="empty-plus"></div></div>
+    <h2>Ta bibliothèque est vide</h2>
+    <p>Ajoute un jeu, une ROM, ou scanne ton PC pour tout importer d’un coup.<br/>Jaquettes, logos, fonds et descriptions sont récupérés automatiquement.</p>
+    <div class="empty-actions">
+      <button class="btn primary" data-action="scanLaunchers" data-nav>Importer Steam, Epic & GOG</button>
+      <button class="btn" data-action="addHub" data-nav>Autres options…</button>
+    </div>
+  </div>
 
   <footer class="hints" id="hints" aria-label="Commandes"></footer>
 
@@ -65,19 +88,20 @@
     <div class="details-bg" id="dBg"></div>
     <div class="details">
       <div class="details-main">
+        <div class="d-platform" id="dPlatform"></div>
         <div class="d-logo-wrap"><img id="dLogo" alt="" hidden /><h2 id="dTitle"></h2></div>
         <div class="d-meta" id="dMeta"></div>
         <div class="d-tags" id="dTags"></div>
         <p class="d-desc" id="dDesc"></p>
         <div class="d-stats" id="dStats"></div>
         <div class="d-actions" id="dActions">
-          <button class="btn primary" data-act="play" data-nav><span class="key-mini" data-glyph="a"></span>Jouer</button>
+          <button class="btn primary" data-act="play" data-nav><span class="key-mini" data-glyph="a"></span><span>Jouer</span></button>
           <button class="btn" data-act="fav" data-nav id="dFav">Favori</button>
           <button class="btn" data-act="rematch" data-nav>Corriger le jeu</button>
           <button class="btn" data-act="images" data-nav>Images</button>
           <button class="btn" data-act="edit" data-nav>Modifier</button>
           <button class="btn" data-act="folder" data-nav>Dossier</button>
-          <button class="btn danger" data-act="remove" data-nav>Supprimer</button>
+          <button class="btn danger" data-act="remove" data-nav>Retirer</button>
         </div>
         <div class="d-sub" id="dSub" hidden></div>
       </div>
@@ -85,30 +109,88 @@
     </div>
   </div>
 
-  <!-- Ajout / correction -->
+  <!-- Hub d'ajout -->
+  <div class="overlay center" id="addHub" hidden role="dialog" aria-modal="true" aria-labelledby="hubTitle">
+    <div class="panel wide">
+      <h2 id="hubTitle">Ajouter des jeux</h2>
+      <div class="hub-grid">
+        <button class="hub-card" data-action="addOne" data-nav>
+          <span class="hub-ico"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span>
+          <strong>Un jeu ou une ROM</strong><span class="dim">Choisir un .exe, une ROM ou un EBOOT.BIN</span>
+        </button>
+        <button class="hub-card" data-action="scanLaunchers" data-nav>
+          <span class="hub-ico"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg></span>
+          <strong>Steam, Epic & GOG</strong><span class="dim">Importer les jeux installés</span>
+        </button>
+        <button class="hub-card" data-action="scanFolders" data-nav>
+          <span class="hub-ico"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><circle cx="12" cy="13" r="2.5"/><path d="m14 15 2 2"/></svg></span>
+          <strong>Scanner des dossiers</strong><span class="dim">Jeux PC, ROMs, dumps PS3, émulateurs</span>
+        </button>
+        <button class="hub-card" data-action="scanPc" data-nav>
+          <span class="hub-ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+          <strong>Scanner tout le PC</strong><span class="dim">Tous les disques (plus long)</span>
+        </button>
+      </div>
+      <div class="panel-actions"><button class="btn" data-action="close" data-nav>Fermer</button></div>
+    </div>
+  </div>
+
+  <!-- Scan -->
+  <div class="overlay center" id="scan" hidden role="dialog" aria-modal="true" aria-labelledby="scanTitle">
+    <div class="panel xwide">
+      <h2 id="scanTitle">Scan</h2>
+      <div id="scanRunning">
+        <div class="scan-anim"><div class="spinner big"></div></div>
+        <p class="scan-count"><b id="scanFound">0</b> trouvé(s) · <span id="scanDirs">0</span> dossiers</p>
+        <p class="scan-path dim" id="scanPath"></p>
+        <div class="panel-actions center"><button class="btn" id="scanStop" data-nav>Arrêter</button></div>
+      </div>
+      <div id="scanResults" hidden>
+        <div class="scan-head">
+          <p id="scanSummary"></p>
+          <div class="scan-tools">
+            <button class="btn small" id="scanAll" data-nav>Tout cocher</button>
+            <button class="btn small" id="scanNone" data-nav>Tout décocher</button>
+          </div>
+        </div>
+        <div class="scan-emus" id="scanEmus" hidden></div>
+        <div class="scan-list" id="scanList"></div>
+        <div class="panel-actions">
+          <button class="btn" data-action="close" data-nav>Annuler</button>
+          <button class="btn primary" id="scanImport" data-nav>Ajouter</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ajout / correction d'un jeu -->
   <div class="overlay center" id="addDialog" hidden role="dialog" aria-modal="true" aria-labelledby="addTitle">
     <div class="panel wide">
       <h2 id="addTitle">Ajouter un jeu</h2>
       <div class="add-step" id="addStep1">
         <button class="drop-target" data-action="pick" data-nav>
-          <span class="drop-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24"><path d="M12 15V3m0 0L7 8m5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></svg>
-          </span>
-          <strong>Choisir le fichier .exe du jeu</strong>
-          <span class="dim">ou glisse-le ici · .exe, .lnk, .url, .bat</span>
+          <span class="drop-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 15V3m0 0L7 8m5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4" /></svg></span>
+          <strong>Choisir le jeu (.exe) ou la ROM</strong>
+          <span class="dim">ou glisse-le ici · .exe, .lnk, ROMs, ISO, EBOOT.BIN…</span>
         </button>
       </div>
       <div class="add-step" id="addStep2" hidden>
         <div class="field">
-          <label for="addPath">Exécutable</label>
+          <label>Fichier</label>
           <div class="path-row"><code id="addPath"></code><button class="btn small" data-action="pick" data-nav id="addRepick">Changer</button></div>
         </div>
-        <div class="field">
-          <label for="addName">Nom du jeu <span class="dim">(sert à la recherche)</span></label>
-          <input id="addName" type="text" autocomplete="off" spellcheck="false" data-nav />
+        <div class="field-row">
+          <div class="field grow">
+            <label for="addName">Nom du jeu <span class="dim">(sert à la recherche)</span></label>
+            <input id="addName" type="text" autocomplete="off" spellcheck="false" data-nav />
+          </div>
+          <div class="field">
+            <label for="addPlatform">Console</label>
+            <select id="addPlatform" data-nav></select>
+          </div>
         </div>
         <div class="field">
-          <label>Correspondance trouvée <span class="dim" id="addStatus"></span></label>
+          <label>Correspondance <span class="dim" id="addStatus"></span></label>
           <div class="results" id="addResults" role="listbox" aria-label="Résultats"></div>
         </div>
         <div class="panel-actions">
@@ -123,57 +205,89 @@
   <div class="overlay center" id="menu" hidden role="dialog" aria-modal="true" aria-label="Menu">
     <div class="panel menu-panel">
       <h2>Menu</h2>
-      <button class="menu-item" data-action="add" data-nav>Ajouter un jeu <span class="dim">N</span></button>
+      <button class="menu-item" data-action="home" data-nav>Choisir une console <span class="dim">Échap</span></button>
+      <button class="menu-item" data-action="addHub" data-nav>Ajouter des jeux <span class="dim">N</span></button>
       <button class="menu-item" data-action="settings" data-nav>Réglages <span class="dim">S</span></button>
       <button class="menu-item" data-action="installUpdate" data-nav id="menuInstall" hidden>Installer la mise à jour et redémarrer</button>
       <button class="menu-item" data-action="checkUpdate" data-nav>Rechercher les mises à jour <span class="dim" id="menuVersion"></span></button>
       <button class="menu-item" data-action="fullscreen" data-nav>Plein écran <span class="dim">F11</span></button>
-      <button class="menu-item" data-action="minimize" data-nav>Réduire la fenêtre</button>
-      <button class="menu-item danger" data-action="quit" data-nav>Quitter</button>
+      <button class="menu-item" data-action="minimize" data-nav>Réduire en arrière-plan <span class="dim">Ctrl+Alt+L pour revenir</span></button>
+      <button class="menu-item danger" data-action="quit" data-nav>Quitter RR Launcher</button>
     </div>
   </div>
 
   <!-- Réglages -->
   <div class="overlay center" id="settings" hidden role="dialog" aria-modal="true" aria-labelledby="setTitle">
-    <div class="panel wide">
+    <div class="panel xwide">
       <h2 id="setTitle">Réglages</h2>
-      <div class="setting">
-        <div><strong>Couleur des boîtes</strong><span class="dim">Le boîtier de chaque jeu</span></div>
-        <div class="seg" data-setting="caseStyle">
-          <button data-value="red" data-nav>Rouge</button><button data-value="black" data-nav>Noir</button><button data-value="blue" data-nav>Bleu</button><button data-value="auto" data-nav>Auto</button>
+      <div class="set-tabs" role="tablist">
+        <button class="set-tab" data-settab="general" aria-selected="true" data-nav>Général</button>
+        <button class="set-tab" data-settab="emus" data-nav>Consoles & émulateurs</button>
+        <button class="set-tab" data-settab="data" data-nav>Métadonnées</button>
+      </div>
+
+      <section class="set-page" data-page="general">
+        <div class="setting">
+          <div><strong>Masquer le launcher pendant le jeu</strong><span class="dim">Il revient tout seul quand tu quittes le jeu</span></div>
+          <button class="toggle" data-toggle="hideOnLaunch" role="switch" data-nav></button>
         </div>
-      </div>
-      <div class="setting">
-        <div><strong>Tri</strong><span class="dim">Ordre dans le carrousel</span></div>
-        <div class="seg" data-setting="sort">
-          <button data-value="recent" data-nav>Récents</button><button data-value="name" data-nav>Nom</button><button data-value="added" data-nav>Ajout</button><button data-value="playtime" data-nav>Temps</button>
+        <div class="setting">
+          <div><strong>Rester en arrière-plan à la fermeture</strong><span class="dim">La croix / Alt+F4 le range dans la zone de notification</span></div>
+          <button class="toggle" data-toggle="closeToTray" role="switch" data-nav></button>
         </div>
-      </div>
-      <div class="setting">
-        <div><strong>Plein écran au démarrage</strong></div>
-        <button class="toggle" data-toggle="fullscreen" role="switch" data-nav></button>
-      </div>
-      <div class="setting">
-        <div><strong>Réduire le launcher pendant le jeu</strong><span class="dim">Il revient quand le jeu se ferme</span></div>
-        <button class="toggle" data-toggle="minimizeOnLaunch" role="switch" data-nav></button>
-      </div>
-      <div class="setting">
-        <div><strong>Sons d’interface</strong></div>
-        <button class="toggle" data-toggle="sounds" role="switch" data-nav></button>
-      </div>
-      <div class="setting col">
-        <div><strong>Clé API SteamGridDB</strong> <span class="dim">(optionnelle)</span>
-          <span class="dim">Plus de jaquettes et logos, y compris pour les jeux hors Steam.
-            <a href="#" data-link="https://www.steamgriddb.com/profile/preferences/api">Obtenir une clé gratuite</a></span></div>
-        <input id="sgdbKey" type="password" placeholder="Colle ta clé ici" autocomplete="off" data-nav />
-      </div>
+        <div class="setting">
+          <div><strong>Lancer au démarrage de Windows</strong><span class="dim">Démarre discrètement en arrière-plan</span></div>
+          <button class="toggle" data-toggle="openAtLogin" role="switch" data-nav></button>
+        </div>
+        <div class="setting">
+          <div><strong>Plein écran</strong></div>
+          <button class="toggle" data-toggle="fullscreen" role="switch" data-nav></button>
+        </div>
+        <div class="setting">
+          <div><strong>Sons d’interface</strong></div>
+          <div class="row-gap">
+            <div class="seg" data-setting="volume">
+              <button data-value="0.35" data-nav>Doux</button><button data-value="0.7" data-nav>Normal</button><button data-value="1" data-nav>Fort</button>
+            </div>
+            <button class="toggle" data-toggle="sounds" role="switch" data-nav></button>
+          </div>
+        </div>
+        <div class="setting">
+          <div><strong>Boîtes des jeux PC</strong></div>
+          <div class="seg" data-setting="caseStyle">
+            <button data-value="red" data-nav>Rouge</button><button data-value="black" data-nav>Noir</button><button data-value="blue" data-nav>Bleu</button><button data-value="auto" data-nav>Auto</button>
+          </div>
+        </div>
+        <div class="setting">
+          <div><strong>Tri</strong></div>
+          <div class="seg" data-setting="sort">
+            <button data-value="recent" data-nav>Récents</button><button data-value="name" data-nav>Nom</button><button data-value="added" data-nav>Ajout</button><button data-value="playtime" data-nav>Temps</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="set-page" data-page="emus" hidden>
+        <p class="dim small">Choisis l’exécutable de chaque émulateur. Les arguments sont préremplis pour les émulateurs connus ; <code>{rom}</code> est remplacé par le chemin du jeu. Un scan de dossier détecte aussi les émulateurs automatiquement.</p>
+        <div class="emu-list" id="emuList"></div>
+      </section>
+
+      <section class="set-page" data-page="data" hidden>
+        <div class="setting col">
+          <div><strong>Clé API SteamGridDB</strong> <span class="dim">(optionnelle, gratuite)</span>
+            <span class="dim">Plus de jaquettes, fonds et logos — y compris pour les jeux console et hors Steam.
+              <a href="#" data-link="https://www.steamgriddb.com/profile/preferences/api">Obtenir une clé</a></span></div>
+          <input id="sgdbKey" type="password" placeholder="Colle ta clé ici" autocomplete="off" data-nav />
+        </div>
+        <p class="dim small">Sources : Steam (jeux PC), libretro-thumbnails (ROMs nommées No-Intro/Redump), SteamGridDB, Wikipédia.</p>
+      </section>
+
       <div class="panel-actions">
         <button class="btn primary" data-action="close" data-nav>Terminé</button>
       </div>
     </div>
   </div>
 
-  <!-- Modification / confirmation -->
+  <!-- Invite générique -->
   <div class="overlay center" id="prompt" hidden role="dialog" aria-modal="true" aria-labelledby="pTitle">
     <div class="panel">
       <h2 id="pTitle"></h2>
@@ -182,9 +296,11 @@
     </div>
   </div>
 
-  <div class="dropzone" id="dropzone" hidden><div>Dépose l’exécutable du jeu</div></div>
+  <div class="dropzone" id="dropzone" hidden><div>Dépose le jeu ou la ROM</div></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="launch-flash" id="launchFlash" aria-hidden="true"></div>
 
+  <script src="sounds.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

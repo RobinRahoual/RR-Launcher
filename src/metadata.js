@@ -197,8 +197,80 @@ function dominantColor(file) {
   }
 }
 
+// ---------- Image de console (Wikipédia / Wikimedia Commons) ----------
+function removeWhiteBackground(file, outFile) {
+  const img = nativeImage.createFromPath(file);
+  if (img.isEmpty()) return false;
+  let { width, height } = img.getSize();
+  let im = img;
+  if (width > 1200) { im = img.resize({ width: 1200, quality: 'best' }); ({ width, height } = im.getSize()); }
+  const bmp = Buffer.from(im.toBitmap()); // BGRA
+  const idx = (x, y) => (y * width + x) * 4;
+  const isBg = (i) => bmp[i] > 232 && bmp[i + 1] > 232 && bmp[i + 2] > 232;
+  // Fond blanc ? (coins)
+  const corners = [idx(2, 2), idx(width - 3, 2), idx(2, height - 3), idx(width - 3, height - 3)];
+  const alreadyAlpha = corners.every((i) => bmp[i + 3] < 20);
+  if (!alreadyAlpha && corners.filter(isBg).length >= 3) {
+    const seen = new Uint8Array(width * height);
+    const stack = [];
+    for (let x = 0; x < width; x++) stack.push(x, 0, x, height - 1);
+    for (let y = 0; y < height; y++) stack.push(0, y, width - 1, y);
+    while (stack.length) {
+      const y = stack.pop(), x = stack.pop();
+      if (x < 0 || y < 0 || x >= width || y >= height) continue;
+      const p = y * width + x;
+      if (seen[p]) continue;
+      seen[p] = 1;
+      const i = p * 4;
+      if (!isBg(i)) continue;
+      bmp[i + 3] = 0;
+      stack.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+    }
+    // Adoucit le contour
+    for (let y = 1; y < height - 1; y++) for (let x = 1; x < width - 1; x++) {
+      const i = idx(x, y);
+      if (bmp[i + 3] === 0) continue;
+      const n = [idx(x + 1, y), idx(x - 1, y), idx(x, y + 1), idx(x, y - 1)].filter((j) => bmp[j + 3] === 0).length;
+      if (n) bmp[i + 3] = Math.round(255 * (1 - n * 0.2));
+    }
+  }
+  const outImg = nativeImage.createFromBitmap(bmp, { width, height });
+  fs.writeFileSync(outFile, outImg.toPNG());
+  return true;
+}
+
+async function platformImage(wikiTitle, dir, id) {
+  const media = await getJson(`https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(wikiTitle)}`);
+  const items = (media?.items || []).filter((it) => it.type === 'image' && it.srcset?.length && !/\.svg/i.test(it.title || '')
+    && !/logo|wordmark|icon|map|chart|sales|controller|manette|comparison|motherboard|screenshot|diagram|box art/i.test(it.title || ''));
+  for (const it of items.slice(0, 4)) {
+    const best = [...it.srcset].sort((a, b) => parseFloat(b.scale) - parseFloat(a.scale))[0];
+    const url = best.src.startsWith('//') ? 'https:' + best.src : best.src;
+    const raw = await downloadFirst([url], dir, `${id}-raw`);
+    if (!raw) continue;
+    const out = `${id}.png`;
+    try {
+      if (removeWhiteBackground(path.join(dir, raw), path.join(dir, out))) { fs.rmSync(path.join(dir, raw), { force: true }); return out; }
+    } catch (e) { log(`platformImage ${id}: ${e.message}`); }
+    return raw;
+  }
+  return null;
+}
+
 // ---------- API publique ----------
-async function search(term, settings) {
+async function wikiSearch(term, platformName) {
+  const q = `${term} ${platformName || ''} video game`.trim();
+  const json = await getJson(`https://en.wikipedia.org/w/api.php?action=query&list=search&format=json&srlimit=6&srsearch=${encodeURIComponent(q)}`);
+  return (json?.query?.search || []).map((r) => ({ source: 'wiki', title: r.title, name: r.title.replace(/\s*\((video game|jeu vidéo)\)$/i, '') }));
+}
+
+async function search(term, settings, platform) {
+  if (platform && platform.id !== 'pc') {
+    const tasks = [wikiSearch(term, platform.name).catch(() => [])];
+    if (settings.sgdbKey) tasks.push(sgdbSearch(term, settings.sgdbKey).catch(() => []));
+    const [wiki, sg = []] = await Promise.all(tasks);
+    return [...sg.slice(0, 5), ...wiki.slice(0, 6)];
+  }
   const tasks = [steamSearch(term).catch(() => [])];
   if (settings.sgdbKey) tasks.push(sgdbSearch(term, settings.sgdbKey).catch(() => []));
   const [steam, sg = []] = await Promise.all(tasks);
@@ -215,7 +287,7 @@ async function search(term, settings) {
  * @param {object} match  { source, appid?, sgdbId?, name }
  * @param {string} dir    dossier média du jeu
  */
-async function fetchAll(match, dir, settings, progress = () => {}) {
+async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   const out = { name: match.name, media: {}, screenshots: [] };
   let steam = null;
   let urls = { cover: [], hero: [], logo: [], header: [] };
@@ -230,6 +302,37 @@ async function fetchAll(match, dir, settings, progress = () => {}) {
     urls.logo.push(...(assets.logo || []), ...steamLegacy(match.appid, ['logo.png']));
     urls.header.push(...(assets.header || []), steam?.header_image, ...steamLegacy(match.appid, ['header.jpg']));
     if (steam?.background_raw) urls.hero.push(steam.background_raw);
+  }
+
+  // ---- Jeux console (ROM, dump, portage recompilé) ----
+  const plat = ctx.platform;
+  let wikiCover = null;
+  if (plat && plat.id !== 'pc') {
+    if (plat.libretro && ctx.romPath) {
+      progress('Jaquette (libretro)…');
+      const stem = path.basename(ctx.romPath).replace(/\.[^.]+$/, '');
+      const variants = [...new Set([stem, match.name, `${match.name} (USA)`, `${match.name} (Europe)`, `${match.name} (World)`, `${match.name} (France)`])]
+        .map((v) => v.replace(/[&*\/:`<>?\\|"]/g, '_'));
+      const base = `https://raw.githubusercontent.com/libretro-thumbnails/${plat.libretro}/master`;
+      for (const v of variants) {
+        urls.cover.push(`${base}/Named_Boxarts/${encodeURIComponent(v)}.png`);
+        urls.hero.push(`${base}/Named_Snaps/${encodeURIComponent(v)}.png`, `${base}/Named_Titles/${encodeURIComponent(v)}.png`);
+      }
+    }
+    try {
+      progress('Wikipédia…');
+      const title = match.source === 'wiki' ? match.title : (await wikiSearch(match.name, plat.name))[0]?.title;
+      if (title) {
+        const en = await getJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
+        if (en?.originalimage?.source) wikiCover = en.originalimage.source;
+        if (match.source === 'wiki') out.name = (en?.title || match.name).replace(/\s*\((video game|jeu vidéo)\)$/i, '');
+        const year = (en?.description || '').match(/(19|20)\d{2}/);
+        if (year) out.releaseDate = year[0];
+        out.description = en?.extract || '';
+      }
+      const fr = await wikiSummary(out.name);
+      if (fr) out.description = fr;
+    } catch { /* hors ligne */ }
   }
 
   if (steam) {
@@ -261,6 +364,7 @@ async function fetchAll(match, dir, settings, progress = () => {}) {
     } catch { /* ignore */ }
   }
 
+  if (wikiCover) urls.cover.push(wikiCover);
   progress('Téléchargement des visuels…');
   const [cover, hero, logo, header] = await Promise.all([
     downloadFirst(urls.cover, dir, 'cover'),
@@ -276,7 +380,7 @@ async function fetchAll(match, dir, settings, progress = () => {}) {
   }
   delete out.screenshotUrls;
 
-  if (!out.description) {
+  if (!out.description && (!plat || plat.id === 'pc')) {
     progress('Description…');
     out.description = await wikiSummary(out.name);
   }
@@ -287,4 +391,4 @@ async function fetchAll(match, dir, settings, progress = () => {}) {
   return out;
 }
 
-module.exports = { search, fetchAll, dominantColor, normalize, setLogFile, log };
+module.exports = { search, fetchAll, dominantColor, normalize, setLogFile, log, platformImage, downloadFirst };

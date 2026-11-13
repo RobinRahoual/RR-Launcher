@@ -1,20 +1,32 @@
 # RR Launcher
 
-Launcher pour jeux PC, façon console : carrousel horizontal de boîtes 3D, fond assombri tiré du jeu, navigation manette / clavier / souris.
+Launcher façon console pour jeux PC et émulation : accueil avec choix de la console, carrousel horizontal de boîtes 3D au format de chaque support, fond assombri tiré du jeu, sons d'interface, navigation manette / clavier / souris.
 
 ## Installation
 
 Télécharge `RR-Launcher-Setup-x.y.z.exe` depuis la [dernière release](https://github.com/RobinRahoual/RR-Launcher/releases/latest) et lance-le. L'installateur n'est pas signé : si Windows SmartScreen s'affiche, clique sur **Informations complémentaires → Exécuter quand même**.
 
+## Consoles & émulation
+
+L'accueil affiche une carte par console présente dans ta bibliothèque (photo récupérée sur Wikipédia, remplaçable dans **Réglages → Consoles & émulateurs → Image**). Les boîtes reprennent le format de chaque support : DVD (PC, PS2, Xbox, Wii…), Blu-ray (PS3), petits boîtiers (Switch, PSP, DS, GameCube), boîtier CD (PlayStation, Dreamcast) ou carton (NES, SNES, N64, Game Boy).
+
+Consoles gérées : Switch, Wii U, Wii, GameCube, N64, SNES, NES, Game Boy / Color, GBA, DS, 3DS, PlayStation 1/2/3, PSP, PS Vita, Xbox, Xbox 360, Dreamcast, Mega Drive.
+
+Pour chaque console, choisis l'exécutable de l'émulateur (Réglages → Consoles & émulateurs, ou au premier lancement d'un jeu). Les arguments sont préremplis pour RPCS3, PCSX2, DuckStation, Dolphin, Cemu, Ryujinx, Eden/Citron, PPSSPP, xemu, Xenia, Azahar/Citra, melonDS, mGBA, Mesen, Snes9x, Project64, simple64, ares, Flycast, BlastEm, Vita3K et RetroArch ; `{rom}` est remplacé par le chemin du jeu.
+
+Les portages recompilés (.exe) peuvent être rangés sous leur console d'origine : ajoute l'exe et choisis la console.
+
 ## Ajouter un jeu
 
-1. `N` (clavier), bouton **View/Share** (manette) ou **Menu → Ajouter un jeu**. Tu peux aussi glisser-déposer le `.exe` sur la fenêtre.
-2. Choisis l'exécutable (`.exe`, `.lnk`, `.url`, `.bat`). Le nom du jeu est deviné depuis le fichier.
-3. Vérifie la correspondance proposée (Steam / SteamGridDB) puis **Ajouter**.
+`N` (clavier), bouton **View/Share** (manette) ou **Menu → Ajouter des jeux** :
+
+- **Un jeu ou une ROM** : `.exe`, `.lnk`, ROM, ISO/CHD/CUE, `EBOOT.BIN` (PS3)… ou glisser-déposer sur la fenêtre. La console est devinée d'après l'extension et le dossier (`PS2`, `GameCube`…).
+- **Steam, Epic & GOG** : importe tous les jeux installés (lancés via leur launcher).
+- **Scanner des dossiers** / **tout le PC** : trouve les jeux PC (un exe par dossier de jeu), les ROMs, les dumps PS3 (titre lu dans `PARAM.SFO`) et les émulateurs, qui sont configurés automatiquement. Tu coches ce que tu veux ajouter.
 
 Le launcher télécharge alors tout seul : jaquette, image de fond, logo, description, développeur, date, genres et captures d'écran.
 
-**Sources** : Steam (sans clé, en français) → SteamGridDB (clé gratuite optionnelle dans Réglages, utile pour les jeux hors Steam) → Wikipédia pour la description en dernier recours. Sans jaquette, une jaquette est générée à partir du fond et du logo.
+**Sources** : Steam (jeux PC, en français) ; libretro-thumbnails (ROMs nommées No-Intro/Redump) ; SteamGridDB (clé gratuite optionnelle, utile pour les consoles et les jeux hors Steam) ; Wikipédia (descriptions et jaquettes console). Sans jaquette, une jaquette est générée à partir du fond et du logo.
 
 Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer ? **Détails → Images**.
 
@@ -28,9 +40,13 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer ? **Dé
 | Retourner la boîte | Y / △ | Espace | |
 | Catégories | LB / RB | Tab, Q / E | Clic sur l'onglet |
 | Sauter de 5 jeux | LT / RT | Page ↑ / ↓ | |
-| Ajouter un jeu | View / Share | N | Menu |
+| Retour aux consoles | B / ○ | Échap | Flèche en haut à gauche |
+| Ajouter des jeux | View / Share | N | Menu |
 | Favori | | F | Détails |
-| Menu | Menu / Options | Échap | Bouton Menu |
+| Menu | Menu / Options | M (Échap sur l'accueil) | Bouton Menu |
+| Réduire en arrière-plan | Menu → Réduire | | Bouton — en haut à droite |
+| Quitter | Menu → Quitter | Ctrl+Q | Bouton ⏻ en haut à droite |
+| Revenir au launcher | | Ctrl+Alt+L (partout) | Icône près de l'horloge |
 | Plein écran | | F11 | Menu |
 
 ## Mises à jour
@@ -38,6 +54,10 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer ? **Dé
 Le launcher vérifie les [Releases GitHub](https://github.com/RobinRahoual/RR-Launcher/releases) au démarrage puis toutes les 4 h, télécharge la nouvelle version en arrière-plan et affiche **« Mise à jour X · Redémarrer »** en haut à droite. Sinon elle s'installe à la fermeture. Vérification manuelle : **Menu → Rechercher les mises à jour**.
 
 **Publier une version** : augmenter `version` dans `package.json` et pousser sur `main`. Le workflow `.github/workflows/release.yml` compile l'installateur sur Windows et crée la release `vX.Y.Z` (avec `latest.yml`, indispensable aux mises à jour).
+
+## Arrière-plan
+
+Le launcher reste ouvert dans la zone de notification (près de l'horloge Windows). Quand tu lances un jeu, il se masque ; quand tu quittes le jeu, il revient au premier plan pour enchaîner sur un autre. Pour les jeux Steam/Epic et ceux qui passent par un petit launcher, la fin de partie est détectée en surveillant les processus du dossier du jeu. Option « Lancer au démarrage de Windows » dans les Réglages.
 
 ## Données
 
