@@ -4,12 +4,12 @@
 :root {
   /* Points d'accroche partagés : HOME et GAMES composent leur écran entre ces deux barres */
   --top-h: clamp(64px, 10.4vh, 190px);   /* 112 px en 1080p (réf. Switch : barre du haut ≈ 16 %) */
-  --bottom-h: clamp(56px, 10vh, 180px);   /* 108 px en 1080p (réf. Switch / ES-DE : ≈ 10 %) */
+  --bottom-h: clamp(52px, 7.8vh, 150px);  /* 84 px en 1080p (écran jeux / overlays ; l'accueil garde sa bande de 108 px, voir plus bas) */
 
   --shell-x: clamp(24px, 2.5vw, 80px);    /* marge latérale des barres */
   --sys: clamp(40px, 5.6vh, 100px);       /* bouton rond système : 60 px en 1080p (réf. Switch) */
-  --glyph: clamp(22px, 2.9vh, 52px);      /* glyphe rond de la barre du bas : 31 px en 1080p */
-  --bar-text: clamp(15px, 2.45vh, 44px);  /* libellés de la barre du bas : 26 px en 1080p */
+  --glyph: clamp(20px, 2.3vh, 42px);      /* glyphe rond de la barre du bas : 25 px en 1080p */
+  --bar-text: clamp(14px, 1.8vh, 34px);   /* libellés de la barre du bas : 19 px en 1080p */
   --light-bar: #f4f4f6;
   --light-ink: #3a3a3a;
 }
@@ -223,7 +223,7 @@ body[data-view="home"]:not(.has-overlay) .hints .glyph.pill { color: #fff; backg
 }
 .hint-list { gap: calc(var(--glyph) * 1.05); }
 .hint { gap: calc(var(--glyph) * .32); padding: 4px calc(var(--glyph) * .2); font-weight: 500; letter-spacing: .01em; color: var(--fg); }
-.foot-info { font-size: clamp(16px, 2.5vh, 44px); font-weight: 500; letter-spacing: .03em; text-transform: none; color: var(--fg); }
+.foot-info { font-size: clamp(14px, 1.8vh, 34px); font-weight: 500; letter-spacing: .03em; text-transform: none; color: var(--fg); }
 /* Glyphes ronds pleins (réf. Switch : rond clair, lettre sombre) — monochromes, couleurs du thème */
 .hints .glyph, .hints .glyph.round, .hints .glyph.pill, .hints .glyph.ps {
   height: var(--glyph); min-width: var(--glyph); border: 0; border-radius: 999px;
@@ -266,6 +266,12 @@ body[data-view="home"]:not(.has-overlay) .hints .glyph,
 body[data-view="home"]:not(.has-overlay) .hints .glyph.round,
 body[data-view="home"]:not(.has-overlay) .hints .glyph.pill { color: var(--light-bar); background: var(--text-3); border: 0; }
 
+/* Accueil (sans overlay) : bande ES-DE d'origine, plus haute et plus lisible */
+body[data-view="home"]:not(.has-overlay) {
+  --bottom-h: clamp(56px, 10vh, 180px);
+  --glyph: clamp(22px, 2.9vh, 52px);
+}
+
 @media (max-width: 1100px) {
   .hint-list { gap: calc(var(--glyph) * .6); }
   body[data-view="home"]:not(.has-overlay) .foot-info { padding-left: 0; }
@@ -278,3 +284,6 @@ body[data-view="home"]:not(.has-overlay) .hints::before { height: calc(var(--bot
 /* LOOK : le texte d'info se tronque, jamais les commandes */
 .foot-info { flex: 1 1 auto; }
 .hint-list { flex: 0 0 auto; }
+
+/* Menu en jeu et animation d'ouverture : pas de compteur de bibliothèque à gauche */
+body.in-ingame .foot-info { visibility: hidden; }

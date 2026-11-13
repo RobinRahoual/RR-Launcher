@@ -1927,6 +1927,7 @@ function glyph(btn) {
 function renderHints() {
   const H = [];
   const h = (btns, label, act) => H.push({ btns, label, act });
+  document.body.classList.toggle('in-ingame', S.mode === 'ingame' || BO.kind === 'open'); // masque l'info de bibliothèque (menu en jeu / animation)
   if (BO.kind === 'open') { h(['b'], 'Annuler', 'boCancel'); h(['a'], 'Passer', 'boSkip'); } // BOXOPEN
   else if (S.mode === 'ingame') { // GUIDE : menu en jeu
     h(['b'], igPowerOpen() ? 'Retour' : 'Reprendre le jeu', 'igBack');
@@ -1989,7 +1990,7 @@ addEventListener('keydown', (e) => {
     if (BO.kind === 'open' && !e.repeat) { if (e.key === 'Enter' || e.key === ' ') boSkip(); else if (e.key === 'Escape' || e.key === 'Backspace') boCancel(); }
     return;
   }
-  if (BO.busy) boFinish();
+  if (BO.busy) { const closing = BO.kind === 'close'; boFinish(); if (closing && (e.key === 'Escape' || e.key === 'Backspace')) { e.preventDefault(); return; } } // BOXOPEN : Échap pendant la fermeture = terminer net
   if (S.topFocus >= 0 && SHELL_KEYS[e.key] && !e.ctrlKey && !e.altKey) { if (shellTopInput(SHELL_KEYS[e.key])) { e.preventDefault(); return; } } // SHELL : barre du haut
   else if (S.topFocus >= 0) shellTopInput(e.key === 'Tab' ? 'tab' : 'other'); // SHELL : autre touche → rend la main
   const inInput = !!e.target.matches?.('input, select');
@@ -2125,7 +2126,8 @@ function onPadBtn(btn) {
   if (shellSplashActive()) return endSplash(); // SHELL
   if (BO.kind === 'open') { if (btn === 'a') boSkip(); else if (btn === 'b') boCancel(); return; } // BOXOPEN
   if (BO.kind === 'cancel') return;
-  if (BO.busy) boFinish();
+  if (BO.busy) { const closing = BO.kind === 'close'; boFinish(); if (closing && btn === 'b') return; } // BOXOPEN : B pendant la fermeture = terminer, pas « retour à l'accueil »
+  if (S.mode === 'ingame') { if (btn === 'a') document.activeElement?.click?.(); else if (btn === 'b') igBack(); return; } // GUIDE : seuls A / B comptent dans le menu en jeu
   if (S.topFocus >= 0 && shellTopInput(btn === 'a' || btn === 'b' ? btn : 'other')) return; // SHELL : barre du haut
   if (S.mode === 'main' && !S.lib.games.length) {
     if (btn === 'a') { const el = document.activeElement; if (el?.matches?.('[data-nav]')) el.click(); else action('scanLaunchers'); }
@@ -2407,6 +2409,7 @@ function guidePress(info = {}) {
 
 async function openIngame(g) {
   IG.id = g.id;
+  if (BO.busy) boClear(); // BOXOPEN : une animation de boîte en cours ne doit pas rester par-dessus le menu en jeu
   if (S.mode !== 'ingame') closeAll();
   if (S.topFocus >= 0) shellLeaveTop(true);
   igRender(g);
