@@ -23,6 +23,7 @@ const MEDIA = path.join(DATA, 'media');
 const PLATFORM_MEDIA = path.join(MEDIA, '_platforms');
 const DEFAULT_SETTINGS = {
   sgdbKey: '',
+  tgdbKey: '',
   fullscreen: true,
   hideOnLaunch: true, // masquer le launcher pendant le jeu, le réafficher à la fin
   closeToTray: true, // la croix / Alt+F4 envoie le launcher dans la zone de notification
@@ -278,7 +279,8 @@ async function applyMetadata(game, match) {
     const info = await meta.fetchAll(match, tmp, store.data.settings, progress, { platform, romPath: game.romPath });
     const found = info.media.cover || info.media.hero || info.media.header || info.media.logo;
     if (found || !fs.existsSync(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true });
+      fs.rmSync(dir + '.keep', { recursive: true, force: true });
+      if (fs.existsSync(dir)) fs.renameSync(dir, dir + '.keep');
       if (fs.existsSync(tmp)) fs.renameSync(tmp, dir);
     } else {
       fs.rmSync(tmp, { recursive: true, force: true });
@@ -288,6 +290,16 @@ async function applyMetadata(game, match) {
     }
     // Pour les jeux Steam importés, le nom Steam fait foi ; sinon on garde le nom choisi.
     const keepName = game.customName || (platform.id !== 'pc' && match.source !== 'wiki');
+    // Les images choisies à la main sont conservées
+    const custom = Object.fromEntries(Object.entries(game.media || {}).filter(([, f]) => f && /-custom-/.test(f)));
+    if (Object.keys(custom).length && fs.existsSync(dir)) {
+      for (const f of Object.values(custom)) {
+        const from = path.join(dir + '.keep', f);
+        if (fs.existsSync(from)) fs.copyFileSync(from, path.join(dir, f));
+      }
+    }
+    fs.rmSync(dir + '.keep', { recursive: true, force: true });
+    info.media = { ...info.media, ...custom };
     Object.assign(game, info, { name: keepName ? game.name : info.name || game.name });
     if (info.appid && game.kind !== 'steam') game.appid = info.appid;
     game.metaStatus = game.media.cover || game.media.hero || game.media.header ? 'ok' : 'none';
@@ -382,6 +394,12 @@ ipcMain.handle('game:refetch', async (_e, { id, match }) => {
   return enqueue(g, match);
 });
 
+ipcMain.handle('games:refetchAll', () => {
+  for (const g of games()) { g.metaStatus = 'loading'; enqueue(g, null); }
+  commit();
+  return games().length;
+});
+
 ipcMain.handle('game:update', (_e, { id, patch }) => {
   const g = findGame(id);
   if (!g) return null;
@@ -400,7 +418,7 @@ ipcMain.handle('game:remove', (_e, id) => {
 
 ipcMain.handle('game:setImage', async (_e, { id, kind }) => {
   const g = findGame(id);
-  if (!g || !['cover', 'hero', 'logo'].includes(kind)) return null;
+  if (!g || !['cover', 'hero', 'logo', 'back'].includes(kind)) return null;
   const r = await dialog.showOpenDialog(win, { title: 'Choisir une image', properties: ['openFile'], filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'gif'] }] });
   if (r.canceled || !r.filePaths[0]) return null;
   const src = r.filePaths[0];

@@ -26,9 +26,9 @@ Les portages recompilés (.exe) peuvent être rangés sous leur console d'origin
 
 Le launcher télécharge alors tout seul : jaquette, image de fond, logo, description, développeur, date, genres et captures d'écran.
 
-**Sources** : Steam (jeux PC, en français) ; libretro-thumbnails (ROMs nommées No-Intro/Redump) ; SteamGridDB (clé gratuite optionnelle, utile pour les consoles et les jeux hors Steam) ; Wikipédia (descriptions et jaquettes console). Sans jaquette, une jaquette est générée à partir du fond et du logo.
+**Sources** : Steam (jeux PC, en français) ; TheGamesDB (clé gratuite optionnelle : vrais scans du **dos des boîtes** et jaquettes console) ; libretro-thumbnails (ROMs nommées No-Intro/Redump) ; SteamGridDB (clé gratuite optionnelle, utile pour les consoles et les jeux hors Steam) ; Wikipédia (descriptions et jaquettes console). Sans jaquette, une jaquette est générée à partir du fond et du logo.
 
-Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer ? **Détails → Images**.
+Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquette, dos, fond, logo) ? **Détails → Images**. Après avoir ajouté une clé API : **Réglages → Métadonnées → Re-télécharger tous les visuels** (les images choisies à la main sont conservées).
 
 ## Commandes
 

@@ -279,7 +279,17 @@
               <a href="#" data-link="https://www.steamgriddb.com/profile/preferences/api">Obtenir une clé</a></span></div>
           <input id="sgdbKey" type="password" placeholder="Colle ta clé ici" autocomplete="off" data-nav />
         </div>
-        <p class="dim small">Sources : Steam (jeux PC), libretro-thumbnails (ROMs nommées No-Intro/Redump), SteamGridDB, Wikipédia.</p>
+        <div class="setting col">
+          <div><strong>Clé API TheGamesDB</strong> <span class="dim">(optionnelle, gratuite)</span>
+            <span class="dim">Scans des vraies jaquettes : le <b>dos des boîtes</b> et l’avant pour les jeux console.
+              <a href="#" data-link="https://forums.thegamesdb.net/viewforum.php?f=10">Demander une clé</a></span></div>
+          <input id="tgdbKey" type="password" placeholder="Colle ta clé ici" autocomplete="off" data-nav />
+        </div>
+        <div class="setting">
+          <div><strong>Re-télécharger tous les visuels</strong><span class="dim">Après avoir ajouté une clé, pour compléter les jeux déjà présents</span></div>
+          <button class="btn small" id="refetchAll" data-nav>Lancer</button>
+        </div>
+        <p class="dim small">Sources : Steam (jeux PC), TheGamesDB (jaquettes avant/arrière), libretro-thumbnails (ROMs nommées No-Intro/Redump), SteamGridDB, Wikipédia.</p>
       </section>
 
       <div class="panel-actions">

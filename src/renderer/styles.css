@@ -608,3 +608,52 @@ code { font-family: ui-monospace, 'Cascadia Code', monospace; }
 .home-caption.swap .home-logo { animation: captionIn var(--dur-med) var(--ease-out); }
 .brand-logo { height: clamp(26px, 3.2vw, 40px); width: clamp(180px, 18vw, 300px); background: var(--c, #fff); -webkit-mask-position: left center; mask-position: left center; }
 .sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* =================================================================== Boîtiers plastique (1.2) */
+/* Cadre coloré en plastique autour de la jaquette, bandeau avec filet blanc, clip latéral */
+.box:not([data-style="card"]):not([data-style="jewel"]) .front {
+  padding: calc(var(--box-h) * .017);
+  border-radius: calc(var(--box-h) * .024);
+  background:
+    linear-gradient(100deg, color-mix(in oklab, var(--case) 70%, white) 0%, var(--case) 6%, var(--case) 88%, color-mix(in oklab, var(--case) 70%, black) 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255,255,255,.22),
+    inset 0 calc(var(--box-h) * .004) 0 rgba(255,255,255,.28),
+    inset 0 calc(var(--box-h) * -.004) 0 rgba(0,0,0,.35);
+}
+.sheet {
+  position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: calc(var(--box-h) * .006);
+  box-shadow: 0 0 0 1px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.08);
+}
+.sheet .band {
+  height: calc(var(--box-h) * .066); justify-content: flex-start; padding: 0 6%;
+  background: var(--band);
+  border-bottom: max(1.5px, calc(var(--box-h) * .0025)) solid color-mix(in oklab, var(--band-fg, #fff) 85%, transparent);
+  box-shadow: 0 1px 0 rgba(0,0,0,.25);
+}
+.box[data-style="bluray"] .sheet .band { height: calc(var(--box-h) * .058); }
+.box[data-style="small"] .sheet .band { height: calc(var(--box-h) * .075); }
+.sheet .band-logo { -webkit-mask-position: left center; mask-position: left center; width: 62%; height: 56%; }
+.sheet .band-label { font-size: calc(var(--box-h) * .028); }
+.sheet .art { margin: 0; border-radius: 0; }
+.front > .gloss {
+  position: absolute; inset: 0; pointer-events: none; border-radius: inherit; z-index: 3;
+  background:
+    linear-gradient(112deg, rgba(255,255,255,.28) 0%, rgba(255,255,255,.07) 22%, transparent 38%, transparent 72%, rgba(255,255,255,.1) 92%, rgba(255,255,255,.02) 100%);
+}
+.front > .clip {
+  position: absolute; right: 0; top: 34%; height: 30%; width: calc(var(--box-h) * .008);
+  border-radius: 3px 0 0 3px; background: linear-gradient(90deg, rgba(0,0,0,.55), rgba(0,0,0,.2)); z-index: 4;
+}
+.box:not([data-style="card"]):not([data-style="jewel"]) .spine { border-radius: calc(var(--box-h) * .012); }
+.box:not([data-style="card"]):not([data-style="jewel"]) .spine::before {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(90deg, rgba(255,255,255,.18), transparent 30%, transparent 70%, rgba(0,0,0,.35));
+}
+/* Dos scanné */
+.back .b-scan { position: absolute; inset: 0; padding: calc(var(--box-h) * .017); background: var(--case); border-radius: inherit; }
+.back .b-scan img { width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--box-h) * .006); display: block; }
+.back:has(.b-scan) { padding: 0; }
+.back > .gloss { position: absolute; inset: 0; pointer-events: none; background: linear-gradient(112deg, rgba(255,255,255,.22), transparent 35%); }
+.box:not([data-style="card"]):not([data-style="jewel"]) .back { border-radius: calc(var(--box-h) * .024); background: var(--case); }

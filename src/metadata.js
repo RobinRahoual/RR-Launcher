@@ -148,6 +148,23 @@ async function sgdbImages(gameId, key) {
   return { cover, hero, logo };
 }
 
+// ---------- TheGamesDB (scans de jaquettes avant / arrière, clé gratuite) ----------
+const TGDB = 'https://api.thegamesdb.net';
+async function tgdbBoxart(name, platformId, key) {
+  const q = `${TGDB}/v1.1/Games/ByGameName?apikey=${encodeURIComponent(key)}&name=${encodeURIComponent(name)}${platformId ? `&filter%5Bplatform%5D=${platformId}` : ''}`;
+  const res = await getJson(q);
+  const games = res?.data?.games || [];
+  if (!games.length) { log(`tgdb « ${name} » : aucun résultat`); return {}; }
+  const n = normalize(name);
+  const game = games.find((g) => normalize(g.game_title) === n) || games.find((g) => normalize(g.game_title).startsWith(n)) || games[0];
+  const img = await getJson(`${TGDB}/v1/Games/Images?apikey=${encodeURIComponent(key)}&games_id=${game.id}&filter%5Btype%5D=boxart`);
+  const base = img?.data?.base_url?.original || 'https://cdn.thegamesdb.net/images/original/';
+  const list = img?.data?.images?.[game.id] || img?.data?.images?.[String(game.id)] || [];
+  const url = (side) => list.filter((i) => i.side === side).map((i) => base + i.filename);
+  log(`tgdb « ${name} » → ${game.game_title} (#${game.id}) front=${url('front').length} back=${url('back').length}`);
+  return { front: url('front'), back: url('back') };
+}
+
 // ---------- Wikipédia (description de secours) ----------
 async function wikiSummary(name) {
   for (const lang of ['fr', 'en']) {
@@ -382,15 +399,25 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
     } catch { /* ignore */ }
   }
 
+  urls.back = [];
+  if (settings.tgdbKey) {
+    try {
+      progress('Jaquettes TheGamesDB…');
+      const t = await tgdbBoxart(out.name || match.name, plat?.tgdb || 1, settings.tgdbKey);
+      if (plat && plat.id !== 'pc') urls.cover.push(...(t.front || []));
+      urls.back.push(...(t.back || []));
+    } catch (e) { log(`tgdb : ${e.message}`); }
+  }
   if (wikiCover) urls.cover.push(wikiCover);
   progress('Téléchargement des visuels…');
-  const [cover, hero, logo, header] = await Promise.all([
+  const [cover, hero, logo, header, back] = await Promise.all([
     downloadFirst(urls.cover, dir, 'cover'),
     downloadFirst(urls.hero, dir, 'hero'),
     downloadFirst(urls.logo, dir, 'logo'),
     downloadFirst(urls.header, dir, 'header'),
+    downloadFirst(urls.back, dir, 'back'),
   ]);
-  Object.assign(out.media, { cover, hero, logo, header });
+  Object.assign(out.media, { cover, hero, logo, header, back });
 
   if (out.screenshotUrls?.length) {
     const shots = await Promise.all(out.screenshotUrls.map((u, i) => downloadFirst([u], dir, `shot${i}`)));
@@ -403,7 +430,7 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
     out.description = await wikiSummary(out.name);
   }
 
-  log(`fetchAll ${match.source}:${match.appid || match.sgdbId || ''} « ${out.name} » → cover=${cover} hero=${hero} logo=${logo} header=${header} desc=${(out.description || '').length}c`);
+  log(`fetchAll ${match.source}:${match.appid || match.sgdbId || ''} « ${out.name} » → cover=${cover} back=${back} hero=${hero} logo=${logo} header=${header} desc=${(out.description || '').length}c`);
   const colorSrc = cover || header || hero;
   out.color = colorSrc ? dominantColor(path.join(dir, colorSrc)) : null;
   return out;

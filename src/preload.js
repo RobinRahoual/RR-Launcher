@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('rr', {
   search: (term, platform) => ipcRenderer.invoke('meta:search', { term, platform }),
   addGame: call('game:add'),
   addMany: call('games:addMany'),
+  refetchAll: call('games:refetchAll'),
   refetch: (id, match) => ipcRenderer.invoke('game:refetch', { id, match }),
   updateGame: (id, patch) => ipcRenderer.invoke('game:update', { id, patch }),
   removeGame: call('game:remove'),

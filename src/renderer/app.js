@@ -320,6 +320,7 @@ function artHTML(g, lazy) {
   return `<div class="gen" ${style}>${logo}</div>`;
 }
 function backHTML(g) {
+  if (g.media?.back) return `<div class="b-scan"><img data-src="${mediaUrl(g, g.media.back)}" alt="" /></div><div class="gloss"></div>`;
   const hero = g.media?.hero || g.media?.header;
   const shots = (g.screenshots || []).slice(0, 2).map((s) => `<div style="background-image:url('${mediaUrl(g, s)}')"></div>`).join('');
   return `
@@ -343,7 +344,7 @@ function slotHTML(g) {
   let front;
   if (c.style === 'card') front = `<div class="art">${artHTML(g, true)}<div class="gloss"></div><div class="sweep"></div>${loading}</div>`;
   else if (c.style === 'jewel') front = `<div class="jewel-hinge"></div><div class="art">${artHTML(g, true)}<div class="gloss"></div><div class="sweep"></div>${loading}</div>`;
-  else front = `<div class="band">${bandInner}</div><div class="art">${artHTML(g, true)}<div class="gloss"></div><div class="sweep"></div>${loading}</div>`;
+  else front = `<div class="sheet"><div class="band">${bandInner}</div><div class="art">${artHTML(g, true)}<div class="sweep"></div>${loading}</div></div><div class="gloss"></div><i class="clip"></i>`;
   const spine = c.pc
     ? `<span class="s-rr">RR</span><span class="s-name">${name}</span>`
     : `<span class="s-top">${S.platLogo[g.platform] ? `<span class="s-logo" style="${logoCss(g.platform)}"></span>` : `<span class="s-plat" style="writing-mode:horizontal-tb;font-size:calc(var(--box-d)*.26)">${esc(plat(g.platform).short.slice(0, 6))}</span>`}</span><span class="s-name">${name}</span>`;
@@ -802,7 +803,7 @@ $('#dActions').addEventListener('click', async (e) => {
   if (act === 'images') {
     const sub = $('#dSub');
     sub.hidden = !sub.hidden;
-    sub.innerHTML = ['cover:Jaquette', 'hero:Image de fond', 'logo:Logo'].map((x) => {
+    sub.innerHTML = ['cover:Jaquette', 'back:Dos de la boîte', 'hero:Image de fond', 'logo:Logo'].map((x) => {
       const [k, l] = x.split(':');
       return `<button class="btn small" data-img="${k}" data-nav>${l}…</button>`;
     }).join('');
@@ -1090,6 +1091,7 @@ function renderSettings() {
   $$('#settings .seg').forEach((seg) => $$('button', seg).forEach((b) => b.setAttribute('aria-pressed', String(s[seg.dataset.setting]) === b.dataset.value)));
   $$('#settings [data-toggle]').forEach((b) => b.setAttribute('aria-checked', !!s[b.dataset.toggle]));
   if (document.activeElement !== $('#sgdbKey')) $('#sgdbKey').value = s.sgdbKey || '';
+  if (document.activeElement !== $('#tgdbKey')) $('#tgdbKey').value = s.tgdbKey || '';
   $$('.set-tab').forEach((t) => t.setAttribute('aria-selected', t.dataset.settab === setPage));
   $$('.set-page').forEach((p) => { p.hidden = p.dataset.page !== setPage; });
   if (setPage === 'emus') renderEmus();
@@ -1139,6 +1141,17 @@ $('#settings').addEventListener('change', (e) => {
   if (a) rr.setEmulator(a.dataset.args, { args: a.value.trim() });
 });
 $('#sgdbKey').addEventListener('change', () => rr.setSettings({ sgdbKey: $('#sgdbKey').value.trim() }));
+$('#tgdbKey').addEventListener('change', () => rr.setSettings({ tgdbKey: $('#tgdbKey').value.trim() }));
+$('#refetchAll').addEventListener('click', () => {
+  openPrompt({
+    title: 'Re-télécharger tous les visuels ?',
+    body: `<p class="dim">Jaquettes, dos, fonds, logos et descriptions de tous les jeux sont récupérés à nouveau avec les sources actuelles. Les images choisies à la main sont conservées.</p>`,
+    actions: [
+      { label: 'Annuler', onClick: () => closeOverlay() },
+      { label: 'Re-télécharger', primary: true, onClick: async () => { const n = await rr.refetchAll(); closeAll(); toast(`Mise à jour des visuels de ${n} jeu${n > 1 ? 'x' : ''}…`); } },
+    ],
+  });
+});
 
 // ---------------------------------------------------------------- Actions
 async function action(name) {
