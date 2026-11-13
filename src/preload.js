@@ -56,4 +56,6 @@ contextBridge.exposeInMainWorld('rr', {
   setIngame: call('guide:ingame'),
   onGuide: on('guide:press'),
   onPadRemote: on('pad:remote'),
+  // WAKE : retour au premier plan (fin de la dernière session, manette allumée)
+  onWake: on('win:wake'),
 });

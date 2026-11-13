@@ -11,6 +11,7 @@ const scanner = require('./scanner');
 const { BY_ID, platformForFile, detectEmulator, publicPlatforms, romExtensions } = require('./platforms');
 const { autoUpdater } = require('electron-updater');
 const guide = require('./guide'); // GUIDE : bouton Xbox / PS / Home (natif optionnel)
+const padwake = require('./padwake'); // WAKE : manette allumée → launcher au premier plan
 
 protocol.registerSchemesAsPrivileged([
   { scheme: 'rr', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } },
@@ -40,6 +41,7 @@ const DEFAULT_SETTINGS = {
   platformLogoFails: {}, // platformId -> date (ms) du dernier échec ; nouvel essai après 24 h
   logosVersion: 0, // version de l'algorithme / de la liste de logos ayant rempli platformLogos
   guideButton: true, // GUIDE : le bouton Xbox / PS / Home de la manette ouvre le launcher (menu en jeu)
+  wakeOnPad: true, // WAKE : allumer / brancher une manette ouvre le launcher s'il est masqué ou réduit
 };
 const store = new JsonStore(path.join(DATA, 'library.json'), { games: [], settings: DEFAULT_SETTINGS });
 store.data.settings = { ...DEFAULT_SETTINGS, ...store.data.settings };
@@ -105,9 +107,12 @@ function createWindow() {
   });
   win.on('enter-full-screen', () => send('win:fullscreen', true));
   win.on('leave-full-screen', () => send('win:fullscreen', false));
-  win.on('show', () => send('win:visible', true));
+  win.on('show', () => { send('win:visible', true); updatePadWake(); });
   win.on('focus', () => recheckSessions());
-  win.on('hide', () => send('win:visible', false));
+  win.on('hide', () => { send('win:visible', false); updatePadWake(); });
+  // WAKE : réduite / restaurée → (dés)active la surveillance des manettes
+  win.on('minimize', () => updatePadWake());
+  win.on('restore', () => updatePadWake());
   // GUIDE : « toujours au premier plan » n'est que temporaire (pour passer devant un jeu)
   win.on('blur', () => { if (win.isAlwaysOnTop()) win.setAlwaysOnTop(false); });
   win.webContents.setWindowOpenHandler(({ url }) => { shell.openExternal(url); return { action: 'deny' }; });
@@ -133,6 +138,32 @@ function showWindow() {
   win.show();
   win.focus();
   if (store.data.settings.fullscreen && !win.isFullScreen()) win.setFullScreen(true);
+}
+// WAKE : ramène VRAIMENT le launcher au premier plan (fin de partie, manette allumée).
+// Sous Windows une application en arrière-plan ne peut pas voler le premier plan (la fenêtre reste
+// derrière ou clignote dans la barre des tâches) : show + restore + plein écran si réglé, puis
+// « toujours au premier plan » temporaire (~1,5 s) et focusWindow natif (AttachThreadInput + astuce Alt).
+let wakeTopTimer = null;
+function bringToFront(reason, extra = {}) {
+  if (!win || win.isDestroyed()) return;
+  const wasHidden = !win.isVisible();
+  const wasFront = !wasHidden && !win.isMinimized() && win.isFocused();
+  showWindow(); // restore + show + focus + plein écran si réglé
+  if (!wasFront) {
+    win.setAlwaysOnTop(true, 'screen-saver');
+    win.moveTop();
+    const n = winNative();
+    if (n) {
+      try { n.allowForeground(); if (!win.isFocused()) n.focusWindow(n.hwndOf(win.getNativeWindowHandle())); }
+      catch (e) { meta.log(`premier plan : ${e.message}`); }
+    }
+    clearTimeout(wakeTopTimer);
+    wakeTopTimer = setTimeout(() => {
+      // le menu en jeu garde « toujours au premier plan » tant qu'il est ouvert (voir guide:ingame)
+      if (win && !win.isDestroyed() && win.isAlwaysOnTop() && !ingameOpen) win.setAlwaysOnTop(false);
+    }, 1500);
+  }
+  send('win:wake', { reason, wasHidden, wasFront, ...extra });
 }
 function hideToTray() {
   if (!win) return;
@@ -164,7 +195,7 @@ function send(ch, payload) {
 }
 
 app.on('second-instance', showWindow);
-app.on('before-quit', () => { quitting = true; guideWatch.stop(); });
+app.on('before-quit', () => { quitting = true; guideWatch.stop(); guideWatch.setConnect(false); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 
 app.whenReady().then(() => {
@@ -186,6 +217,9 @@ app.whenReady().then(() => {
   try { globalShortcut.register('CommandOrControl+Alt+L', () => summon('shortcut')); } catch { /* déjà pris */ }
   applyLoginItem();
   updateGuideWatch();
+  // WAKE : démarrage avec --hidden (« Lancer au démarrage de Windows ») : fenêtre jamais montrée → surveillance active
+  // (sinon l'événement « show » de la fenêtre s'en charge)
+  if (startHidden) updatePadWake();
 });
 app.on('window-all-closed', () => { if (quitting) app.quit(); });
 
@@ -627,6 +661,7 @@ function tooBroad(dir) {
 function onSessionStart(id) {
   send('game:running', { id, running: true });
   commit();
+  updatePadWake(); // WAKE : pendant un jeu, seul le sondage Guide reste actif
   if (store.data.settings.hideOnLaunch) setTimeout(() => { if (running.has(id) && !ingameOpen) hideToTray(); }, 900);
 }
 function finishSession(id) {
@@ -638,7 +673,9 @@ function finishSession(id) {
   if (g) g.playtime = (g.playtime || 0) + Math.round((Date.now() - r.start) / 1000);
   commit();
   send('game:running', { id, running: false, name: g?.name });
-  if (store.data.settings.hideOnLaunch && running.size === 0) showWindow();
+  // WAKE : dernière session terminée → le launcher revient devant, que hideOnLaunch soit actif ou non
+  if (running.size === 0) bringToFront('session-end', { id, platform: g?.platform || null });
+  updatePadWake();
 }
 
 // Surveille les processus du dossier du jeu (jeux Steam/Epic, ou exécutables qui se relancent).
@@ -756,6 +793,7 @@ ipcMain.handle('settings:set', (_e, patch) => {
   if ('fullscreen' in patch && win) win.setFullScreen(!!patch.fullscreen);
   if ('openAtLogin' in patch) applyLoginItem();
   if ('guideButton' in patch) updateGuideWatch();
+  if ('wakeOnPad' in patch) updatePadWake(); // WAKE
   commit();
   return store.data.settings;
 });
@@ -820,9 +858,22 @@ const guideWatch = guide.createGuideWatcher({
   // Menu en jeu affiché mais fenêtre sans focus (Windows a refusé le premier plan) : on relaie la manette
   wantRemote: () => ingameOpen && !!win && win.isVisible() && !win.isFocused(),
   onRemote: (btn) => send('pad:remote', btn),
+  // WAKE : une manette vient de s'allumer / d'être branchée (launcher masqué ou réduit, aucun jeu)
+  onConnect: () => { if (running.size === 0) bringToFront('pad'); },
 });
 function updateGuideWatch() {
   if (store.data.settings.guideButton !== false) guideWatch.start(); else guideWatch.stop();
+}
+// WAKE : surveillance des connexions de manettes — fenêtre masquée (zone de notification, y compris
+// démarrage avec --hidden) ou réduite, aucun jeu en cours, réglage wakeOnPad actif.
+function updatePadWake() {
+  const ok = !!win && !win.isDestroyed();
+  guideWatch.setConnect(padwake.wakeWanted({
+    enabled: store.data.settings.wakeOnPad !== false,
+    gameRunning: running.size > 0,
+    hidden: ok && !win.isVisible(),
+    minimized: ok && win.isMinimized(),
+  }));
 }
 
 // Fait revenir le launcher devant tout (y compris un jeu en plein écran fenêtré) et prévient le renderer.
@@ -928,7 +979,7 @@ async function quitGame(id) {
 ipcMain.handle('game:resume', (_e, id) => resumeGame(id));
 ipcMain.handle('game:quit', (_e, id) => quitGame(id));
 ipcMain.handle('game:sessions', () => [...running.entries()].map(([id, r]) => ({ id, start: r.start })));
-ipcMain.handle('guide:status', () => ({ ...guideWatch.status(), enabled: store.data.settings.guideButton !== false }));
+ipcMain.handle('guide:status', () => ({ ...guideWatch.status(), enabled: store.data.settings.guideButton !== false, wakeOnPad: store.data.settings.wakeOnPad !== false }));
 ipcMain.handle('guide:ingame', (_e, open) => {
   ingameOpen = !!open;
   if (!ingameOpen && win && !win.isDestroyed() && win.isAlwaysOnTop() && win.isFocused()) win.setAlwaysOnTop(false);
