@@ -115,6 +115,14 @@ const Sfx = (() => {
       tone(659.25, t + 1.0, 0.7, 0.02, 'sine', 0.7);
       tone(987.77, t + 1.06, 0.8, 0.016, 'sine', 0.75);
     },
+    'boxopen-disc': (t) => SOUNDS.boxopen(t), // BOXOPEN, disque : boîtier + disque qui prend de la vitesse
+    'boxopen-cart': (t) => { // BOXOPEN, cartouche : glissement dans la fente puis petit « clac » de la broche
+      air(t, 0.2, 800, 3200, 0.04, 1.4);
+      tone(1800, t + 0.19, 0.05, 0.03, 'triangle', 0.2);
+      air(t + 0.19, 0.035, 4800, 2400, 0.045, 3);
+      tone(740, t + 0.19, 0.08, 0.03, 'triangle', 0.25);
+      tone(880, t + 0.42, 0.45, 0.012, 'sine', 0.6, 1.5);
+    },
     boxclose: (t) => { // BOXOPEN : le couvercle se referme (clac feutré)
       air(t, 0.24, 2400, 500, 0.022, 1.2);
       tone(1046.5, t, 0.12, 0.022, 'sine', 0.4);
