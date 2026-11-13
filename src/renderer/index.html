@@ -57,7 +57,12 @@
 
   <!-- Accueil : roue des consoles -->
   <main id="home" class="view">
-    <div id="disc" class="disc" title="Consoles"><div class="disc-ticks" id="discTicks"></div><div class="disc-ring"></div></div>
+    <div id="disc" class="disc" title="Consoles">
+      <div class="disc-ring" aria-hidden="true"></div>
+      <div class="disc-ticks" id="discTicks" aria-hidden="true"></div>
+      <div class="disc-gloss" aria-hidden="true"></div>
+      <div class="disc-mark" aria-hidden="true"><i></i></div>
+    </div>
     <div id="wheelItems" class="wheel-items"></div>
   </main>
 
