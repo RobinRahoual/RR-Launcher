@@ -1014,17 +1014,72 @@ async function play(id = S.items[S.sel]?.id, opts = {}) {
   const g = S.lib.games.find((x) => x.id === id);
   if (!g) return;
   if (!opts.force && guideBeforePlay(g)) return; // GUIDE : jeu déjà en cours → reprendre ; autre jeu en cours → demander
+  if (LD.active) return; // LOADING : un lancement est déjà en cours
+  if (!(await ldShow(g))) return; // LOADING : écran de chargement ; false = annulé (B / Échap)
   const r = await rr.launch(id);
-  if (r.resumed) return;
+  if (r.resumed) return ldHide();
   if (!r.ok) {
+    ldHide();
     if (r.error === 'NO_EMULATOR') return askEmulator(r.platform, id);
     return toast(r.error || 'Impossible de lancer le jeu.', true);
   }
-  sfx('launch');
-  const f = $('#launchFlash');
-  f.classList.remove('go'); void f.offsetWidth; f.classList.add('go');
-  toast(`Lancement de ${g.name}…`, 'progress');
+  ldCommitted(); // LOADING : l'écran reste jusqu'au retour du launcher (rr.onVisible / game:running false) ou 12 s
 }
+// ================================================================ LOADING : écran de lancement façon console
+// Overlay plein écran #launching affiché AVANT rr.launch : bannière du jeu (zoom lent), logo au centre, anneau « Lancement… ».
+// Reste ≥ 1,6 s (0,8 s si reduceMotion), puis rr.launch. B / Échap annulent tant que rr.launch n'est pas appelé.
+// Après un lancement réussi, il disparaît au retour du launcher (win:visible / fin de session) ou après 12 s.
+const LD = { active: false, committed: false, t0: 0, tCommit: 0, resolve: null, minT: null, safeT: null, hideT: null, id: null };
+const LD_MIN = reduceMotion ? 800 : 1600;
+function ldShow(g) {
+  const el = $('#launching');
+  const m = g.media || {};
+  const p = plat(g.platform);
+  const banner = m.hero || m.header || (g.screenshots || [])[0];
+  const url = banner ? mediaUrl(g, banner) : m.cover ? mediaUrl(g, m.cover) : '';
+  const kind = banner ? '' : m.cover ? 'is-cover' : 'is-none';
+  clearTimeout(LD.hideT);
+  Object.assign(LD, { active: true, committed: false, id: g.id, t0: performance.now() });
+  el.className = '';
+  el.innerHTML = `<div class="ld-bg ${kind}"></div><div class="ld-veil"></div>
+    <div class="ld-logo">${m.logo ? `<img src="${mediaUrl(g, m.logo)}" alt="${esc(g.name)}" />` : `<div class="ld-name">${esc(g.name)}</div>`}</div>
+    <div class="ld-hint">${glyph('b')}<span>Annuler</span></div>
+    <div class="ld-status"><div class="ld-ring"></div><div class="ld-txt"><b>Lancement…</b><span>${esc(p.name || '')}</span></div></div>`;
+  el.setAttribute('aria-label', `Lancement de ${g.name}`);
+  el.hidden = false;
+  sfx('launch');
+  return new Promise((resolve) => {
+    LD.resolve = resolve;
+    const show = () => { if (!LD.active || LD.id !== g.id) return; void el.offsetWidth; el.classList.add('in'); LD.minT = setTimeout(() => { LD.minT = null; LD.resolve = null; resolve(true); }, LD_MIN); };
+    if (!url) return show();
+    // bannière décodée avant le fondu (évite un fond noir qui « saute »), 300 ms au plus
+    $('.ld-bg', el).style.backgroundImage = `url("${url}")`;
+    const im = new Image(); im.src = url;
+    Promise.race([im.decode().catch(() => {}), new Promise((r) => setTimeout(r, 300))]).then(show);
+  });
+}
+function ldCommitted() {
+  LD.committed = true; LD.tCommit = performance.now();
+  $('#launching').classList.add('go');
+  clearTimeout(LD.safeT);
+  LD.safeT = setTimeout(() => ldHide(), 12000);
+}
+function ldHide(now = false) {
+  if (!LD.active) return;
+  const el = $('#launching');
+  clearTimeout(LD.minT); clearTimeout(LD.safeT);
+  if (LD.resolve) { LD.resolve(false); LD.resolve = null; }
+  LD.active = false; LD.committed = false; LD.id = null;
+  const end = () => { if (!LD.active) { el.hidden = true; el.className = ''; el.innerHTML = ''; } };
+  if (now || reduceMotion) return end();
+  el.classList.add('out');
+  LD.hideT = setTimeout(end, 320);
+}
+function ldCancel() { if (!LD.active || LD.committed) return; sfx('back'); ldHide(); }
+rr.onVisible((v) => { if (v && LD.active && LD.committed && performance.now() - LD.tCommit > 1000) ldHide(); });
+rr.onRunning(({ id, running }) => { if (!running && LD.active && LD.committed && id === LD.id) ldHide(); });
+// ================================================================ fin LOADING
+
 function askEmulator(pid, gameId) {
   const p = plat(pid);
   const names = (p.emulators || []).map((e) => e.name).join(', ');
@@ -1989,6 +2044,7 @@ function setDevice(d) {
 // ---------------------------------------------------------------- Clavier
 addEventListener('keydown', (e) => {
   setDevice('kbd');
+  if (LD.active && e.key !== 'F11' && !e.ctrlKey && !e.altKey) { e.preventDefault(); if (!e.repeat && (e.key === 'Escape' || e.key === 'Backspace')) ldCancel(); return; } // LOADING
   // BOXOPEN : pendant l'ouverture, Entrée/Espace saute, Échap/Retour annule ; une fermeture en cours se termine net
   if (BO.kind === 'open' || BO.kind === 'cancel') {
     e.preventDefault();
@@ -2105,6 +2161,7 @@ function pollPad(t) {
   pad.prev = b;
 }
 function onPadDir(dir, repeat) {
+  if (LD.active) return; // LOADING
   if (shellSplashActive()) return endSplash(); // SHELL
   if (BO.kind === 'open' || BO.kind === 'cancel') return; // BOXOPEN
   if (BO.busy) boFinish();
@@ -2128,6 +2185,7 @@ function onPadDir(dir, repeat) {
   else if (dir === 'up' && !repeat) shellFocusTop();
 }
 function onPadBtn(btn) {
+  if (LD.active) { if (btn === 'b') ldCancel(); return; } // LOADING
   if (shellSplashActive()) return endSplash(); // SHELL
   if (BO.kind === 'open') { if (btn === 'a') boSkip(); else if (btn === 'b') boCancel(); return; } // BOXOPEN
   if (BO.kind === 'cancel') return;
@@ -2413,6 +2471,7 @@ function guidePress(info = {}) {
 }
 
 async function openIngame(g) {
+  ldHide(true); // LOADING : le menu en jeu est prioritaire
   IG.id = g.id;
   if (BO.busy) boClear(); // BOXOPEN : une animation de boîte en cours ne doit pas rester par-dessus le menu en jeu
   if (S.mode !== 'ingame') closeAll();

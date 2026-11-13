@@ -1,0 +1,58 @@
+/* RR Launcher — LOADING : écran de lancement plein écran façon console (bannière du jeu, logo au centre, anneau de chargement).
+   Toujours sombre et cinématique, dans les deux thèmes : le texte est blanc, le fond noir (pas de flash blanc en thème clair). */
+#launching {
+  position: fixed; inset: 0; z-index: 120; overflow: hidden; background: #000; color: #fff; cursor: default;
+  opacity: 0; transition: opacity 350ms var(--ease-out, ease-out);
+}
+#launching[hidden] { display: none; }
+#launching.in { opacity: 1; }
+#launching.out { opacity: 0; transition-duration: 300ms; transition-timing-function: ease-in; pointer-events: none; }
+
+/* Bannière : nette, zoom lent 1.00 → 1.06 (Ken Burns) */
+#launching .ld-bg { position: absolute; inset: 0; background: #0a0a0a center / cover no-repeat; transform-origin: 50% 46%; will-change: transform; }
+#launching.in .ld-bg { animation: ldZoom 14s linear forwards; }
+@keyframes ldZoom { from { transform: scale(1); } to { transform: scale(1.06); } }
+/* Sans bannière : jaquette floutée, ou dégradé de marque */
+#launching .ld-bg.is-cover { filter: blur(28px) saturate(1.1); inset: -6%; }
+#launching .ld-bg.is-none { background: radial-gradient(ellipse at 50% 40%, var(--accent-deep), #0a0a0a 75%); }
+/* Voile radial : lisibilité du logo au centre et des textes dans les coins */
+#launching .ld-veil {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 55% 50% at 50% 48%, rgba(0,0,0,.5), rgba(0,0,0,0) 70%),
+    radial-gradient(ellipse 120% 100% at 50% 50%, rgba(0,0,0,0) 38%, rgba(0,0,0,.72) 100%),
+    linear-gradient(0deg, rgba(0,0,0,.55), rgba(0,0,0,0) 28%);
+}
+
+/* Logo (ou nom du jeu) */
+#launching .ld-logo { position: absolute; inset: 0; display: grid; place-items: center; padding: 6vh 6vw; opacity: 0; transform: scale(.96); }
+#launching.in .ld-logo { animation: ldLogo 600ms 120ms var(--ease-out, ease-out) forwards; }
+@keyframes ldLogo { to { opacity: 1; transform: scale(1); } }
+#launching .ld-logo img { max-width: 42vw; max-height: 30vh; width: auto; height: auto; object-fit: contain; filter: drop-shadow(0 10px 32px rgba(0,0,0,.55)) drop-shadow(0 2px 6px rgba(0,0,0,.4)); }
+#launching .ld-logo .ld-name {
+  max-width: 62vw; text-align: center; font-family: var(--font-display); font-size: clamp(34px, 6.2vw, 108px); line-height: 1.05; letter-spacing: .01em;
+  text-wrap: balance; text-shadow: 0 6px 30px rgba(0,0,0,.6), 0 1px 3px rgba(0,0,0,.5);
+}
+
+/* Bas droite : anneau + texte */
+#launching .ld-status { zoom: var(--ui, 1); position: absolute; right: 3.4vw; bottom: 4.6vh; display: flex; align-items: center; gap: 14px; opacity: 0; }
+#launching.in .ld-status { animation: ldFade 400ms 350ms ease-out forwards; }
+@keyframes ldFade { to { opacity: 1; } }
+#launching .ld-ring { width: 38px; height: 38px; flex: none; border-radius: 50%; border: 3px solid rgba(255,255,255,.22); border-top-color: var(--accent); animation: ldSpin 900ms linear infinite; }
+@keyframes ldSpin { to { transform: rotate(360deg); } }
+#launching .ld-txt { display: flex; flex-direction: column; gap: 2px; text-shadow: 0 2px 10px rgba(0,0,0,.7); }
+#launching .ld-txt b { font-family: var(--font-display); font-weight: 400; font-size: 21px; letter-spacing: .02em; }
+#launching .ld-txt span { font-size: 16px; color: rgba(255,255,255,.8); }
+
+/* Bas gauche : annulation, avant l'appel de lancement seulement */
+#launching .ld-hint { zoom: var(--ui, 1); position: absolute; left: 3.4vw; bottom: 4.6vh; display: flex; align-items: center; gap: 10px; font-size: 15px; color: rgba(255,255,255,.85); text-shadow: 0 2px 10px rgba(0,0,0,.7); opacity: 0; }
+#launching.in .ld-hint { animation: ldFade 400ms 350ms ease-out forwards; }
+#launching.go .ld-hint { display: none; }
+#launching .ld-hint .glyph { flex: none; background: rgba(255,255,255,.2); color: #fff; border: 1px solid rgba(255,255,255,.35); box-shadow: none; text-shadow: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  #launching.in .ld-bg { animation: none; }
+  #launching .ld-logo { transform: none; }
+  #launching.in .ld-logo, #launching.in .ld-status, #launching.in .ld-hint { animation-duration: 1ms; animation-delay: 0s; }
+  #launching .ld-ring { animation-duration: 2.4s; }
+}

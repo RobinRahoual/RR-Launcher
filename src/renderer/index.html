@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="games.css" />
   <link rel="stylesheet" href="shell.css" />
   <link rel="stylesheet" href="boxopen.css" /><!-- BOXOPEN : ouverture de la boîte + page du jeu -->
+  <link rel="stylesheet" href="launching.css" /><!-- LOADING : écran de lancement -->
   <link rel="stylesheet" href="theme.css" />
   <link rel="stylesheet" href="guide.css" />
 </head>
@@ -504,6 +505,8 @@
   <div class="dropzone" id="dropzone" hidden><div>Dépose le jeu ou la ROM</div></div>
   <div class="toasts" id="toast" role="status" aria-live="polite"></div>
   <div class="launch-flash" id="launchFlash" aria-hidden="true"></div>
+  <!-- LOADING : écran de lancement plein écran (rempli par app.js) -->
+  <div id="launching" role="status" aria-live="polite" hidden></div>
 
   <script src="sounds.js"></script>
   <script src="app.js"></script>
