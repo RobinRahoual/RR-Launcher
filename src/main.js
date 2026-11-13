@@ -33,9 +33,11 @@ const DEFAULT_SETTINGS = {
   sort: 'recent',
   emulators: {}, // platformId -> { path, args, name }
   platformImages: {}, // platformId -> fichier
+  platformLogos: {}, // platformId -> fichier (téléchargé localement, jamais dans le dépôt)
 };
 const store = new JsonStore(path.join(DATA, 'library.json'), { games: [], settings: DEFAULT_SETTINGS });
 store.data.settings = { ...DEFAULT_SETTINGS, ...store.data.settings };
+store.data.settings.platformLogos ||= {};
 if ('minimizeOnLaunch' in store.data.settings) { store.data.settings.hideOnLaunch = store.data.settings.minimizeOnLaunch; delete store.data.settings.minimizeOnLaunch; }
 // Migration 1.0.x → 1.1 : plateforme et type de lancement
 for (const g of store.data.games) {
@@ -433,6 +435,33 @@ ipcMain.handle('platform:image', async (_e, id) => {
   const file = await platformFetching.get(id);
   platformFetching.delete(id);
   if (file) { s.platformImages[id] = file; store.save(); }
+  return file;
+});
+const logoFetching = new Map();
+ipcMain.handle('platform:logo', async (_e, id) => {
+  const s = store.data.settings;
+  const known = s.platformLogos[id];
+  if (known === '') return null; // déjà cherché sans succès
+  if (known && fs.existsSync(path.join(PLATFORM_MEDIA, known))) return known;
+  const p = BY_ID[id];
+  if (!p || !p.wiki) return null;
+  if (!logoFetching.has(id)) {
+    logoFetching.set(id, meta.platformLogo(p.wiki, PLATFORM_MEDIA, id).catch((e) => { meta.log(`logo ${id}: ${e.message}`); return undefined; }));
+  }
+  const file = await logoFetching.get(id);
+  logoFetching.delete(id);
+  if (file) { s.platformLogos[id] = file; store.save(); }
+  else if (file === null) { s.platformLogos[id] = ''; store.save(); }
+  return file || null;
+});
+ipcMain.handle('platform:setLogo', async (_e, id) => {
+  const r = await dialog.showOpenDialog(win, { title: 'Logo de la console (PNG transparent conseillé)', properties: ['openFile'], filters: [{ name: 'Images', extensions: ['png', 'svg', 'webp'] }] });
+  if (r.canceled || !r.filePaths[0]) return null;
+  fs.mkdirSync(PLATFORM_MEDIA, { recursive: true });
+  const file = `${id}-logo-custom-${Date.now()}${path.extname(r.filePaths[0]).toLowerCase()}`;
+  fs.copyFileSync(r.filePaths[0], path.join(PLATFORM_MEDIA, file));
+  store.data.settings.platformLogos[id] = file;
+  commit();
   return file;
 });
 ipcMain.handle('platform:setImage', async (_e, id) => {

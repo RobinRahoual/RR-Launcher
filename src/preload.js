@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld('rr', {
   launch: call('game:launch'),
   platformImage: call('platform:image'),
   setPlatformImage: call('platform:setImage'),
+  platformLogo: call('platform:logo'),
+  setPlatformLogo: call('platform:setLogo'),
   pickEmulator: call('emu:pick'),
   setEmulator: (platformId, conf) => ipcRenderer.invoke('emu:set', { platformId, conf }),
   applyDetectedEmulators: call('emu:applyDetected'),

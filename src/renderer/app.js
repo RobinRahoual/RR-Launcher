@@ -25,6 +25,7 @@ const S = {
   spin: new Map(),
   home: { items: [], sel: 0, pos: -2, vel: 0, selId: null },
   platImg: {},
+  platLogo: {},
   progress: {},
   mode: 'main',
   stack: [],
@@ -42,6 +43,7 @@ const DEPTH = { dvd: 0.085, bluray: 0.07, small: 0.07, card: 0.17, jewel: 0.075 
 
 // ---------------------------------------------------------------- Utilitaires
 const mediaUrl = (g, file) => (file ? `rr://media/${g.id}/${encodeURIComponent(file)}?v=${g.mediaVersion || 0}` : '');
+const logoCss = (id) => (S.platLogo[id] ? `--logo:url('rr://media/_platforms/${encodeURIComponent(S.platLogo[id])}')` : '');
 const platUrl = (file) => (file ? `rr://media/_platforms/${encodeURIComponent(file)}` : '');
 const yearOf = (g) => (String(g.releaseDate || '').match(/\d{4}/) || [])[0] || '';
 const plat = (id) => S.P[id] || S.P.pc || { id: 'pc', name: 'PC', short: 'PC', color: '#F43F5E', case: { style: 'dvd', ratio: 0.64 } };
@@ -107,7 +109,9 @@ function cardHTML(it) {
   if (it.id === 'all') return `<div class="c-glow"></div><div class="c-floor"></div><div class="c-img"><div class="c-fallback all">TOUS<br/>LES JEUX</div></div><div class="c-count">${it.n}</div><div class="c-name">Tous les jeux</div>`;
   const p = plat(it.id);
   const img = S.platImg[it.id];
-  const inner = img ? `<img src="${platUrl(img)}" alt="${esc(p.name)}" />` : `<div class="c-fallback">${esc(p.short)}</div>`;
+  const inner = img ? `<img src="${platUrl(img)}" alt="${esc(p.name)}" />`
+    : S.platLogo[it.id] ? `<div class="c-fallback"><span class="c-logo" style="${logoCss(it.id)}" role="img" aria-label="${esc(p.name)}"></span></div>`
+    : `<div class="c-fallback">${esc(p.short)}</div>`;
   const mask = img ? `style="--mask:url('${platUrl(img)}')"` : '';
   return `<div class="c-glow"></div><div class="c-floor"></div><div class="c-img">${inner}</div><div class="sweep" ${mask}></div><div class="c-count">${it.n}</div><div class="c-name">${esc(p.name)}</div>`;
 }
@@ -117,7 +121,7 @@ function syncCards() {
   for (const [id, el] of cards) if (!ids.has(id)) { el.remove(); cards.delete(id); }
   S.home.items.forEach((it) => {
     let el = cards.get(it.id);
-    const sig = `${it.n}|${S.platImg[it.id] || ''}`;
+    const sig = `${it.n}|${S.platImg[it.id] || ''}|${S.platLogo[it.id] || ''}`;
     if (!el) {
       el = document.createElement('div');
       el.className = 'ccard';
@@ -128,7 +132,18 @@ function syncCards() {
     el.style.setProperty('--pc', it.id === 'all' || it.id === 'add' ? '#F43F5E' : plat(it.id).color);
     if (el._sig !== sig) { el.innerHTML = cardHTML(it); el._sig = sig; }
     if (it.id !== 'all' && it.id !== 'add' && it.id !== 'pc' && S.platImg[it.id] === undefined) loadPlatImage(it.id);
+    loadPlatLogo(it.id);
   });
+}
+async function loadPlatLogo(id) {
+  if (!id || id === 'pc' || id === 'all' || id === 'add' || S.platLogo[id] !== undefined) return;
+  S.platLogo[id] = null;
+  const f = await rr.platformLogo(id).catch(() => null);
+  if (f) {
+    S.platLogo[id] = f;
+    syncCards(); syncSlots();
+    if (S.view === 'home') updateHomeChrome(); else updateBrand();
+  }
 }
 async function loadPlatImage(id) {
   S.platImg[id] = null;
@@ -159,6 +174,7 @@ function updateHomeChrome() {
   if (!it) return;
   const cap = $('#homeCaption');
   cap.classList.remove('swap'); void cap.offsetWidth; cap.classList.add('swap');
+  if (it.id === 'add' || it.id === 'all') setHomeLogo(null);
   if (it.id === 'add') {
     $('#homeTitle').textContent = 'Ajouter des jeux';
     $('#homeSub').textContent = 'Jeux PC, Steam, Epic, GOG, ROMs et émulateurs';
@@ -171,6 +187,7 @@ function updateHomeChrome() {
   } else {
     const p = plat(it.id);
     $('#homeTitle').textContent = p.name;
+    setHomeLogo(it.id);
     const emu = p.id !== 'pc' && !S.lib.settings.emulators?.[p.id] && S.lib.games.some((x) => x.platform === p.id && x.kind === 'rom') ? ' · émulateur à configurer' : '';
     $('#homeSub').textContent = [p.maker, p.year, `${it.n} jeu${it.n > 1 ? 'x' : ''}`].filter(Boolean).join(' · ') + emu;
     const g = recentGame(p.id);
@@ -178,6 +195,13 @@ function updateHomeChrome() {
   }
   $('#counter').textContent = '';
   sweepCard();
+}
+function setHomeLogo(id) {
+  const el = $('#homeLogo');
+  const has = id && S.platLogo[id];
+  el.hidden = !has;
+  el.style.cssText = has ? logoCss(id) : '';
+  $('#homeTitle').classList.toggle('sr-only', !!has);
 }
 function recentGame(pid) {
   return [...S.lib.games].filter((g) => !pid || g.platform === pid).sort((a, b) => (b.lastPlayed || b.addedAt) - (a.lastPlayed || a.addedAt))[0];
@@ -313,6 +337,7 @@ function slotHTML(g) {
   const reflectImg = g.media?.cover ? `<img data-src="${mediaUrl(g, g.media.cover)}" alt="" />` : '';
   const bandInner = c.pc
     ? `<span class="band-mark"><span class="band-rr">RR</span><span class="band-pc"><span>PC</span><span>GAMES</span></span></span>`
+    : S.platLogo[g.platform] ? `<span class="band-logo" style="${logoCss(g.platform)}" role="img" aria-label="${esc(c.label)}"></span>`
     : `<span class="band-label">${esc(c.label)}</span>`;
   let front;
   if (c.style === 'card') front = `<div class="art">${artHTML(g, true)}<div class="gloss"></div><div class="sweep"></div>${loading}</div>`;
@@ -320,7 +345,7 @@ function slotHTML(g) {
   else front = `<div class="band">${bandInner}</div><div class="art">${artHTML(g, true)}<div class="gloss"></div><div class="sweep"></div>${loading}</div>`;
   const spine = c.pc
     ? `<span class="s-rr">RR</span><span class="s-name">${name}</span>`
-    : `<span class="s-top"><span class="s-plat" style="writing-mode:horizontal-tb;font-size:calc(var(--box-d)*.26)">${esc(plat(g.platform).short.slice(0, 6))}</span></span><span class="s-name">${name}</span>`;
+    : `<span class="s-top">${S.platLogo[g.platform] ? `<span class="s-logo" style="${logoCss(g.platform)}"></span>` : `<span class="s-plat" style="writing-mode:horizontal-tb;font-size:calc(var(--box-d)*.26)">${esc(plat(g.platform).short.slice(0, 6))}</span>`}</span><span class="s-name">${name}</span>`;
   return `
     <div class="halo"></div>
     <div class="box" data-style="${c.style}" style="--case:${c.body};--band:${c.band};--band-fg:${c.fg || '#fff'};--spine-fg:${c.fg && c.style !== 'card' && c.band === c.body ? c.fg : '#fff'}">
@@ -334,7 +359,7 @@ function slotHTML(g) {
     </div>
     <div class="shadow"></div>`;
 }
-const sig = (g) => JSON.stringify([g.name, g.media, g.mediaVersion, g.metaStatus, g.favorite, g.color, g.platform, S.lib.settings.caseStyle, S.lib.running.includes(g.id), g.description, g.screenshots, S.dims.H]);
+const sig = (g) => JSON.stringify([S.platLogo[g.platform] || '', g.name, g.media, g.mediaVersion, g.metaStatus, g.favorite, g.color, g.platform, S.lib.settings.caseStyle, S.lib.running.includes(g.id), g.description, g.screenshots, S.dims.H]);
 
 function slotDims(g) {
   const c = caseInfo(g);
@@ -349,6 +374,7 @@ function syncSlots() {
   const car = $('#carousel');
   const ids = new Set(S.items.map((g) => g.id));
   for (const [id, el] of slots) if (!ids.has(id)) { el.remove(); slots.delete(id); }
+  new Set(S.items.map((g) => g.platform)).forEach(loadPlatLogo);
   S.items.forEach((g, i) => {
     let el = slots.get(g.id);
     const s = sig(g);
@@ -558,7 +584,10 @@ function updateBrand() {
   }
   const p = S.plat === 'all' ? null : plat(S.plat);
   t.className = 'brand-title platform';
-  t.innerHTML = p ? `<span style="color:${['#2b2b2b', '#4d4d55', '#9aa0a6'].includes(p.color) ? '#fff' : p.color}">${esc(p.name.toUpperCase())}</span>` : '<span class="brand-rr">TOUS</span> LES JEUX';
+  const col = ['#2b2b2b', '#4d4d55', '#9aa0a6', '#1a1a1a'].includes(p?.color) ? '#fff' : p?.color;
+  t.innerHTML = !p ? '<span class="brand-rr">TOUS</span> LES JEUX'
+    : S.platLogo[p.id] ? `<span class="brand-logo" style="${logoCss(p.id)};--c:${col}" role="img" aria-label="${esc(p.name)}"></span>`
+    : `<span style="color:${col}">${esc(p.name.toUpperCase())}</span>`;
   const count = inPlat(S.lib.games).length;
   const tabLabel = S.tabs.find((x) => x.id === S.tab)?.label || 'Tous';
   $('#brandSub').textContent = [p?.maker, p?.year, `${count} jeu${count > 1 ? 'x' : ''}`, tabLabel].filter(Boolean).join(' · ');
@@ -1079,6 +1108,7 @@ function renderEmus() {
       <div class="e-actions">
         <button class="btn small" data-emupick="${p.id}" data-nav>${c ? 'Changer' : 'Choisir…'}</button>
         <button class="btn small" data-platimg="${p.id}" data-nav title="Image de la console sur l’accueil">Image</button>
+        <button class="btn small" data-platlogo="${p.id}" data-nav title="Logo de la console">Logo</button>
         ${c ? `<button class="btn small danger" data-emudel="${p.id}" data-nav>Retirer</button>` : ''}
       </div>
     </div>`;
@@ -1092,6 +1122,8 @@ $('#settings').addEventListener('click', async (e) => {
   const pick = e.target.closest('[data-emupick]');
   const del = e.target.closest('[data-emudel]');
   const pimg = e.target.closest('[data-platimg]');
+  const plogo = e.target.closest('[data-platlogo]');
+  if (plogo) { const f = await rr.setPlatformLogo(plogo.dataset.platlogo); if (f) { S.platLogo[plogo.dataset.platlogo] = f; syncCards(); syncSlots(); updateBrand(); toast('Logo mis à jour'); } return; }
   if (tab) { setPage = tab.dataset.settab; renderSettings(); sfx('tab'); return; }
   if (seg) { const k = seg.parentElement.dataset.setting; const v = k === 'volume' ? parseFloat(seg.dataset.value) : seg.dataset.value; await rr.setSettings({ [k]: v }); }
   if (tg) await rr.setSettings({ [tg.dataset.toggle]: !S.lib.settings[tg.dataset.toggle] });

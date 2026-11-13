@@ -594,3 +594,17 @@ code { font-family: ui-monospace, 'Cascadia Code', monospace; }
 .tabs::-webkit-scrollbar { display: none; }
 .brand-title.platform { font-size: clamp(22px, 2.2vw, 34px); white-space: nowrap; }
 .brand > div { min-width: 0; }
+
+/* Logos officiels des consoles (téléchargés localement), affichés en monochrome via un masque */
+.band-logo, .s-logo, .c-logo, .home-logo, .brand-logo {
+  display: block; background: var(--band-fg, #fff);
+  -webkit-mask: var(--logo) center / contain no-repeat; mask: var(--logo) center / contain no-repeat;
+}
+.band-logo { height: 58%; width: 74%; }
+.s-logo { width: 78%; height: 62%; }
+.box[data-style] .spine .s-top { padding: 0 8%; }
+.c-logo { width: 82%; height: 46%; background: #fff; }
+.home-logo { height: clamp(46px, 7vh, 84px); width: min(560px, 70vw); margin: 0 auto 16px; background: #fff; filter: drop-shadow(0 4px 18px rgba(0,0,0,.6)); }
+.home-caption.swap .home-logo { animation: captionIn var(--dur-med) var(--ease-out); }
+.brand-logo { height: clamp(26px, 3.2vw, 40px); width: clamp(180px, 18vw, 300px); background: var(--c, #fff); -webkit-mask-position: left center; mask-position: left center; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

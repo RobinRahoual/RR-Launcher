@@ -257,6 +257,24 @@ async function platformImage(wikiTitle, dir, id) {
   return null;
 }
 
+// Logo officiel de la console (fichier SVG de l'article Wikipédia, rendu en PNG par Wikimedia).
+async function platformLogo(wikiTitle, dir, id) {
+  const media = await getJson(`https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(wikiTitle)}`);
+  const items = (media?.items || []).filter((it) => it.type === 'image' && /logo|wordmark/i.test(it.title || '') && !/controller|icon|button|symbol|company|corporation|sony_logo|nintendo_logo|microsoft_logo|sega_logo/i.test(it.title || ''));
+  items.sort((a, b) => (/\.svg/i.test(b.title) ? 1 : 0) - (/\.svg/i.test(a.title) ? 1 : 0));
+  for (const it of items.slice(0, 3)) {
+    const name = String(it.title).replace(/^File:/i, '');
+    const urls = [`https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(name)}?width=900`];
+    if (it.srcset?.length) {
+      const best = [...it.srcset].sort((a, b) => parseFloat(b.scale) - parseFloat(a.scale))[0];
+      urls.push(best.src.startsWith('//') ? 'https:' + best.src : best.src);
+    }
+    const file = await downloadFirst(urls, dir, `${id}-logo`);
+    if (file) return file;
+  }
+  return null;
+}
+
 // ---------- API publique ----------
 async function wikiSearch(term, platformName) {
   const q = `${term} ${platformName || ''} video game`.trim();
@@ -391,4 +409,4 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   return out;
 }
 
-module.exports = { search, fetchAll, dominantColor, normalize, setLogFile, log, platformImage, downloadFirst };
+module.exports = { search, fetchAll, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst };
