@@ -578,7 +578,7 @@ function syncSlots() {
       el.className = 'slot';
       el.style.display = 'none';
       el.addEventListener('click', () => onSlotClick(g.id));
-      el.addEventListener('dblclick', () => { clearTimeout(slotClickT); if (S.mode === 'main' && S.items[S.sel]?.id === g.id) play(); });
+      el.addEventListener('dblclick', () => { clearTimeout(slotClickT); if (BO.kind === 'open') boCancel(); if (S.mode === 'main' && S.items[S.sel]?.id === g.id) play(); });
       car.appendChild(el);
       slots.set(g.id, el);
     }
@@ -941,7 +941,7 @@ $('#capActions').addEventListener('click', (e) => {
   if (S.zone === 'actions' && i >= 0) { S.act = i; S._actKey = ''; }
   const a = b.dataset.cap;
   if (a === 'play') play();
-  else if (a === 'details') openDetails();
+  else if (a === 'details') openGame(); // BOXOPEN
   else if (a === 'fav') toggleFav();
   if (S.device === 'mouse' && S.zone !== 'actions') b.blur();
 });
@@ -999,8 +999,8 @@ function onSlotClick(id) {
   const i = S.items.findIndex((g) => g.id === id);
   setZone('row', true);
   clearTimeout(slotClickT);
-  // Clic sur la sélection = détails (différé pour laisser passer un double-clic = jouer)
-  if (i === S.sel) slotClickT = setTimeout(() => { if (S.mode === 'main' && S.items[S.sel]?.id === id) openDetails(); }, 240);
+  // Clic sur la sélection = page du jeu (BOXOPEN ; différé pour laisser passer un double-clic = jouer)
+  if (i === S.sel) slotClickT = setTimeout(() => { if (S.mode === 'main' && S.items[S.sel]?.id === id) openGame(); }, 240);
   else select(i);
 }
 function flip() { if (S.items.length) { S.flip = S.flip ? 0 : 1; sfx('flip'); } }
@@ -1090,6 +1090,7 @@ function closeAll() { while (S.mode !== 'main') closeOverlay(true); }
 // Retour contextuel : ferme d'abord un sous-menu ouvert, sinon l'overlay
 function overlayBack() {
   if (S.mode === 'details' && !$('#dSub').hidden) return toggleImageMenu(false);
+  if (S.mode === 'details' && !S.stack.length) return closeGamePage(); // BOXOPEN : la boîte se referme
   closeOverlay();
 }
 function navables() {
@@ -1102,6 +1103,7 @@ function setFocus(el) {
   el.focus({ preventScroll: false });
   if (S.device !== 'mouse') el.classList.add('is-focus');
   el.scrollIntoView({ block: 'nearest' });
+  if (S.mode === 'details') renderHints(); // BOXOPEN : libellé de A selon le bouton focalisé
 }
 function focusFirst() {
   const list = navables();
@@ -1166,11 +1168,12 @@ function renderDetails() {
   const running = S.lib.running.includes(g.id);
   $('.d-play-label').textContent = running ? 'En cours…' : 'Jouer';
   $('.d-play').classList.toggle('is-running', running);
-  const shots = (g.screenshots || []).slice(0, 3);
+  // BOXOPEN : bande jaquette + captures en bas de la page du jeu
+  const shots = (g.screenshots || []).slice(0, 5);
   $('#dShots').classList.toggle('cover-only', !shots.length);
-  $('#dShots').innerHTML = shots.length
-    ? shots.map((s) => `<div class="d-shot" style="background-image:url('${mediaUrl(g, s)}')"></div>`).join('')
-    : g.media?.cover ? `<img class="d-cover" src="${mediaUrl(g, g.media.cover)}" alt="" />` : '';
+  $('#dShots').innerHTML = (g.media?.cover ? `<div class="d-shot d-cover-tile" style="background-image:url('${mediaUrl(g, g.media.cover)}')"></div>` : '')
+    + shots.map((s) => `<div class="d-shot" style="background-image:url('${mediaUrl(g, s)}')"></div>`).join('');
+  renderDetailsMedia(g); // BOXOPEN
   if (!$('#dSub').hidden) renderImageMenu(g);
 }
 const IMG_KINDS = [
@@ -1222,6 +1225,239 @@ $('#dSub').addEventListener('click', async (e) => {
   b.classList.remove('is-busy');
   if (r) toast(`Image « ${IMG_KINDS.find((x) => x.k === b.dataset.img)?.l || ''} » mise à jour`, 'success');
 });
+
+// ================================================================ BOXOPEN : la boîte s'ouvre, le disque (ou la cartouche) sort → page du jeu
+// Couche d'animation indépendante (#boxopen, styles dans boxopen.css) : on clone la boîte sélectionnée, on la pose
+// au centre-gauche, le couvercle (.front) pivote sur la charnière, le support sort et tourne, puis fondu vers #details.
+// Tout passe par Web Animations (transform / opacity). Interruptible : B annule, A saute. Mouvement réduit : simple fondu.
+const BO_MEDIA = {
+  pc: 'dvd', xbox: 'dvd', x360: 'dvd', ps2: 'ps2', ps3: 'bluray', wiiu: 'bluray', ps1: 'ps1', wii: 'wii', gc: 'mini', psp: 'umd', dc: 'gd',
+  switch: 'c:switch', nds: 'c:ds', '3ds': 'c:ds3', gb: 'c:gb', gba: 'c:gba', snes: 'c:snes', n64: 'c:n64', nes: 'c:nes', md: 'c:md', vita: 'c:vita',
+};
+// Disques : taille relative, face argentée (dessus) et face gravée (dessous) — couleurs d'objets physiques, pas d'interface
+const BO_DISC = {
+  dvd: { s: 1, base: '#d6dae0', under: '#b7b2cc' },
+  ps2: { s: 1, base: '#d6dae0', under: '#3b4c9e' },
+  ps1: { s: 1, base: '#d0d3d8', under: '#0d0d11' },
+  bluray: { s: 1, base: '#c3d0ec', under: '#5f80d0' },
+  wii: { s: 1, base: '#e3e5e9', under: '#c4c8d0' },
+  mini: { s: 0.66, base: '#d6dae0', under: '#bdbdc8' },
+  umd: { s: 0.56, base: '#d6dae0', under: '#b9bcc6' },
+  gd: { s: 1, base: '#d9d5c8', under: '#cbbd93' },
+};
+// Cartouches : r = largeur / hauteur, k = grand côté relatif à la boîte, c = plastique, li = marges de l'étiquette
+const BO_CART = {
+  switch: { r: 0.68, k: 0.6, c: '#2b2b30', li: '8% 8% 15% 8%', cr: '10%' },
+  ds: { r: 1.06, k: 0.5, c: '#3a3a40', li: '8% 8% 28% 8%', cr: '7%', grip: 1 },
+  ds3: { r: 1.06, k: 0.5, c: '#e6e7ea', li: '8% 8% 28% 8%', cr: '7%', grip: 1 },
+  gb: { r: 0.88, k: 0.72, c: '#a9a7a2', li: '25% 11% 13% 11%', cr: '3% 3% 9% 9%', clip: 'polygon(0 0, 89% 0, 100% 10%, 100% 100%, 0 100%)', top: 1 },
+  gba: { r: 1.6, k: 0.72, c: '#3d3a48', li: '16% 9% 11% 9%', cr: '6% 6% 12% 12%' },
+  snes: { r: 1.3, k: 0.86, c: '#9b99a2', li: '8% 12% 36% 12%', cr: '6% 6% 3% 3%', grip: 1 },
+  n64: { r: 1.3, k: 0.86, c: '#36363c', li: '10% 12% 33% 12%', cr: '4%', clip: 'polygon(5% 0, 95% 0, 100% 14%, 100% 100%, 0 100%, 0 14%)', grip: 1 },
+  nes: { r: 0.9, k: 0.8, c: '#8d8d92', li: '7% 10% 40% 10%', cr: '3%', grip: 1 },
+  md: { r: 0.95, k: 0.8, c: '#17171a', li: '8% 9% 30% 9%', cr: '5% 5% 3% 3%', grip: 1 },
+  vita: { r: 0.73, k: 0.54, c: '#1d1d22', li: '9% 8% 14% 8%', cr: '9%' },
+};
+function boMediaKind(g) {
+  const k = BO_MEDIA[g.platform] || (caseInfo(g).style === 'card' ? 'c:snes' : 'dvd');
+  return k.startsWith('c:') ? { type: 'cart', v: k.slice(2) } : { type: 'disc', v: k };
+}
+function boLabel(g) {
+  const f = g.media?.cover || g.media?.hero || g.media?.header;
+  const fb = `linear-gradient(150deg, ${g.color || plat(g.platform).color}, #0b0b16)`;
+  return f ? `url('${mediaUrl(g, f)}') center / cover no-repeat, ${fb}` : fb;
+}
+// HTML d'un disque / d'une cartouche à l'échelle « ref » (px) : utilisé par l'animation et par la page du jeu
+function boMediaHTML(g, ref) {
+  const m = boMediaKind(g);
+  if (m.type === 'disc') {
+    const d = BO_DISC[m.v] || BO_DISC.dvd;
+    const dia = Math.round(ref * d.s);
+    return { ...m, w: dia, h: dia, html: `
+      <div class="rr-disc" data-disc="${m.v}" style="--d:${dia}px;--disc-base:${d.base};--disc-under:${d.under};--label:${boLabel(g)}">
+        <div class="disc-spin"><div class="disc-face disc-top"><div class="disc-label"></div></div><div class="disc-face disc-under"></div></div>
+        <div class="disc-sheen"></div>
+      </div>` };
+  }
+  const c = BO_CART[m.v] || BO_CART.snes;
+  const long = ref * c.k;
+  const w = Math.round(c.r >= 1 ? long : long * c.r), h = Math.round(c.r >= 1 ? long / c.r : long);
+  const clip = c.clip ? `--clip:${c.clip};` : '';
+  return { ...m, w, h, html: `
+    <div class="rr-cart" data-cart="${m.v}" style="width:${w}px;height:${h}px;--cart:${c.c};--li:${c.li};--cr:${c.cr};${clip}--label:${boLabel(g)}">
+      <div class="cart-spin">
+        <div class="cart-face cart-front"><div class="cart-label"></div>${c.grip ? '<i class="cart-grip"></i>' : ''}${c.top ? '<i class="cart-grip top"></i>' : ''}</div>
+        <div class="cart-face cart-back"><i class="cart-grip"></i><i class="cart-pins"></i></div>
+      </div>
+    </div>` };
+}
+
+const BO = { busy: false, kind: '', anims: [], timers: [], root: null, slot: null, opened: false, gameId: null };
+const BO_T = { move: 420, doorAt: 240, door: 460, liftAt: 600, lift: 420, spinAt: 600, outAt: 1040, end: 1360 };
+const BO_DOOR = -160;
+// Pose de la boîte ouverte (centre-gauche, légèrement tournée face caméra)
+function boPose(d) {
+  const s = Math.min(innerHeight * 0.58 / d.H, innerWidth * 0.27 / d.W);
+  // le couvercle s'ouvre vers la gauche : on garde sa largeur à l'écran
+  return { x: Math.max(innerWidth * 0.36, innerWidth * 0.05 + 1.45 * d.W * s), y: innerHeight * 0.5, s, ry: -20, rx: 6 };
+}
+const boRig = (d, p) => `translate3d(${(p.x - d.W / 2).toFixed(1)}px, ${(p.y - d.H / 2).toFixed(1)}px, 0) rotateY(${p.ry}deg) rotateX(${p.rx}deg) scale(${p.s.toFixed(4)})`;
+function boFrom(slot, d) {
+  const r = $('.front', slot).getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2, s: r.height / d.H, ry: 0, rx: 0 };
+}
+function boBuild(g, slot) {
+  const d = slot._dims || { W: S.dims.H * 0.64, H: S.dims.H, D: S.dims.H * 0.085 };
+  const m = boMediaHTML(g, 0.9 * Math.min(d.W, d.H));
+  const root = document.createElement('div');
+  root.id = 'boxopen';
+  root.setAttribute('aria-hidden', 'true');
+  const hero = heroOf(g);
+  root.innerHTML = `<div class="bo-bg"${hero ? ` style="background-image:url('${hero}')"` : ''}></div><div class="bo-scene"><div class="bo-rig"></div></div>`;
+  const rig = $('.bo-rig', root);
+  rig.style.cssText = `--box-w:${d.W}px;--box-h:${d.H}px;--box-d:${d.D}px;width:${d.W}px;height:${d.H}px`;
+  const box = $('.box', slot).cloneNode(true);
+  $('.reflect', box)?.remove();
+  box.classList.add('bo-box');
+  const front = $('.front', box);
+  const door = document.createElement('div');
+  door.className = 'bo-door';
+  front.replaceWith(door);
+  door.append(front);
+  door.insertAdjacentHTML('beforeend', '<div class="bo-door-in"><i></i><i></i></div>');
+  box.insertAdjacentHTML('afterbegin', `<div class="bo-tray" data-media="${m.type}"><i class="bo-holder" style="width:${m.w * 1.05}px;height:${m.h * 1.05}px"></i></div><div class="bo-wall l"></div><div class="bo-wall r"></div><div class="bo-wall t"></div><div class="bo-wall b"></div>`);
+  box.insertAdjacentHTML('beforeend', `<div class="bo-media" style="left:${(d.W - m.w) / 2}px;top:${(d.H - m.h) / 2}px;width:${m.w}px;height:${m.h}px"><div class="bo-flip">${m.html}</div></div>`);
+  rig.append(box);
+  root.addEventListener('mousedown', (e) => { e.preventDefault(); if (BO.kind === 'open') boSkip(); else boFinish(); });
+  document.body.append(root);
+  return { root, rig, door, d, m, bg: $('.bo-bg', root), scene: $('.bo-scene', root), media: $('.bo-media', root), flip: $('.bo-flip', root), spin: $('.disc-spin, .cart-spin', root) };
+}
+function boAnim(el, frames, delay, duration, easing = 'cubic-bezier(.2,.8,.2,1)') {
+  const a = el.animate(frames, { delay, duration, easing, fill: 'both' });
+  BO.anims.push(a);
+  return a;
+}
+function boClear() {
+  BO.anims.forEach((a) => a.cancel());
+  BO.timers.forEach(clearTimeout);
+  BO.anims = []; BO.timers = [];
+  BO.root?.remove(); BO.root = null;
+  BO.slot?.classList.remove('bo-hide'); BO.slot = null;
+  BO.busy = false; BO.kind = '';
+  document.body.classList.remove('bo-on');
+}
+// Point d'entrée : A / Entrée / clic / X / I / « Détails » dans l'écran jeux
+function openGame() {
+  if (BO.busy || S.mode !== 'main' || S.view !== 'games') return;
+  const g = S.items[S.sel];
+  if (!g) return;
+  const slot = slots.get(g.id);
+  if (reduceMotion || !slot || slot.style.display === 'none' || !$('.front', slot)) return openDetails();
+  S.flip = 0; S.flipCur = 0;
+  frameGames(performance.now(), 0); // repose la boîte (sans retournement) avant de la mesurer
+  const L = boBuild(g, slot);
+  const { d } = L;
+  const from = boFrom(slot, d), to = boPose(d);
+  Object.assign(BO, { busy: true, kind: 'open', root: L.root, slot, opened: false, gameId: g.id });
+  slot.classList.add('bo-hide');
+  document.body.classList.add('bo-on');
+  L.scene.style.perspectiveOrigin = `${to.x}px ${to.y}px`;
+  const zIn = -d.D / 2 + 2;
+  sfx('boxopen');
+  boAnim(L.bg, [{ opacity: 0 }, { opacity: 1 }], 0, 320, 'ease-out');
+  boAnim(L.rig, [{ transform: boRig(d, from) }, { transform: boRig(d, to) }], 0, BO_T.move);
+  boAnim(L.door, [
+    { transform: `translateZ(${d.D / 2}px) rotateY(0deg)` },
+    { transform: `translateZ(${d.D / 2}px) rotateY(-12deg)`, offset: 0.18 },
+    { transform: `translateZ(${d.D / 2}px) rotateY(${BO_DOOR}deg)` },
+  ], BO_T.doorAt, BO_T.door, 'cubic-bezier(.55,0,.25,1)');
+  const outX = d.W * 0.95, outZ = d.D * 2.6 + d.H * 0.08;
+  boAnim(L.media, [
+    { transform: `translate3d(0px, 0px, ${zIn}px) rotateY(0deg) rotateX(0deg) scale(1)` },
+    { transform: `translate3d(${d.W * 0.08}px, ${-d.H * 0.02}px, ${d.D * 1.6}px) rotateY(4deg) rotateX(0deg) scale(1.02)`, offset: 0.3 },
+    { transform: `translate3d(${outX}px, ${-d.H * 0.03}px, ${outZ}px) rotateY(${-to.ry + 2}deg) rotateX(${-to.rx - 4}deg) scale(1.16)` },
+  ], BO_T.liftAt, BO_T.lift, 'cubic-bezier(.45,0,.2,1)');
+  boAnim(L.flip, [{ transform: 'rotateY(0deg)' }, { transform: 'rotateY(360deg)' }], BO_T.liftAt + 80, 520, 'cubic-bezier(.5,0,.3,1)');
+  if (L.m.type === 'disc') {
+    boAnim(L.spin, [{ transform: 'rotate(0deg)' }, { transform: 'rotate(1620deg)' }], BO_T.spinAt, BO_T.end - BO_T.spinAt, 'cubic-bezier(.55,0,1,.7)');
+  } else {
+    boAnim(L.spin, [{ transform: 'rotate(0deg) translateY(0)' }, { transform: 'rotate(-6deg) translateY(-4%)' }, { transform: 'rotate(0deg) translateY(0)' }], BO_T.spinAt + 400, 360, 'ease-in-out');
+  }
+  // Fondu / zoom vers la page du jeu
+  L.scene.style.transformOrigin = `${to.x + outX * to.s * 0.8}px ${to.y}px`;
+  boAnim(L.scene, [{ opacity: 1, transform: 'scale(1)' }, { opacity: 0, transform: 'scale(1.14)' }], BO_T.outAt, BO_T.end - BO_T.outAt, 'cubic-bezier(.5,0,.75,0)');
+  boAnim(L.bg, [{ opacity: 1 }, { opacity: 0 }], BO_T.outAt + 60, BO_T.end - BO_T.outAt - 60, 'ease-in');
+  BO.timers.push(setTimeout(boOpenPage, BO_T.outAt));
+  BO.timers.push(setTimeout(() => { boClear(); renderHints(); }, BO_T.end + 20));
+  renderHints();
+}
+function boOpenPage() {
+  if (BO.opened) return;
+  BO.opened = true;
+  if (S.mode === 'main' && S.items[S.sel]?.id === BO.gameId) openDetails();
+}
+// A pendant l'ouverture : on arrive tout de suite sur la page
+function boSkip() {
+  if (BO.kind !== 'open') return;
+  boOpenPage();
+  boClear();
+  renderHints();
+}
+// B pendant l'ouverture : on annule, la boîte reprend sa place
+function boCancel() {
+  if (BO.kind !== 'open') return;
+  BO.timers.forEach(clearTimeout); BO.timers = [];
+  if (BO.opened) closeOverlay(true);
+  BO.kind = 'cancel';
+  sfx('back');
+  const a = BO.root.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 160, easing: 'ease-in', fill: 'both' });
+  BO.anims.push(a);
+  a.onfinish = () => { boClear(); renderHints(); };
+  renderHints();
+}
+// Fin immédiate (fermeture ou annulation en cours)
+function boFinish() { if (BO.busy && BO.kind !== 'open') { boClear(); renderHints(); } }
+// B sur la page du jeu : la boîte se referme et retourne dans la rangée
+function closeGamePage() {
+  const g = S.items[S.sel];
+  const slot = g && slots.get(g.id);
+  if (BO.busy) boClear();
+  if (reduceMotion || S.view !== 'games' || !slot || slot.style.display === 'none' || !$('.front', slot)) return closeOverlay();
+  const L = boBuild(g, slot);
+  const { d } = L;
+  const to = boPose(d), from = boFrom(slot, d);
+  closeOverlay(true);
+  Object.assign(BO, { busy: true, kind: 'close', root: L.root, slot, opened: false, gameId: g.id });
+  slot.classList.add('bo-hide');
+  document.body.classList.add('bo-on');
+  L.scene.style.perspectiveOrigin = `${to.x}px ${to.y}px`;
+  sfx('boxclose');
+  const zIn = -d.D / 2 + 2;
+  boAnim(L.media, [
+    { transform: `translate3d(${d.W * 0.6}px, 0px, ${d.D * 2}px) scale(1.06)`, opacity: 0.4 },
+    { transform: `translate3d(0px, 0px, ${zIn}px) scale(1)`, opacity: 1 },
+  ], 0, 200, 'cubic-bezier(.3,0,.2,1)');
+  boAnim(L.door, [
+    { transform: `translateZ(${d.D / 2}px) rotateY(${BO_DOOR}deg)` },
+    { transform: `translateZ(${d.D / 2}px) rotateY(0deg)` },
+  ], 80, 280, 'cubic-bezier(.5,0,.4,1)');
+  boAnim(L.rig, [{ transform: boRig(d, to) }, { transform: boRig(d, from) }], 280, 300, 'cubic-bezier(.4,0,.2,1)');
+  boAnim(L.bg, [{ opacity: 1 }, { opacity: 0 }], 240, 320, 'ease-in-out');
+  BO.timers.push(setTimeout(() => { boClear(); renderHints(); }, 600));
+  renderHints();
+}
+// Petit disque / petite cartouche à côté du titre, sur la page du jeu
+function renderDetailsMedia(g) {
+  const el = $('#dMedia');
+  if (!el) return;
+  const key = `${g.id}|${g.mediaVersion || 0}|${g.platform}`;
+  if (el._key === key) return;
+  el._key = key;
+  const m = boMediaHTML(g, 118);
+  el.dataset.media = m.type;
+  el.innerHTML = m.html;
+}
+// ================================================================ fin BOXOPEN
 
 // ---------------------------------------------------------------- Invites
 const PROMPT_ICON = {
@@ -1634,11 +1870,13 @@ async function action(name) {
     case 'minimize': closeAll(); sfx('back'); rr.minimize(); break;
     case 'quitAsk': quitAsk(); break;
     case 'quit': rr.quit(); break;
-    case 'close': closeOverlay(); break;
+    case 'close': overlayBack(); break;
     case 'checkUpdate': checkUpdate(); break;
     case 'installUpdate': if (S.update?.state === 'ready') { toast('Installation de la mise à jour…', 'progress'); rr.installUpdate(); } break;
     case 'play': play(); break;
-    case 'details': openDetails(); break;
+    case 'details': openGame(); break; // BOXOPEN
+    case 'boCancel': boCancel(); break;
+    case 'boSkip': boSkip(); break;
     case 'flip': flip(); break;
     case 'tabNext': cycleTab(1); break;
     case 'open': openHomeItem(); break;
@@ -1682,13 +1920,15 @@ function glyph(btn) {
 function renderHints() {
   const H = [];
   const h = (btns, label, act) => H.push({ btns, label, act });
-  if (S.mode !== 'main') {
+  if (BO.kind === 'open') { h(['b'], 'Annuler', 'boCancel'); h(['a'], 'Passer', 'boSkip'); } // BOXOPEN
+  else if (S.mode !== 'main') {
     const sub = S.mode === 'details' && !$('#dSub').hidden;
     h(['b'], sub ? 'Fermer les images' : S.mode === 'menu' ? 'Fermer' : 'Retour', sub ? 'closeSub' : 'close');
     if (S.mode === 'settings') h(S.device === 'pad' ? ['lb', 'rb'] : ['tab'], 'Sections', 'setNext');
-    if (S.mode === 'details') h(['y'], 'Jouer', 'play');
+    const onPlay = S.mode === 'details' && document.activeElement?.matches?.('.d-play'); // BOXOPEN : A = Jouer sur la page du jeu
+    if (S.mode === 'details' && !onPlay) h(['y'], 'Jouer', 'play');
     h(['ud'], 'Se déplacer', null);
-    h(['a'], S.mode === 'scan' && !$('#scanResults').hidden ? 'Cocher / valider' : 'Valider', null);
+    h(['a'], onPlay ? 'Jouer' : S.mode === 'scan' && !$('#scanResults').hidden ? 'Cocher / valider' : 'Valider', null);
   }
   else if (!S.lib.games.length) { h(['menu'], 'Menu', 'menu'); h(['view'], 'Ajouter des jeux', 'addHub'); h(['a'], 'Importer', 'scanLaunchers'); }
   else if (S.topFocus >= 0) { h(['b'], 'Retour', null); h(['lr'], 'Choisir', null); h(['a'], 'Ouvrir', null); }
@@ -1707,9 +1947,8 @@ function renderHints() {
     if (S.items.length) {
       if (S.tabs.length > 1) h(S.device === 'pad' ? ['lb', 'rb'] : ['lb'], 'Catégories', 'tabNext');
       h(['y'], 'Retourner', 'flip');
-      h(['x'], 'Détails', 'details');
       h(['lr'], 'Naviguer', null);
-      h(['a'], 'Jouer', 'play');
+      h(['a'], 'Ouvrir', 'details'); // BOXOPEN : A ouvre la page du jeu (Jouer y est focalisé)
     }
   }
   $('#hintList').innerHTML = H.map((x, i) => `<button class="hint" data-hint="${i}" ${x.act ? '' : 'tabindex="-1"'}>${x.btns.map(glyph).join('')}<span class="hint-label">${esc(x.label)}</span></button>`).join('');
@@ -1732,6 +1971,13 @@ function setDevice(d) {
 // ---------------------------------------------------------------- Clavier
 addEventListener('keydown', (e) => {
   setDevice('kbd');
+  // BOXOPEN : pendant l'ouverture, Entrée/Espace saute, Échap/Retour annule ; une fermeture en cours se termine net
+  if (BO.kind === 'open' || BO.kind === 'cancel') {
+    e.preventDefault();
+    if (BO.kind === 'open' && !e.repeat) { if (e.key === 'Enter' || e.key === ' ') boSkip(); else if (e.key === 'Escape' || e.key === 'Backspace') boCancel(); }
+    return;
+  }
+  if (BO.busy) boFinish();
   if (S.topFocus >= 0 && SHELL_KEYS[e.key] && !e.ctrlKey && !e.altKey) { if (shellTopInput(SHELL_KEYS[e.key])) { e.preventDefault(); return; } } // SHELL : barre du haut
   else if (S.topFocus >= 0) shellTopInput(e.key === 'Tab' ? 'tab' : 'other'); // SHELL : autre touche → rend la main
   const inInput = !!e.target.matches?.('input, select');
@@ -1780,9 +2026,9 @@ addEventListener('keydown', (e) => {
   }
   const map = {
     ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
-    PageDown: () => move(5), PageUp: () => move(-5), Enter: () => (S.items.length ? play() : setTab('all')),
+    PageDown: () => move(5), PageUp: () => move(-5), Enter: () => (S.items.length ? openGame() : setTab('all')), // BOXOPEN
     ArrowDown: () => setZone('actions'), ArrowUp: () => shellFocusTop(),
-    i: openDetails, I: openDetails, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
+    i: openGame, I: openGame, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
     n: () => action('addHub'), N: () => action('addHub'), Insert: () => action('addOne'), s: () => action('settings'), S: () => action('settings'),
     Escape: () => (S.flip ? flip() : goHome()), Backspace: goHome, m: () => action('menu'), M: () => action('menu'),
     Delete: () => S.items[S.sel] && confirmRemove(S.items[S.sel]),
@@ -1801,7 +2047,7 @@ addEventListener('mousemove', (e) => {
 });
 let wheelAcc = 0, wheelT = 0;
 function onWheel(e) {
-  if (S.mode !== 'main') return;
+  if (S.mode !== 'main' || BO.busy) return; // BOXOPEN
   e.preventDefault();
   const now = performance.now();
   if (now - wheelT > 250) wheelAcc = 0;
@@ -1817,7 +2063,7 @@ function onWheel(e) {
 $('#stage').addEventListener('wheel', onWheel, { passive: false });
 $('#home').addEventListener('wheel', onWheel, { passive: false });
 $$('.overlay').forEach((o) => o.addEventListener('mousedown', (e) => { if (e.target === o && S.mode !== 'details' && S.mode !== 'scan') closeOverlay(); }));
-$('#details').addEventListener('mousedown', (e) => { if (e.target.closest('.details') === null || e.target.classList.contains('details')) closeOverlay(); });
+$('#details').addEventListener('mousedown', (e) => { if (e.target.closest('.details') === null || e.target.classList.contains('details')) overlayBack(); });
 
 // ---------------------------------------------------------------- Manette
 const pad = { prev: [], axisDir: null };
@@ -1841,6 +2087,8 @@ function pollPad(t) {
 }
 function onPadDir(dir, repeat) {
   if (shellSplashActive()) return endSplash(); // SHELL
+  if (BO.kind === 'open' || BO.kind === 'cancel') return; // BOXOPEN
+  if (BO.busy) boFinish();
   if (S.topFocus >= 0 && shellTopInput(dir)) return; // SHELL : barre du haut
   if (S.mode !== 'main') return spatial(dir);
   if (!S.lib.games.length) { if (!repeat) spatial(dir); return; }
@@ -1862,6 +2110,9 @@ function onPadDir(dir, repeat) {
 }
 function onPadBtn(btn) {
   if (shellSplashActive()) return endSplash(); // SHELL
+  if (BO.kind === 'open') { if (btn === 'a') boSkip(); else if (btn === 'b') boCancel(); return; } // BOXOPEN
+  if (BO.kind === 'cancel') return;
+  if (BO.busy) boFinish();
   if (S.topFocus >= 0 && shellTopInput(btn === 'a' || btn === 'b' ? btn : 'other')) return; // SHELL : barre du haut
   if (S.mode === 'main' && !S.lib.games.length) {
     if (btn === 'a') { const el = document.activeElement; if (el?.matches?.('[data-nav]')) el.click(); else action('scanLaunchers'); }
@@ -1876,7 +2127,7 @@ function onPadBtn(btn) {
   if (S.mode === 'main') {
     if (S.zone === 'actions' && (btn === 'a' || btn === 'b')) return btn === 'a' ? pressAct() : setZone('row');
     const m = {
-      a: () => (S.items.length ? play() : setTab('all')), b: () => (S.flip ? flip() : goHome()), x: openDetails, y: flip,
+      a: () => (S.items.length ? openGame() : setTab('all')), b: () => (S.flip ? flip() : goHome()), x: openGame, y: flip, // BOXOPEN
       lb: () => cycleTab(-1), rb: () => cycleTab(1), lt: () => move(-5), rt: () => move(5), view: () => action('addHub'), menu: () => action('menu'),
     }[btn];
     return m && m();

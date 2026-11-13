@@ -1,0 +1,241 @@
+/* RR Launcher — BOXOPEN : ouverture animée de la boîte (couche #boxopen), disques / cartouches, page du jeu (#details).
+   Les couleurs en dur ici sont celles d'objets physiques (plastique, disque, carton) ; l'interface passe par les tokens. */
+
+/* =================================================================== Couche d'animation */
+#boxopen { position: fixed; inset: 0; z-index: 25; overflow: hidden; cursor: pointer; }
+#boxopen .bo-bg {
+  position: absolute; inset: -2%; opacity: 0;
+  background: var(--bg) center / cover no-repeat;
+}
+#boxopen .bo-bg::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 46% 62% at 38% 50%, rgba(var(--bg-rgb), .38), rgba(var(--bg-rgb), .86) 100%);
+}
+#boxopen .bo-scene { position: absolute; inset: 0; perspective: 1300px; will-change: transform, opacity; }
+#boxopen .bo-rig { position: absolute; left: 0; top: 0; transform-style: preserve-3d; transform-origin: 50% 50%; will-change: transform; }
+.slot.bo-hide { visibility: hidden; }
+
+/* Couvercle : la face avant clonée pivote sur la charnière (tranche gauche) */
+.bo-door {
+  position: absolute; inset: 0; transform-style: preserve-3d; transform-origin: 0 50%;
+  transform: translateZ(calc(var(--box-d) / 2)); will-change: transform;
+}
+.bo-door > .face.front { transform: none; }
+.bo-door-in {
+  position: absolute; inset: 0; transform: rotateY(180deg); backface-visibility: hidden;
+  border-radius: calc(var(--box-h) * .024);
+  background:
+    linear-gradient(90deg, rgba(255,255,255,.07), transparent 12%, transparent 88%, rgba(0,0,0,.35)),
+    linear-gradient(160deg, color-mix(in oklab, var(--case) 34%, #1b1b20) 0%, color-mix(in oklab, var(--case) 22%, #0c0c0f) 100%);
+  box-shadow: inset 0 0 0 calc(var(--box-h) * .012) color-mix(in oklab, var(--case) 55%, #08080a), inset 0 0 calc(var(--box-h) * .04) rgba(0,0,0,.55);
+}
+/* Petites griffes à livret, côté opposé à la charnière */
+.bo-door-in i {
+  position: absolute; right: 6%; width: 7%; height: 5%; border-radius: 2px;
+  background: linear-gradient(90deg, rgba(255,255,255,.2), rgba(255,255,255,.05));
+  box-shadow: 0 1px 0 rgba(0,0,0,.4);
+}
+.bo-door-in i:first-child { top: 14%; }
+.bo-door-in i:last-child { bottom: 14%; }
+
+/* Intérieur du boîtier : fond (plateau) et parois intérieures */
+.bo-tray {
+  position: absolute; inset: 0; transform: translateZ(calc(var(--box-d) / -2 + 1px));
+  border-radius: calc(var(--box-h) * .024);
+  background:
+    radial-gradient(ellipse 80% 70% at 50% 45%, rgba(255,255,255,.07), transparent 70%),
+    color-mix(in oklab, var(--case) 40%, #0d0d10);
+  box-shadow:
+    inset 0 0 0 calc(var(--box-h) * .014) color-mix(in oklab, var(--case) 70%, #050506),
+    inset 0 0 calc(var(--box-h) * .06) rgba(0,0,0,.6);
+}
+.bo-holder {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: radial-gradient(circle closest-side, rgba(0,0,0,.18), rgba(0,0,0,.34) 96%, rgba(255,255,255,.1) 100%);
+  box-shadow: inset 0 calc(var(--box-h) * .006) calc(var(--box-h) * .02) rgba(0,0,0,.55);
+}
+/* Moyeu à pétales du support de disque */
+.bo-tray[data-media="disc"] .bo-holder::after {
+  content: ''; position: absolute; left: 50%; top: 50%; width: 27%; height: 27%; transform: translate(-50%, -50%); border-radius: 50%;
+  background:
+    radial-gradient(circle closest-side, #2a2a2f 0 34%, #5a5a63 36% 46%, transparent 48%),
+    repeating-conic-gradient(from 0deg, rgba(255,255,255,.28) 0 7deg, rgba(0,0,0,.25) 7deg 12deg, transparent 12deg 30deg),
+    radial-gradient(circle closest-side, #3a3a42 0 98%, transparent 100%);
+}
+.bo-tray[data-media="cart"] .bo-holder { border-radius: 8%; background: linear-gradient(180deg, rgba(0,0,0,.34), rgba(0,0,0,.2)); }
+.bo-wall { position: absolute; backface-visibility: hidden; background: color-mix(in oklab, var(--case) 48%, #070708); }
+.bo-wall.l, .bo-wall.r { width: var(--box-d); height: var(--box-h); left: calc((var(--box-w) - var(--box-d)) / 2); }
+.bo-wall.t, .bo-wall.b { width: var(--box-w); height: var(--box-d); top: calc((var(--box-h) - var(--box-d)) / 2); }
+.bo-wall.l { transform: rotateY(90deg) translateZ(calc(var(--box-w) / -2)); }
+.bo-wall.r { transform: rotateY(-90deg) translateZ(calc(var(--box-w) / -2)); }
+.bo-wall.t { transform: rotateX(-90deg) translateZ(calc(var(--box-h) / -2)); }
+.bo-wall.b { transform: rotateX(90deg) translateZ(calc(var(--box-h) / -2)); }
+/* Boîte carton (N64, SNES…) et boîtier CD (PS1, Dreamcast) */
+.bo-box[data-style="card"] .bo-tray { background: linear-gradient(160deg, #d8c6a2, #b99f73); box-shadow: inset 0 0 calc(var(--box-h) * .05) rgba(60,40,10,.45); border-radius: 3px; }
+.bo-box[data-style="card"] .bo-door-in { background: linear-gradient(160deg, #e3d4b5, #c7b089); box-shadow: inset 0 0 calc(var(--box-h) * .04) rgba(60,40,10,.35); border-radius: 3px; }
+.bo-box[data-style="card"] .bo-door-in i { display: none; }
+.bo-box[data-style="card"] .bo-wall { background: #a88f62; }
+.bo-box[data-style="jewel"] .bo-tray { background: radial-gradient(ellipse at 50% 40%, #2a2a30, #0c0c0e); border-radius: 2px; }
+.bo-box[data-style="jewel"] .bo-door-in { border-radius: 2px; background: linear-gradient(160deg, rgba(235,238,242,.92), rgba(200,205,212,.92)); box-shadow: inset 0 0 0 2px rgba(255,255,255,.6); }
+
+/* Support qui sort du boîtier */
+.bo-media { position: absolute; transform-style: preserve-3d; will-change: transform; }
+.bo-flip { position: absolute; inset: 0; transform-style: preserve-3d; }
+.bo-flip > * { position: absolute; inset: 0; }
+
+/* =================================================================== Disque (CD / DVD / Blu-ray / mini-disque) */
+.rr-disc { position: relative; width: var(--d); height: var(--d); transform-style: preserve-3d; }
+.rr-disc .disc-spin { position: absolute; inset: 0; transform-style: preserve-3d; }
+.disc-face {
+  position: absolute; inset: 0; border-radius: 50%; backface-visibility: hidden;
+  /* trou central + anneau transparent */
+  -webkit-mask: radial-gradient(circle closest-side, transparent 12%, rgba(0,0,0,.42) 12.6% 26.5%, #000 27.2%);
+          mask: radial-gradient(circle closest-side, transparent 12%, rgba(0,0,0,.42) 12.6% 26.5%, #000 27.2%);
+}
+.disc-top {
+  background:
+    radial-gradient(circle closest-side, transparent 26.8%, rgba(255,255,255,.8) 27.3% 28.4%, rgba(150,158,170,.5) 28.8% 31.6%, transparent 32%),
+    conic-gradient(from 40deg, hsla(190,90%,72%,.32), hsla(285,80%,74%,.28), hsla(50,90%,72%,.32), hsla(150,80%,68%,.28), hsla(220,90%,74%,.32), hsla(330,80%,74%,.28), hsla(190,90%,72%,.32)),
+    conic-gradient(from 20deg, var(--disc-base), #f5f7fa 7%, var(--disc-base) 15%, #b9bfc9 30%, var(--disc-base) 45%, #f5f7fa 57%, var(--disc-base) 65%, #b9bfc9 80%, var(--disc-base));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), inset 0 0 0 2px rgba(0,0,0,.18);
+}
+/* Étiquette imprimée : la jaquette du jeu sur la face du dessus */
+.disc-label {
+  position: absolute; inset: 0; border-radius: 50%; background: var(--label);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 32.4%, #000 33% 93.4%, transparent 94%);
+          mask: radial-gradient(circle closest-side, transparent 32.4%, #000 33% 93.4%, transparent 94%);
+}
+.disc-label::after {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(circle closest-side, transparent 30%, rgba(255,255,255,.14) 31%, transparent 40%), radial-gradient(circle at 50% 50%, transparent 88%, rgba(0,0,0,.25) 94%);
+}
+.disc-under {
+  transform: rotateY(180deg);
+  background:
+    radial-gradient(circle closest-side, transparent 26.8%, rgba(255,255,255,.55) 27.3% 28.2%, transparent 28.8%),
+    conic-gradient(from 0deg, hsla(190,90%,75%,.5), hsla(285,80%,75%,.45), hsla(50,90%,75%,.5), hsla(150,80%,70%,.45), hsla(220,90%,75%,.5), hsla(330,80%,75%,.45), hsla(190,90%,75%,.5)),
+    var(--disc-under);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.4);
+}
+.rr-disc[data-disc="ps1"] .disc-under { background: radial-gradient(circle closest-side, transparent 26.8%, rgba(255,255,255,.4) 27.3% 28.2%, transparent 28.8%), conic-gradient(from 0deg, rgba(255,255,255,.08), rgba(130,90,200,.2), rgba(255,255,255,.04), rgba(90,170,200,.18), rgba(255,255,255,.08)), var(--disc-under); }
+/* Reflets fixes (ne tournent pas avec le disque) */
+.disc-sheen {
+  position: absolute; inset: 0; border-radius: 50%; pointer-events: none; backface-visibility: hidden; transform: translateZ(1px);
+  background:
+    conic-gradient(from 300deg, transparent 0 3%, rgba(255,255,255,.62) 8%, transparent 14% 46%, rgba(255,255,255,.42) 54%, transparent 61%),
+    radial-gradient(circle at 34% 28%, rgba(255,255,255,.28), transparent 46%);
+  -webkit-mask: radial-gradient(circle closest-side, transparent 27%, #000 28%);
+          mask: radial-gradient(circle closest-side, transparent 27%, #000 28%);
+}
+
+/* =================================================================== Cartouche */
+.rr-cart { position: relative; transform-style: preserve-3d; }
+.rr-cart .cart-spin { position: absolute; inset: 0; transform-style: preserve-3d; }
+.cart-face {
+  position: absolute; inset: 0; backface-visibility: hidden; border-radius: var(--cr); clip-path: var(--clip, none);
+  background: linear-gradient(165deg, color-mix(in oklab, var(--cart) 76%, white) 0%, var(--cart) 22%, var(--cart) 72%, color-mix(in oklab, var(--cart) 72%, black) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.22), inset 0 -3px 0 rgba(0,0,0,.3), inset 0 2px 0 rgba(255,255,255,.18);
+}
+.cart-back { transform: rotateY(180deg); }
+.cart-label {
+  position: absolute; inset: var(--li); border-radius: 3px; background: var(--label); overflow: hidden;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.3), 0 1px 0 rgba(255,255,255,.18);
+}
+.cart-label::after { content: ''; position: absolute; inset: 0; background: linear-gradient(120deg, rgba(255,255,255,.3), transparent 38%, transparent 70%, rgba(255,255,255,.08)); }
+.cart-grip {
+  position: absolute; left: 18%; right: 18%; bottom: 7%; height: 12%; border-radius: 2px;
+  background: repeating-linear-gradient(90deg, rgba(0,0,0,.32) 0 2px, rgba(255,255,255,.1) 2px 3px, transparent 3px 7px);
+}
+.cart-grip.top { top: 7%; bottom: auto; height: 10%; }
+.cart-back .cart-grip { top: 8%; bottom: auto; }
+.cart-pins { position: absolute; left: 12%; right: 12%; bottom: 0; height: 8%; background: repeating-linear-gradient(90deg, #c9a24a 0 3px, transparent 3px 6px); opacity: .85; }
+
+/* =================================================================== Page du jeu (#details) façon console */
+#details { background: var(--bg); }
+#details .details-bg { inset: -2%; filter: none; animation: kenburns 46s ease-in-out infinite alternate; }
+[data-theme="dark"] #details .details-bg { filter: brightness(.82) saturate(1.05); }
+#details::after {
+  background:
+    linear-gradient(90deg, rgba(var(--bg-rgb), .95) 0%, rgba(var(--bg-rgb), .86) 32%, rgba(var(--bg-rgb), .45) 56%, transparent 80%),
+    linear-gradient(0deg, rgba(var(--bg-rgb), .96) 0%, rgba(var(--bg-rgb), .7) 20%, transparent 46%);
+}
+#details .details {
+  display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto;
+  gap: clamp(18px, 3.2vh, 40px); align-items: end;
+  padding: clamp(28px, 7vh, 96px) 5vw calc(var(--bottom-h, 72px) + clamp(16px, 3vh, 36px));
+}
+#details .details-main { width: min(780px, 58vw); max-height: none; justify-content: flex-end; min-height: 0; }
+
+/* En-tête : disque / cartouche qui tourne + plateforme, logo, méta */
+.d-head { display: flex; align-items: center; gap: 26px; }
+.d-media {
+  position: relative; flex: 0 0 auto; width: 132px; height: 132px; display: grid; place-items: center; perspective: 700px;
+}
+.d-media::after {
+  content: ''; position: absolute; left: 14%; right: 14%; bottom: -4%; height: 12%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--accent-deep) 40%, transparent), transparent 70%);
+}
+.d-media > * { flex: 0 0 auto; }
+.d-media .rr-disc { transform: rotateX(16deg) rotateY(-12deg); }
+.d-media .disc-spin { animation: boSpin 7s linear infinite; }
+.d-media .rr-cart { transform: rotateY(-14deg) rotateX(6deg); }
+.d-media .cart-spin { animation: boFloat 5.5s ease-in-out infinite; }
+@keyframes boSpin { to { transform: rotate(360deg); } }
+@keyframes boFloat { 50% { transform: translateY(-5%) rotate(-3deg); } }
+.d-head-text { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+#details .d-platform { margin-bottom: 12px; }
+#details .d-logo-wrap img { max-height: 124px; max-width: min(460px, 100%); }
+#details .d-logo-wrap h2 { font-size: clamp(32px, 3.4vw, 58px); line-height: 1.05; }
+#details .d-meta { margin-top: 10px; }
+
+/* Bouton Jouer proéminent */
+#details .d-actions { margin-top: 26px; gap: 12px; }
+#details .d-play { min-width: 300px; min-height: 66px; padding: 0 30px; border-radius: 16px; font-size: 20px; box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 35%, transparent); }
+#details .d-play .ico { width: 24px; height: 24px; }
+#details .d-play.is-focus, #details .d-play:focus-visible { outline: 3px solid var(--fg); outline-offset: 4px; }
+#details .d-fav { min-height: 66px; border-radius: 16px; background: rgba(var(--bg-rgb), .55); backdrop-filter: blur(10px); }
+#details .d-tools { border-top: 0; padding-top: 0; }
+
+/* Infos */
+#details .d-info { margin-top: 16px; display: flex; flex-direction: column; min-height: 0; }
+#details .d-tags { margin-top: 0; }
+#details .d-desc { margin-top: 12px; max-height: 4.9em; font-size: 15px; }
+#details .d-stats { margin-top: 14px; padding: 8px 2px; background: rgba(var(--bg-rgb), .5); backdrop-filter: blur(10px); }
+#details .d-stats b { font-size: 17px; }
+
+/* Bande de jaquette + captures */
+#details .details-side {
+  display: flex; gap: 14px; align-items: stretch; height: clamp(84px, 15vh, 180px);
+  zoom: 1; overflow: hidden; align-content: initial; grid-template-columns: none;
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 60px), transparent);
+          mask-image: linear-gradient(90deg, #000 calc(100% - 60px), transparent);
+}
+#details .details-side .d-shot {
+  flex: 0 0 auto; height: 100%; aspect-ratio: 16 / 9; border-radius: 12px; background: var(--surface-0) center / cover no-repeat;
+  box-shadow: 0 12px 30px rgba(0,0,0,.28), 0 0 0 1px var(--line);
+}
+#details .details-side .d-shot.d-cover-tile { aspect-ratio: .7; }
+#details .details-side:empty { display: none; }
+
+/* Petites fenêtres */
+@media (max-height: 760px) {
+  #details .details { padding-top: 22px; gap: 14px; }
+  .d-media { width: 96px; height: 96px; }
+  .d-media .rr-disc, .d-media .rr-cart { scale: .78; }
+  #details .d-logo-wrap img { max-height: 80px; }
+  #details .d-actions { margin-top: 16px; }
+  #details .d-play, #details .d-fav { min-height: 54px; }
+  #details .d-play { min-width: 240px; font-size: 18px; }
+  #details .d-desc { max-height: 3.2em; }
+  #details .d-stats { display: none; }
+  #details .details-side { height: 78px; }
+}
+@media (max-width: 1360px) { #details .details-main { width: min(720px, 70vw); } }
+
+/* Mouvement réduit : pas de rotation ni de couche d'animation */
+@media (prefers-reduced-motion: reduce) {
+  .d-media .disc-spin, .d-media .cart-spin, #details .details-bg { animation: none; }
+  #boxopen { display: none; }
+}

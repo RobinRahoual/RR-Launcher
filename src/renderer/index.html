@@ -11,6 +11,7 @@
   <link rel="stylesheet" href="home.css" />
   <link rel="stylesheet" href="games.css" />
   <link rel="stylesheet" href="shell.css" />
+  <link rel="stylesheet" href="boxopen.css" /><!-- BOXOPEN : ouverture de la boîte + page du jeu -->
   <link rel="stylesheet" href="theme.css" />
 </head>
 <body data-view="home">
@@ -134,20 +135,22 @@
     <div class="hint-list" id="hintList"></div>
   </footer>
 
-  <!-- Détails -->
+  <!-- Détails = page du jeu (BOXOPEN : grand art, logo, Jouer, infos, bande de captures) -->
   <div class="overlay" id="details" hidden role="dialog" aria-modal="true" aria-labelledby="dTitle">
     <div class="details-bg" id="dBg"></div>
     <div class="details">
       <div class="details-main">
-        <div class="d-platform" id="dPlatform"></div>
-        <div class="d-logo-wrap"><img id="dLogo" alt="" hidden /><h2 id="dTitle"></h2></div>
-        <div class="d-meta" id="dMeta"></div>
-        <div class="d-tags" id="dTags"></div>
-        <p class="d-desc" id="dDesc"></p>
-        <div class="d-stats" id="dStats"></div>
+        <div class="d-head">
+          <div class="d-media" id="dMedia" aria-hidden="true"></div>
+          <div class="d-head-text">
+            <div class="d-platform" id="dPlatform"></div>
+            <div class="d-logo-wrap"><img id="dLogo" alt="" hidden /><h2 id="dTitle"></h2></div>
+            <div class="d-meta" id="dMeta"></div>
+          </div>
+        </div>
         <div class="d-actions" id="dActions">
           <div class="d-main-actions">
-            <button class="btn primary d-play" data-act="play" data-nav>
+            <button class="btn primary d-play" data-act="play" data-nav data-default>
               <svg class="ico fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.6v14.8c0 .8.9 1.3 1.6.9l12-7.4c.6-.4.6-1.4 0-1.8l-12-7.4C7.9 3.3 7 3.8 7 4.6z"/></svg>
               <span class="d-play-label">Jouer</span><span class="key-mini" data-glyph="a"></span>
             </button>
@@ -175,6 +178,11 @@
           </div>
         </div>
         <div class="d-sub" id="dSub" hidden role="group" aria-labelledby="dSubTitle"></div>
+        <div class="d-info">
+          <div class="d-tags" id="dTags"></div>
+          <p class="d-desc" id="dDesc"></p>
+          <div class="d-stats" id="dStats"></div>
+        </div>
       </div>
       <div class="details-side" id="dShots"></div>
     </div>
