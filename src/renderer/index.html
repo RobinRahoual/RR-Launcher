@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="stylesheet" href="wheel.css" />
   <link rel="stylesheet" href="ux.css" />
+  <link rel="stylesheet" href="games.css" />
 </head>
 <body data-view="home">
   <!-- Fond -->
@@ -67,14 +68,36 @@
   </main>
 
   <!-- Jeux d'une console -->
-  <main id="stage" class="view" aria-live="polite">
+  <main id="stage" class="view">
     <div id="carousel" class="carousel"></div>
+    <div id="catEmpty" class="cat-empty" hidden>
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2.5"/><path d="M9 9h6M9 13h4"/></svg>
+      <h2>Aucun jeu dans cette catégorie</h2>
+      <p>Change de catégorie <span class="cat-empty-keys"><span class="key-mini tab-glyph" data-glyph="lb" data-key="Q"></span><span class="key-mini tab-glyph" data-glyph="rb" data-key="E"></span></span> ou affiche toute la bibliothèque.</p>
+      <button class="btn primary" id="catEmptyAll" type="button">Voir tous les jeux</button>
+    </div>
   </main>
-  <section class="caption" id="caption">
+  <section class="caption" id="caption" aria-live="polite">
     <div class="cap-logo" id="capLogo" hidden></div>
-    <h1 id="title"></h1>
+    <div class="cap-head">
+      <img class="cap-game-logo" id="capGameLogo" alt="" hidden />
+      <h1 id="title"></h1>
+    </div>
     <p id="subtitle"></p>
-    <div class="cap-badges" id="capBadges" aria-live="polite"></div>
+    <div class="cap-badges" id="capBadges"></div>
+    <div class="cap-actions" id="capActions" role="group" aria-label="Actions du jeu">
+      <button class="cap-btn cap-play" type="button" data-cap="play">
+        <svg class="ico fill" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.6v14.8c0 .8.9 1.3 1.6.9l12-7.4c.6-.4.6-1.4 0-1.8l-12-7.4C7.9 3.3 7 3.8 7 4.6z"/></svg>
+        <span class="cap-play-label">Jouer</span><span class="key-mini" data-glyph="a"></span>
+      </button>
+      <button class="cap-btn" type="button" data-cap="details">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5M12 7.5h.01"/></svg>
+        <span>Détails</span>
+      </button>
+      <button class="cap-btn cap-icon" type="button" data-cap="fav" aria-pressed="false" aria-label="Ajouter aux favoris" title="Ajouter aux favoris">
+        <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20.5s-7.5-4.6-9.6-9.2C.9 7.9 3 4 6.7 4c2.1 0 3.6 1.2 4.3 2.4h2C13.7 5.2 15.2 4 17.3 4 21 4 23.1 7.9 21.6 11.3 19.5 15.9 12 20.5 12 20.5z"/></svg>
+      </button>
+    </div>
   </section>
 
   <div id="empty" class="empty" hidden>

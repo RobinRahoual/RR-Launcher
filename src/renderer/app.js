@@ -489,7 +489,7 @@ function syncSlots() {
       el.className = 'slot';
       el.style.display = 'none';
       el.addEventListener('click', () => onSlotClick(g.id));
-      el.addEventListener('dblclick', () => { if (S.items[S.sel]?.id === g.id) play(); });
+      el.addEventListener('dblclick', () => { clearTimeout(slotClickT); if (S.mode === 'main' && S.items[S.sel]?.id === g.id) play(); });
       car.appendChild(el);
       slots.set(g.id, el);
     }
@@ -506,16 +506,16 @@ function syncSlots() {
     el._index = i;
   });
   S.dims.Wref = S.dims.H * 0.66;
-  // Position gauche de chaque boîte : largeurs réelles + écart fixe
-  const gap = S.dims.H * 0.24;
+  // Position gauche de chaque boîte : largeurs réelles + écart fixe (rangée serrée façon tuiles)
+  const gap = S.dims.H * 0.13;
   S.cum = [];
   let acc = 0;
   S.items.forEach((g) => { S.cum.push(acc); acc += (slots.get(g.id)?._dims?.W || S.dims.Wref) + gap; });
   S.cumStep = S.dims.Wref + gap;
-  if (S.view === 'games') {
-    $('#caption').hidden = S.items.length === 0;
-    if (S.lib.games.length && !S.items.length) { $('#title').textContent = 'Aucun jeu dans cette catégorie'; $('#caption').hidden = false; $('#subtitle').textContent = ''; }
-  }
+  S.dims.gap = gap;
+  const none = S.view === 'games' && S.lib.games.length > 0 && !S.items.length;
+  $('#catEmpty').hidden = !none;
+  if (S.view === 'games') $('#caption').hidden = S.items.length === 0;
 }
 function hydrate(el) {
   if (el._hydrated) return;
@@ -540,9 +540,28 @@ function scheduleSweep() {
 }
 
 // ---------------------------------------------------------------- Dimensions
+// Rangée de jeux : sous la barre système et les onglets, sélection ancrée à gauche (façon PS5 / Switch)
+const SEL_K = 1.34; // échelle de la boîte sélectionnée
+function cssPx(name, fb) {
+  const v = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(name));
+  return Number.isFinite(v) && v > 0 ? v : fb;
+}
 function measure() {
-  const H = clamp(innerHeight * 0.44, 220, 620);
+  const vh = innerHeight;
+  const topH = cssPx('--top-h', 88), botH = cssPx('--bottom-h', 72);
+  const rowTop = topH + clamp(vh * 0.065, 46, 84);
+  // Hauteur dispo pour la boîte sélectionnée : il faut garder la place du bloc d'infos dessous
+  const info = clamp(vh * 0.3, 250, 340);
+  const selH = clamp(Math.min(vh * 0.41, vh - rowTop - botH - info), 170, 600);
+  const H = selH / SEL_K;
   S.dims.H = H;
+  S.dims.rowTop = rowTop;
+  S.dims.selH = selH;
+  S.dims.left = clamp(innerWidth * 0.056, 56, 150);
+  const r0 = document.documentElement.style;
+  r0.setProperty('--g-left', S.dims.left + 'px');
+  r0.setProperty('--g-row-top', rowTop + 'px');
+  r0.setProperty('--g-sel-h', selH + 'px');
   const R = innerHeight * 0.53;
   const r = document.documentElement.style;
   r.setProperty('--box-h', H + 'px');
@@ -645,15 +664,32 @@ function cumAt(p) {
   const f = Math.floor(p);
   return c[f] + (p - f) * (c[f + 1] - c[f]);
 }
+let lastGamesView = false;
 function frameGames(t, dt) {
+  const games = S.view === 'games';
+  if (games !== lastGamesView) {
+    lastGamesView = games;
+    // Entrée dans une console : la rangée glisse depuis la droite ; sortie : on revient sur la rangée
+    if (games) { S.pos = S.sel + (reduceMotion ? 0 : 1.6); S.vel = 0; }
+    setZone('row', true);
+  }
+  if (!games) {
+    if (visible.size) { for (const el of visible) el.style.display = 'none'; visible = new Set(); }
+    return;
+  }
   spring(S, S.sel, dt);
   S.flipCur += (S.flip - S.flipCur) * Math.min(1, 0.13 * dt);
   const { H } = S.dims;
-  const W = S.dims.Wref || H * 0.72;
-  const step = W * 1.32;
-  const games = S.view === 'games';
-  const half = innerWidth / 2, midY = innerHeight / 2;
-  const lo = Math.floor(S.pos) - 2, hi = Math.ceil(S.pos) + Math.ceil(innerWidth / step) + 1;
+  const W = S.dims.Wref || H * 0.66;
+  const gap = S.dims.gap || H * 0.13;
+  const anchor = S.dims.left || 100;
+  const top = S.dims.rowTop || 140;
+  const k = SEL_K - 1;
+  const lo = Math.floor(S.pos) - 1, hi = Math.ceil(S.pos) + Math.ceil(innerWidth / (W + gap)) + 1;
+  // Surplus de largeur des boîtes « en cours de sélection » (au plus deux, autour de S.pos)
+  const grow = (j) => { const g = S.items[j]; const el = g && slots.get(g.id); return el ? (el._dims?.W || W) * k * clamp(1 - Math.abs(j - S.pos), 0, 1) : 0; };
+  const f0 = Math.floor(S.pos), g0 = grow(f0), g1 = grow(f0 + 1);
+  const base = cumAt(S.pos);
   const now = new Set();
   for (let i = Math.max(0, lo); i <= Math.min(S.items.length - 1, hi); i++) {
     const g = S.items[i];
@@ -664,13 +700,17 @@ function frameGames(t, dt) {
     if (!el._hydrated) hydrate(el);
     const o = i - S.pos, a = Math.abs(o);
     const bw = el._dims?.W || W, bh = el._dims?.H || H;
-    const left = LAY.anchor + cumAt(i) - cumAt(S.pos);
-    const x = left + bw / 2 - half;
-    const sel = games && i === S.sel;
-    const selW = games ? clamp(1 - a, 0, 1) : 0; // poids « sélectionné » continu
-    let ry = 0, rx = 0, y = 0;
+    const selW = clamp(1 - a, 0, 1);
+    const sc = 1 + k * selW;
+    // Bord gauche : position cumulée + surplus des boîtes sélectionnées situées avant
+    const extra = (i > f0 ? g0 : 0) + (i > f0 + 1 ? g1 : 0);
+    const left = anchor + cumAt(i) - base + extra;
+    const x = left + (bw * sc) / 2;
+    const y = top + (bh * sc) / 2;
+    const sel = i === S.sel;
+    let ry = 0, rx = 0, fy = 0;
     if (!reduceMotion) {
-      ry += clamp(S.vel * 120, -30, 30);
+      ry += clamp(S.vel * 90, -22, 22);
       let sp = S.spin.get(i);
       if (sp) {
         ry -= sp;
@@ -678,23 +718,21 @@ function frameGames(t, dt) {
         if (sp < 0.4) S.spin.delete(i); else S.spin.set(i, sp);
       }
       if (selW > 0) {
-        ry += Math.sin(t / 1500) * 5 * selW + (S.device === 'mouse' ? S.mouse.x * 7 * selW : 0);
-        rx = (S.device === 'mouse' ? -S.mouse.y * 4 : Math.sin(t / 2100) * 1.5) * selW;
-        y = Math.sin(t / 1800) * 5 * selW;
+        ry += (S.device === 'mouse' ? S.mouse.x * 6 : Math.sin(t / 1700) * 3.5) * selW;
+        rx = (S.device === 'mouse' ? -S.mouse.y * 3 : Math.sin(t / 2300) * 1.2) * selW;
+        fy = Math.sin(t / 1900) * 2.5 * selW;
       }
     }
     if (sel) ry += S.flipCur * 180;
-    const dy = (H - bh) / 2;
-    const sc = 1 + 0.1 * selW;
-    const z = 50 * selW;
-    el.style.transform = `translate3d(${x}px, ${y + dy}px, ${z}px) rotateY(${ry}deg) rotateX(${rx}deg) scale(${sc})`;
-    // Les jeux déjà passés glissent sous la roue
-    el.style.opacity = o < 0 ? clamp(1 + o * 1.4, 0, 1) : 1;
-    el.style.setProperty('--dim', (games ? clamp(0.38 - selW * 0.38, 0, 0.6) : 0.12 + clamp(o * 0.05, 0, 0.25)).toFixed(3));
+    el.style.transform = `translate3d(${x.toFixed(2)}px, ${(y + fy).toFixed(2)}px, 0) rotateY(${ry.toFixed(2)}deg) rotateX(${rx.toFixed(2)}deg) scale(${sc.toFixed(4)})`;
+    // Les jeux déjà passés s'effacent vite à gauche de l'ancre
+    el.style.opacity = (o < 0 ? clamp(1 + o * 1.6, 0, 1) : 1).toFixed(3);
+    el.style.setProperty('--dim', (0.34 * (1 - selW)).toFixed(3));
     el.classList.toggle('is-selected', sel);
   }
   for (const el of visible) if (!now.has(el)) el.style.display = 'none';
   visible = now;
+  syncActFocus();
 }
 
 // ---------------------------------------------------------------- Fond
@@ -704,7 +742,7 @@ function setBackground(url, tint) {
   if (url === bgCurrent) return;
   bgCurrent = url;
   clearTimeout(bgTimer);
-  bgTimer = setTimeout(() => {
+  bgTimer = setTimeout(() => { // ≈150 ms : pas de scintillement quand on défile vite
     const next = bgFlip ? $('#bgA') : $('#bgB');
     const prev = bgFlip ? $('#bgB') : $('#bgA');
     bgFlip = !bgFlip;
@@ -713,7 +751,7 @@ function setBackground(url, tint) {
     const img = new Image();
     img.onload = apply; img.onerror = apply;
     img.src = url;
-  }, 140);
+  }, 150);
 }
 
 const motes = [];
@@ -725,10 +763,14 @@ function initMotes() {
   fit(); addEventListener('resize', fit);
   for (let i = 0; i < 42; i++) motes.push({ x: Math.random(), y: Math.random(), r: 0.6 + Math.random() * 1.8, s: 0.15 + Math.random() * 0.5, p: Math.random() * 6.28 });
 }
+let motesOff = false;
 function drawMotes(t) {
   if (reduceMotion || !motesCtx || t - motesLast < 33 || document.hidden) return;
   motesLast = t;
   const c = motesCtx, w = c.canvas.width, h = c.canvas.height;
+  // Écran jeux : pas de particules, le visuel du jeu suffit
+  if (S.view === 'games') { if (!motesOff) { c.clearRect(0, 0, w, h); motesOff = true; } return; }
+  motesOff = false;
   c.clearRect(0, 0, w, h);
   for (const m of motes) {
     m.y -= m.s / 2400; m.x += Math.sin(t / 3000 + m.p) / 9000;
@@ -767,26 +809,35 @@ function updateBrand() {
 function updateChrome(force = false) {
   updateBrand();
   const g = S.items[S.sel];
-  $('#counter').textContent = S.items.length ? `${S.sel + 1} / ${S.items.length}` : '';
+  if (typeof setFootInfo === 'function') setFootInfo(S.items.length ? `${S.sel + 1} / ${S.items.length}` : '');
   if (!g) { setBackground('', S.plat !== 'all' ? plat(S.plat).color : ''); $('#capBadges').innerHTML = ''; return; }
-  setCapLogo(null);
-  if (force || $('#title').dataset.id !== g.id) {
+  $('#capLogo').hidden = true;
+  const title = $('#title');
+  title.classList.remove('sr-only');
+  if (force || title.dataset.id !== g.id) {
     const cap = $('#caption');
     cap.classList.remove('swap'); void cap.offsetWidth; cap.classList.add('swap');
-    $('#title').textContent = g.name;
-    $('#title').dataset.id = g.id;
+    title.textContent = g.name;
+    title.dataset.id = g.id;
+    const logo = $('#capGameLogo');
+    const src = g.media?.logo ? mediaUrl(g, g.media.logo) : '';
+    logo.onerror = () => { logo.hidden = true; title.classList.remove('sr-only'); };
+    if (src) { if (logo.getAttribute('src') !== src) logo.src = src; logo.alt = g.name; logo.hidden = false; title.classList.add('sr-only'); }
+    else { logo.hidden = true; logo.removeAttribute('src'); }
   }
   const p = plat(g.platform);
-  const bits = [S.plat === 'all' ? p.name : '', g.developer?.split(',')[0], yearOf(g), (g.genres || [])[0]].filter(Boolean);
-  $('#subtitle').textContent = bits.join(' · ') || p.name;
+  const bits = [p.name, g.developer?.split(',')[0], yearOf(g), (g.genres || [])[0]].filter(Boolean);
+  $('#subtitle').textContent = bits.join(' · ');
   renderCapBadges(g);
+  renderCapActions(g);
   setBackground(heroOf(g), p.color);
 }
-// Puces d'état sous le titre du jeu : en cours, récupération des infos, favori, dernière session
+// Puces d'état sous le titre du jeu : en cours, récupération des infos, temps de jeu, dernière session, favori
 const BADGE_ICON = {
-  fav: '<svg viewBox="0 0 24 24" class="fill"><path d="M12 20.5s-7.5-4.6-9.6-9.2C.9 7.9 3 4 6.7 4c2.1 0 3.6 1.2 4.3 2.4h2C13.7 5.2 15.2 4 17.3 4 21 4 23.1 7.9 21.6 11.3 19.5 15.9 12 20.5 12 20.5z"/></svg>',
-  time: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
-  emu: '<svg viewBox="0 0 24 24"><path d="M12 7.5v6M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>',
+  fav: '<svg aria-hidden="true" viewBox="0 0 24 24" class="fill"><path d="M12 20.5s-7.5-4.6-9.6-9.2C.9 7.9 3 4 6.7 4c2.1 0 3.6 1.2 4.3 2.4h2C13.7 5.2 15.2 4 17.3 4 21 4 23.1 7.9 21.6 11.3 19.5 15.9 12 20.5 12 20.5z"/></svg>',
+  time: '<svg aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg>',
+  last: '<svg aria-hidden="true" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>',
+  emu: '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M12 7.5v6M12 17h.01"/><circle cx="12" cy="12" r="9.5"/></svg>',
 };
 function renderCapBadges(g) {
   const box = $('#capBadges');
@@ -794,16 +845,81 @@ function renderCapBadges(g) {
   const b = [];
   if (S.lib.running.includes(g.id)) b.push('<span class="badge live"><i class="dot"></i>En cours</span>');
   if (g.metaStatus === 'loading') b.push(`<span class="badge busy"><span class="spinner tiny"></span>${esc(S.progress[g.id] || 'Récupération des infos…')}</span>`);
-  if (g.favorite) b.push(`<span class="badge fav">${BADGE_ICON.fav}Favori</span>`);
   if (g.kind === 'rom' && !S.lib.settings.emulators?.[g.platform]) b.push(`<span class="badge warn">${BADGE_ICON.emu}Émulateur à configurer</span>`);
-  b.push(`<span class="badge time">${BADGE_ICON.time}${g.lastPlayed ? `${esc(fmtLast(g.lastPlayed))}${g.playtime ? ` · ${esc(fmtTime(g.playtime))}` : ''}` : 'Jamais lancé'}</span>`);
-  box.innerHTML = b.slice(0, 4).join('');
+  if (g.lastPlayed) {
+    b.push(`<span class="badge time">${BADGE_ICON.time}${esc(fmtTime(g.playtime || 0))}</span>`);
+    b.push(`<span class="badge last">${BADGE_ICON.last}${esc(fmtLast(g.lastPlayed))}</span>`);
+  } else b.push(`<span class="badge time">${BADGE_ICON.time}Jamais lancé</span>`);
+  if (g.favorite) b.push(`<span class="badge fav">${BADGE_ICON.fav}Favori</span>`);
+  box.innerHTML = b.slice(0, 5).join('');
 }
+function renderCapActions(g) {
+  const running = S.lib.running.includes(g.id);
+  $('.cap-play-label').textContent = running ? 'En cours' : 'Jouer';
+  $('.cap-play').classList.toggle('is-running', running);
+  const fav = $('[data-cap="fav"]');
+  fav.setAttribute('aria-pressed', String(!!g.favorite));
+  const l = g.favorite ? 'Retirer des favoris' : 'Ajouter aux favoris';
+  fav.setAttribute('aria-label', l); fav.title = l;
+}
+
+// Zone de focus de l'écran jeux : la rangée de boîtes ou les boutons sous les infos (↓ / ↑)
+const capBtns = () => $$('#capActions .cap-btn');
+function setZone(z, silent = false) {
+  if (z === 'actions' && (!S.items.length || S.view !== 'games')) return;
+  if (S.zone === z) return;
+  S.zone = z;
+  if (z === 'actions') S.act = 0;
+  document.body.classList.toggle('zone-actions', z === 'actions');
+  S._actKey = '';
+  if (z === 'row' && document.activeElement?.closest?.('#capActions')) document.activeElement.blur();
+  if (!silent) sfx('move');
+}
+function moveAct(d) {
+  const n = capBtns().length;
+  const i = clamp((S.act || 0) + d, 0, n - 1);
+  if (i === S.act) return;
+  S.act = i; S._actKey = ''; sfx('move');
+}
+function pressAct() { capBtns()[S.act || 0]?.click(); }
+// Remet le focus visuel / DOM sur le bon bouton (y compris au retour d'un overlay, qui retire .is-focus)
+function syncActFocus() {
+  const on = S.zone === 'actions' && S.mode === 'main' && S.view === 'games' && S.items.length > 0;
+  const key = on ? `${S.act}|${S.device}` : 'off';
+  if (key === S._actKey) return;
+  S._actKey = key;
+  capBtns().forEach((b, i) => {
+    const f = on && i === S.act;
+    b.classList.toggle('is-focus', f && S.device !== 'mouse');
+    b.classList.toggle('is-current', f);
+    b.tabIndex = f || (!on && i === 0) ? 0 : -1;
+  });
+  if (on) capBtns()[S.act]?.focus({ preventScroll: true });
+  if (!on && S.zone !== 'actions') document.body.classList.remove('zone-actions');
+}
+$('#capActions').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-cap]');
+  if (!b || S.mode !== 'main') return;
+  const i = capBtns().indexOf(b);
+  if (S.zone === 'actions' && i >= 0) { S.act = i; S._actKey = ''; }
+  const a = b.dataset.cap;
+  if (a === 'play') play();
+  else if (a === 'details') openDetails();
+  else if (a === 'fav') toggleFav();
+  if (S.device === 'mouse' && S.zone !== 'actions') b.blur();
+});
+// Un overlay qui se ferme retire .is-focus : on force la resynchronisation
+document.addEventListener('focusin', () => { if (S.mode === 'main') S._actKey = ''; });
+$('#catEmptyAll').addEventListener('click', () => setTab('all'));
 
 function renderTabs() {
   const nav = $('#tabs');
-  nav.innerHTML = S.tabs.map((t) =>
-    `<button class="tab" role="tab" aria-selected="${t.id === S.tab}" data-tab="${esc(t.id)}">${esc(t.label)}<span class="count">${t.n}</span></button>`).join('');
+  const pg = (k) => (S.device === 'pad' ? (S.padType === 'ps' ? { lb: 'L1', rb: 'R1' } : { lb: 'LB', rb: 'RB' })[k] : '');
+  const g = (k, key) => (S.tabs.length > 1 ? `<span class="key-mini tab-glyph" data-glyph="${k}" data-key="${key}" aria-hidden="true">${pg(k)}</span>` : '');
+  nav.innerHTML = g('lb', 'Q') + S.tabs.map((t) =>
+    `<button class="tab" role="tab" aria-selected="${t.id === S.tab}" data-tab="${esc(t.id)}">${esc(t.label)}<span class="count">${t.n}</span></button>`).join('') + g('rb', 'E');
+  const act = $('.tab[aria-selected="true"]', nav);
+  if (act && S.view === 'games') act.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 }
 $('#tabs').addEventListener('click', (e) => {
   const b = e.target.closest('[data-tab]');
@@ -814,7 +930,8 @@ function setTab(id) {
   S.tab = id;
   S.flip = 0;
   computeItems();
-  S.sel = 0; S.pos = -3; S.vel = 0; S.selId = S.items[0]?.id || null;
+  S.sel = 0; S.pos = reduceMotion ? 0 : 1.6; S.vel = 0; S.selId = S.items[0]?.id || null;
+  if (!S.items.length) setZone('row', true);
   renderTabs(); syncSlots(); updateChrome(true);
   sfx('tab');
   scheduleSweep();
@@ -839,10 +956,15 @@ function select(i, { spin = true } = {}) {
   scheduleSweep();
 }
 const move = (d) => select(S.sel + d, { spin: Math.abs(d) === 1 });
+let slotClickT;
 function onSlotClick(id) {
-  if (S.mode !== 'main') return;
+  if (S.mode !== 'main' || S.view !== 'games') return;
   const i = S.items.findIndex((g) => g.id === id);
-  if (i === S.sel) openDetails(); else select(i);
+  setZone('row', true);
+  clearTimeout(slotClickT);
+  // Clic sur la sélection = détails (différé pour laisser passer un double-clic = jouer)
+  if (i === S.sel) slotClickT = setTimeout(() => { if (S.mode === 'main' && S.items[S.sel]?.id === id) openDetails(); }, 240);
+  else select(i);
 }
 function flip() { if (S.items.length) { S.flip = S.flip ? 0 : 1; sfx('flip'); } }
 
@@ -1597,10 +1719,18 @@ addEventListener('keydown', (e) => {
     if (m[k]) { e.preventDefault(); m[k](); }
     return;
   }
+  if (S.zone === 'actions') {
+    const z = {
+      ArrowLeft: () => moveAct(-1), ArrowRight: () => moveAct(1), ArrowUp: () => setZone('row'), ArrowDown: () => {},
+      Enter: pressAct, ' ': pressAct, Escape: () => setZone('row'), Backspace: () => setZone('row'),
+    }[k];
+    if (z) { e.preventDefault(); z(); return; }
+  }
   const map = {
     ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
-    PageDown: () => move(5), PageUp: () => move(-5), Enter: () => play(),
-    ArrowUp: openDetails, i: openDetails, I: openDetails, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
+    PageDown: () => move(5), PageUp: () => move(-5), Enter: () => (S.items.length ? play() : setTab('all')),
+    ArrowDown: () => setZone('actions'), ArrowUp: () => {},
+    i: openDetails, I: openDetails, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
     n: () => action('addHub'), N: () => action('addHub'), Insert: () => action('addOne'), s: () => action('settings'), S: () => action('settings'),
     Escape: () => (S.flip ? flip() : goHome()), Backspace: goHome, m: () => action('menu'), M: () => action('menu'),
     Delete: () => S.items[S.sel] && confirmRemove(S.items[S.sel]),
@@ -1628,7 +1758,6 @@ function onWheel(e) {
   while (Math.abs(wheelAcc) >= 60) {
     const d = Math.sign(wheelAcc);
     if (S.view === 'home') homeSelect(S.home.sel + d);
-    else if (e.clientX < LAY.edge) { goHome(); wheelAcc = 0; break; }
     else move(d);
     wheelAcc -= d * 60;
   }
@@ -1668,9 +1797,14 @@ function onPadDir(dir, repeat) {
     else if (dir === 'right' && !repeat) openHomeItem();
     return;
   }
+  if (S.zone === 'actions') {
+    if (repeat) return;
+    if (dir === 'left') moveAct(-1); else if (dir === 'right') moveAct(1); else if (dir === 'up') setZone('row');
+    return;
+  }
   if (dir === 'left') { if (S.sel === 0) { if (!repeat) goHome(); } else move(-1); }
   else if (dir === 'right') move(1);
-  else if (dir === 'up' && !repeat) openDetails();
+  else if (dir === 'down' && !repeat) setZone('actions');
 }
 function onPadBtn(btn) {
   if (S.mode === 'main' && !S.lib.games.length) {
@@ -1684,8 +1818,9 @@ function onPadBtn(btn) {
     return m && m();
   }
   if (S.mode === 'main') {
+    if (S.zone === 'actions' && (btn === 'a' || btn === 'b')) return btn === 'a' ? pressAct() : setZone('row');
     const m = {
-      a: () => play(), b: () => (S.flip ? flip() : goHome()), x: openDetails, y: flip,
+      a: () => (S.items.length ? play() : setTab('all')), b: () => (S.flip ? flip() : goHome()), x: openDetails, y: flip,
       lb: () => cycleTab(-1), rb: () => cycleTab(1), lt: () => move(-5), rt: () => move(5), view: () => action('addHub'), menu: () => action('menu'),
     }[btn];
     return m && m();
