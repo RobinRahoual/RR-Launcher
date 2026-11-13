@@ -1,7 +1,7 @@
 {
   "name": "rr-launcher",
   "productName": "RR Launcher",
-  "version": "1.4.0",
+  "version": "1.5.0",
   "description": "Launcher pour jeux PC",
   "author": "Robin Rahoual",
   "main": "src/main.js",
@@ -9,7 +9,7 @@
     "start": "electron .",
     "dist": "electron-builder --win nsis --x64",
     "release": "electron-builder --win nsis --x64 --publish always",
-    "test": "node --test test/"
+    "test": "node --test test/*.test.js"
   },
   "build": {
     "appId": "fr.robinrahoual.rrlauncher",

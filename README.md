@@ -50,6 +50,17 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 | Revenir au launcher | | Ctrl+Alt+L (partout) | Icône près de l'horloge |
 | Plein écran | | F11 | Menu |
 
+## Ouvrir un jeu, menu en jeu
+
+- **Ouvrir un jeu** (A, Entrée, clic) : la boîte s'ouvre, le disque (ou la cartouche) sort en tournant, puis la page du jeu s'affiche ; A y lance le jeu, B referme la boîte. Le bouton « Jouer » sous la rangée et le double-clic lancent directement.
+- **Bouton Xbox / PS / Home** de la manette pendant une partie : le launcher repasse devant avec le menu en jeu — **Reprendre** (A, B ou rappui), **Changer de jeu**, **Quitter le jeu**, **Alimentation** (veille, redémarrer, éteindre). Revalider le jeu en cours dans la bibliothèque le reprend. Ctrl+Alt+L fait la même chose au clavier.
+- Windows réserve le bouton Xbox à la Game Bar : désactive *Paramètres → Jeux → Xbox Game Bar → « Ouvrir Xbox Game Bar avec ce bouton »* (et l'équivalent dans Steam si besoin). Option dans **Réglages → Général**.
+- Manettes Xbox/XInput via `koffi`, DualShock 4 / DualSense / Switch Pro via `node-hid` (lecture seule).
+
+## Thème
+
+**Réglages → Apparence → Thème** : Clair (défaut), Sombre ou Auto (suit Windows).
+
 ## Mises à jour
 
 Le launcher vérifie les [Releases GitHub](https://github.com/RobinRahoual/RR-Launcher/releases) au démarrage puis toutes les 4 h, télécharge la nouvelle version en arrière-plan et affiche **« Mise à jour X · Redémarrer »** en haut à droite. Sinon elle s'installe à la fermeture. Vérification manuelle : **Menu → Rechercher les mises à jour**.
