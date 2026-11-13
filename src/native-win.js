@@ -166,7 +166,21 @@ let SetSuspendState = null;
 try { SetSuspendState = koffi.load('powrprof.dll').func('bool __stdcall SetSuspendState(bool hibernate, bool force, bool wakeupEventsDisabled)'); } catch {}
 function sleep() { return SetSuspendState ? !!SetSuspendState(false, false, false) : false; }
 
+// ---------------------------------------------------------------- Clavier (DISCORD : raccourci « Go Live »)
+// keybd_event : appuie les touches dans l'ordre puis les relâche dans l'ordre inverse.
+// Discord écoute ses raccourcis globalement : ils fonctionnent même quand le jeu a le focus.
+const MapVirtualKeyW = user32.func('uint32_t __stdcall MapVirtualKeyW(uint32_t uCode, uint32_t uMapType)');
+const EXTENDED = new Set([0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2d, 0x2e, 0xa3, 0xa5]);
+function sendKeys(vks, holdMs = 60) {
+  const flag = (vk, up) => (up ? 0x2 : 0) | (EXTENDED.has(vk) ? 0x1 : 0);
+  for (const vk of vks) keybd_event(vk, MapVirtualKeyW(vk, 0), flag(vk, false), 0);
+  const end = Date.now() + holdMs; while (Date.now() < end) { /* maintien bref */ }
+  for (const vk of [...vks].reverse()) keybd_event(vk, MapVirtualKeyW(vk, 0), flag(vk, true), 0);
+  return true;
+}
+
 module.exports = {
+  sendKeys,
   get xinputOk() { return xinputOk; }, set xinputOk(v) { xinputOk = v; },
   get xinputError() { return xinputError; },
   xinputDll,

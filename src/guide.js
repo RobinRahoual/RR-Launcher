@@ -179,7 +179,7 @@ function makeEdges({ minGapMs = 150 } = {}) {
  * Anti-rebond : un front montant d'un même bouton n'est accepté que `minGapMs` après le précédent,
  * et un nouvel appui Guide moins de `guideCooldownMs` après un relâchement est ignoré.
  */
-const COMBOS = [[BTN.RB, 'capture'], [BTN.LB, 'clip'], [BTN.B, 'quit']];
+const COMBOS = [[BTN.RB, 'capture'], [BTN.LB, 'clip'], [BTN.B, 'quit'], [BTN.Y, 'stream']]; // DISCORD : Guide + Y = stream
 function createComboMachine({ longMs = 1000, minGapMs = 150, guideCooldownMs = 120 } = {}) {
   let prev = 0, held = false, t0 = 0, used = false, lastRelease = -Infinity;
   const lastDown = new Map();

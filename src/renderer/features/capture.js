@@ -74,6 +74,7 @@
     if (pad || s.captureKeys === false) {
       if (s.padShortcuts !== false && s.guideButton !== false) {
         rows.push([`${k(G)}+${k(RB)}`, 'Capture'], [`${k(G)}+${k(LB)}`, 'Clip'], [`${k(G)}+${k(B)}`, 'Quitter'], [`${k(G)} maintenu`, 'Alimentation']);
+        if (s.discordStream !== false && s.discordStreamPad !== false) rows.push([`${k(G)}+${k(ps ? '△' : 'Y')}`, 'Stream Discord']); // DISCORD
         if (s.captureShare === true) rows.push([k(SH), 'Capture']);
       }
     } else rows.push([k('Ctrl+Alt+S'), 'Capture'], [k('Ctrl+Alt+R'), 'Clip']);

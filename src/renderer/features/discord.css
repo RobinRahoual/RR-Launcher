@@ -1,0 +1,7 @@
+/* Module DISCORD */
+#set-discord .dc-row { display: flex; gap: 10px; align-items: center; }
+#set-discord .dc-row input { flex: 1; min-width: 0; }
+#set-discord .dim a { color: var(--accent-text); text-decoration: underline; }
+#set-discord code { font-size: .92em; padding: 1px 5px; border-radius: 5px; background: var(--surface-3); }
+.dc-ig .ico { color: #5865F2; } /* bleu Discord pour repérer l'entrée */
+[data-theme="dark"] .dc-ig .ico { color: #8C96F7; }
