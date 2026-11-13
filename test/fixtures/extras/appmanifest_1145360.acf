@@ -1,0 +1,31 @@
+"AppState"
+{
+	"appid"		"1145360"
+	"Universe"		"1"
+	"name"		"Hades"
+	"StateFlags"		"1542"
+	"installdir"		"Hades"
+	"LastUpdated"		"1700000000"
+	"SizeOnDisk"		"15000000000"
+	"buildid"		"100"
+	"LastOwner"		"76561197960287930"
+	"BytesToDownload"		"1000000"
+	"BytesDownloaded"		"420000"
+	"BytesToStage"		"2000000"
+	"BytesStaged"		"0"
+	"TargetBuildID"		"101"
+	"AutoUpdateBehavior"		"0"
+	"InstalledDepots"
+	{
+		"1145361"
+		{
+			"manifest"		"123456789"
+			"size"		"15000000000"
+		}
+	}
+	// commentaire
+	"UserConfig"
+	{
+		"language"		"french"
+	}
+}

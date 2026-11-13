@@ -1,0 +1,6 @@
+{"ID":1446,"Title":"Super Mario Bros.","ConsoleID":7,"ConsoleName":"NES/Famicom","ImageIcon":"/Images/000001.png","NumAchievements":3,"NumDistinctPlayers":2000,"NumDistinctPlayersCasual":2000,"NumAwardedToUser":2,"UserCompletion":"66.67%",
+"Achievements":{
+"4874":{"ID":4874,"NumAwarded":1500,"NumAwardedHardcore":900,"Title":"Monde 1","Description":"Finir le monde 1","Points":5,"TrueRatio":6,"BadgeName":"04800","DisplayOrder":1,"Type":"progression","DateEarned":"2024-01-15 18:22:05","DateEarnedHardcore":"2024-01-15 18:22:05"},
+"4875":{"ID":4875,"NumAwarded":500,"NumAwardedHardcore":300,"Title":"Monde 8","Description":"Sauver la princesse","Points":25,"TrueRatio":40,"BadgeName":"04801","DisplayOrder":3,"Type":"win_condition"},
+"4876":{"ID":4876,"NumAwarded":80,"NumAwardedHardcore":10,"Title":"Warp","Description":"Utiliser un tuyau de distorsion","Points":10,"TrueRatio":20,"BadgeName":"04802","DisplayOrder":2,"DateEarned":"2024-02-01 09:00:00"}
+}}

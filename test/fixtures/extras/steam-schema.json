@@ -1,0 +1,6 @@
+{"game":{"gameName":"Hades","gameVersion":"5","availableGameStats":{"achievements":[
+{"name":"ACH_FIRST","defaultvalue":0,"displayName":"Premier sang","hidden":0,"description":"Vaincre un ennemi.","icon":"https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/1145360/aaa.jpg","icongray":"https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/1145360/aaa_g.jpg"},
+{"name":"ACH_ESCAPE","defaultvalue":0,"displayName":"Évasion","hidden":0,"description":"S'échapper des Enfers.","icon":"https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/1145360/bbb.jpg","icongray":"x"},
+{"name":"ACH_SECRET","defaultvalue":0,"displayName":"Le vrai final","hidden":1,"description":"Spoiler !","icon":"https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/1145360/ccc.jpg","icongray":"x"},
+{"name":"ACH_FISH","defaultvalue":0,"displayName":"Pêcheur","hidden":0,"description":"Pêcher un poisson.","icon":"https://steamcdn-a.akamaihd.net/steamcommunity/public/images/apps/1145360/ddd.jpg","icongray":"x"}
+]}}}
