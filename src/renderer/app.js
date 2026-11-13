@@ -895,6 +895,7 @@ function setZone(z, silent = false) {
   S._actKey = '';
   if (z === 'row' && document.activeElement?.closest?.('#capActions')) document.activeElement.blur();
   if (!silent) sfx('move');
+  renderHints();
 }
 function moveAct(d) {
   const n = capBtns().length;
@@ -1673,6 +1674,10 @@ function renderHints() {
     h(['view'], 'Ajouter', 'addHub');
     h(['lr'], 'Consoles', null);
     h(['a'], 'Ouvrir', 'open');
+  } else if (S.zone === 'actions' && S.items.length) {
+    h(['b'], 'Jeux', null);
+    h(['lr'], 'Choisir', null);
+    h(['a'], 'Valider', null);
   } else {
     h(['menu'], 'Menu', 'menu');
     h(['b'], 'Consoles', 'home');
@@ -1736,7 +1741,7 @@ addEventListener('keydown', (e) => {
   if (S.view === 'home') {
     const m = {
       ArrowRight: () => homeSelect(S.home.sel + 1), ArrowLeft: () => homeSelect(S.home.sel - 1),
-      Home: () => homeSelect(0), End: () => homeSelect(S.home.items.length - 1),
+      Home: () => homeSelect(0), End: () => homeSelect(S.home.items.length - 1), ArrowUp: () => shellFocusTop(),
       Enter: openHomeItem, ' ': openHomeItem, n: () => action('addHub'), N: () => action('addHub'),
       s: () => action('settings'), S: () => action('settings'), Escape: () => action('menu'), m: () => action('menu'), M: () => action('menu'),
     };
@@ -1753,7 +1758,7 @@ addEventListener('keydown', (e) => {
   const map = {
     ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
     PageDown: () => move(5), PageUp: () => move(-5), Enter: () => (S.items.length ? play() : setTab('all')),
-    ArrowDown: () => setZone('actions'), ArrowUp: () => {},
+    ArrowDown: () => setZone('actions'), ArrowUp: () => shellFocusTop(),
     i: openDetails, I: openDetails, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
     n: () => action('addHub'), N: () => action('addHub'), Insert: () => action('addOne'), s: () => action('settings'), S: () => action('settings'),
     Escape: () => (S.flip ? flip() : goHome()), Backspace: goHome, m: () => action('menu'), M: () => action('menu'),
@@ -1819,6 +1824,7 @@ function onPadDir(dir, repeat) {
   if (S.view === 'home') {
     if (dir === 'left') homeSelect(S.home.sel - 1);
     else if (dir === 'right') homeSelect(S.home.sel + 1);
+    else if (dir === 'up' && !repeat) shellFocusTop();
     return;
   }
   if (S.zone === 'actions') {
@@ -1829,6 +1835,7 @@ function onPadDir(dir, repeat) {
   if (dir === 'left') { if (S.sel === 0) { if (!repeat) goHome(); } else move(-1); }
   else if (dir === 'right') move(1);
   else if (dir === 'down' && !repeat) setZone('actions');
+  else if (dir === 'up' && !repeat) shellFocusTop();
 }
 function onPadBtn(btn) {
   if (shellSplashActive()) return endSplash(); // SHELL

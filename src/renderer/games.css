@@ -118,6 +118,7 @@ body[data-view="home"] .cap-game-logo, body[data-view="home"] .cap-actions { dis
   filter: drop-shadow(0 4px 18px rgba(0, 0, 0, .65));
 }
 .cap-game-logo[hidden] { display: none; }
+body[data-view="games"] .caption { text-align: left; }
 body[data-view="games"] .caption h1 {
   font-family: var(--font-display); font-weight: 400; letter-spacing: .01em;
   font-size: clamp(30px, 3.1vw, 60px); line-height: 1.08; max-width: 60vw;
