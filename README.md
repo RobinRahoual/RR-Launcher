@@ -63,6 +63,16 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 - **Fin de partie** : quand tu quittes le dernier jeu, le launcher revient au premier plan sur la rangée du jeu.
 - **Réveil par la manette** : si le launcher est réduit ou dans la zone de notification et qu'aucun jeu ne tourne, allumer ou brancher une manette (Xbox, DualShock 4, DualSense, Switch Pro) l'ouvre. Option dans **Réglages → Général** ; active aussi « Lancer au démarrage de Windows » pour qu'il soit toujours prêt.
 
+## Fonctions (Réglages → Fonctions)
+
+- **Recherche** : `/` ou Ctrl+F, RS à la manette, loupe en haut — clavier virtuel AZERTY. **Filtres** (G) et **collections** perso ; **statut** (à jouer, en cours, terminé…) et **note** sur la page du jeu, onglet **Backlog**.
+- **Bandes-annonces** : la vidéo du jeu remplace le fond après ~1,5 s (Steam, ou une vidéo locale via Images → Vidéo).
+- **Économiseur d'écran** (5 min par défaut) : diaporama ou vidéos de tes jeux. **Musique d'ambiance** (désactivée par défaut) : dossier de musiques, musique par jeu ou ambiance générée.
+- **Captures et clips** : menu en jeu, Ctrl+Alt+S / Ctrl+Alt+R, ou à la manette Guide + RB (capture), Guide + LB (clip), Guide + B (quitter), Guide maintenu (alimentation). Rangés dans `Images\RR Launcher\<jeu>`, galerie sur la page du jeu.
+- **Statistiques** : temps de jeu par semaine / mois / année, séries, top 10, carte annuelle ; activité sur la page du jeu.
+- **Succès** Steam (clé Web API + profil public) et RetroAchievements (utilisateur + clé) ; état des **mises à jour** Steam / Epic sur les boîtes.
+- **Confort** : vibrations, notifications, taille de l'interface (TV).
+
 ## Thème
 
 **Réglages → Apparence → Thème** : Clair (défaut), Sombre ou Auto (suit Windows).

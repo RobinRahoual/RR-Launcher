@@ -166,7 +166,10 @@
   gap: clamp(18px, 3.2vh, 40px); align-items: end;
   padding: clamp(28px, 7vh, 96px) 5vw calc(var(--bottom-h, 72px) + clamp(16px, 3vh, 36px));
 }
-#details .details-main { width: min(780px, 58vw); max-height: none; justify-content: flex-end; min-height: 0; }
+#details .details-main { width: min(780px, 58vw); max-height: 100%; justify-content: safe flex-end; min-height: 0;
+  /* la page s'est enrichie (statut, activité, succès…) : elle défile au lieu de couper le haut */
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: none; overscroll-behavior: contain; padding: 6px 8px 6px 0; scroll-padding: 24px; }
+#details .details-main::-webkit-scrollbar { display: none; }
 
 /* En-tête : disque / cartouche qui tourne + plateforme, logo, méta */
 .d-head { display: flex; align-items: center; gap: 26px; }

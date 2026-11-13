@@ -33,7 +33,9 @@ function init(ctx) {
   store.data.capture ||= { folders: {} }; // gameId -> nom du dossier (garde le dossier si le jeu est renommé)
   store.data.capture.folders ||= {};
   // Réglages par défaut (actifs) : posés ici pour que les interrupteurs des réglages les affichent « oui »
-  for (const k of ['padShortcuts', 'captureShare', 'captureKeys', 'clipAudio']) if (S()[k] === undefined) S()[k] = true;
+  for (const k of ['padShortcuts', 'captureKeys', 'clipAudio']) if (S()[k] === undefined) S()[k] = true;
+  // Share / View seul : désactivé par défaut (View sert souvent de carte / inventaire dans les jeux Xbox)
+  if (S().captureShare === undefined) S().captureShare = false;
   if (process.platform === 'win32') { try { app.setAppUserModelId('fr.robinrahoual.rrlauncher'); } catch {} } // notifications Windows
 
   const root = () => {
@@ -216,7 +218,7 @@ function init(ctx) {
   hub.on('pad:combo', (name) => {
     if (S().padShortcuts === false || !running.size) return;
     if (name === 'capture') shot({ origin: 'manette' });
-    else if (name === 'share' && S().captureShare !== false) shot({ origin: 'share' });
+    else if (name === 'share' && S().captureShare === true) shot({ origin: 'share' });
     else if (name === 'clip') toggleClip();
   });
 

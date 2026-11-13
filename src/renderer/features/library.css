@@ -153,3 +153,4 @@ body:not([data-view="games"]) .lib-pills { display: none; }
   .lf-row { grid-template-columns: 96px 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { .ls-caret { animation: none; } .ls-wrap { animation: none; } }
+#libSearch { grid-template-columns: minmax(0, 1fr); } .ls-wrap, .ls-results { min-width: 0; }

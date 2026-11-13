@@ -74,7 +74,7 @@
     if (pad || s.captureKeys === false) {
       if (s.padShortcuts !== false && s.guideButton !== false) {
         rows.push([`${k(G)}+${k(RB)}`, 'Capture'], [`${k(G)}+${k(LB)}`, 'Clip'], [`${k(G)}+${k(B)}`, 'Quitter'], [`${k(G)} maintenu`, 'Alimentation']);
-        if (s.captureShare !== false) rows.push([k(SH), 'Capture']);
+        if (s.captureShare === true) rows.push([k(SH), 'Capture']);
       }
     } else rows.push([k('Ctrl+Alt+S'), 'Capture'], [k('Ctrl+Alt+R'), 'Clip']);
     return rows.length ? `<p class="cap-legend-t">Raccourcis en jeu</p><ul>${rows.map(([a, b]) => `<li><span>${a}</span><em>${b}</em></li>`).join('')}</ul>` : '';

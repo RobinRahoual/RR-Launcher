@@ -2242,7 +2242,7 @@ function onPadBtn(btn) {
   else if (btn === 'y' && S.mode === 'details') play();
   else if (S.mode === 'settings' && (btn === 'lb' || btn === 'rb')) cycleSettingsPage(btn === 'lb' ? -1 : 1);
 }
-addEventListener('gamepadconnected', () => { setDevice('pad'); toast('Manette connectée', 'success'); });
+addEventListener('gamepadconnected', () => { setDevice('pad'); }); // la notification est affichée par features/polish.js
 
 // ---------------------------------------------------------------- Échelle des panneaux (1280×720 → 2560×1440)
 function uiScale() {
