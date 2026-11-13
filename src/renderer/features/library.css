@@ -1,1 +1,155 @@
-/* Module library */
+/* Module LIBRARY — recherche / clavier virtuel, filtres, collections, statut & note. Tokens de theme.css uniquement. */
+
+/* ---------- Boutons de la barre du haut ---------- */
+.sys-btn.has-dot::before {
+  content: ''; position: absolute; top: 2px; right: 2px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg);
+}
+
+/* ---------- Pastilles de filtres actifs ---------- */
+.lib-pills {
+  position: fixed; z-index: 6; left: 6vw; top: 120px;
+  display: flex; flex-wrap: nowrap; gap: 8px; max-width: calc(100vw - var(--anchor, 6vw) - 4vw); overflow: hidden;
+}
+body:not([data-view="games"]) .lib-pills { display: none; }
+.lib-pill {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 0 12px; border-radius: 999px; border: 0;
+  background: var(--accent-soft); color: var(--accent-text); font-size: 13px; font-weight: 700; white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.lib-pill svg { width: 13px; height: 13px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; }
+.lib-pill:hover { background: var(--sel-bg); color: var(--sel-fg); }
+.lib-pill.clear { background: transparent; box-shadow: none; text-decoration: underline; text-underline-offset: 3px; color: var(--text-2); }
+
+/* ---------- Chips (filtres, statuts) ---------- */
+.lib-chip {
+  display: inline-flex; align-items: center; gap: 7px; min-height: 36px; padding: 0 14px; border-radius: 999px;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--fg); font-size: 14px; font-weight: 600; white-space: nowrap;
+  transition: background var(--dur-fast), color var(--dur-fast), transform var(--dur-fast);
+}
+.lib-chip svg { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lib-chip:hover { background: var(--surface-3); }
+.lib-chip[aria-pressed="true"], .lib-chip[aria-checked="true"] { background: var(--sel-bg); color: var(--sel-fg); border-color: var(--sel-bg); }
+.lib-chip.is-focus, .lib-chip:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; transform: scale(1.04); }
+.lib-coll-n:not(:empty) { font-size: 12px; padding: 1px 7px; border-radius: 999px; background: var(--accent); color: #fff; }
+
+/* ---------- Panneau Filtres ---------- */
+.lf-panel { width: min(1000px, 100%); }
+.lf-body { display: flex; flex-direction: column; gap: 14px; }
+.lf-row { display: grid; grid-template-columns: 120px 1fr; gap: 14px; align-items: start; }
+.lf-l { padding-top: 8px; font-size: 12px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); }
+.lf-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- Collections ---------- */
+.lc-sub { margin: -10px 0 16px; }
+.lc-list { display: flex; flex-direction: column; gap: 8px; max-height: 52vh; overflow: auto; padding: 4px; }
+.lc-row { display: flex; gap: 8px; align-items: stretch; }
+.lc-main {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 14px; min-height: 52px; padding: 0 16px; text-align: left;
+  border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); color: var(--fg); font-size: 15px; font-weight: 600;
+}
+.lc-main:hover, .lc-main.is-focus { background: var(--surface-3); }
+.lc-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lc-n { font-size: 12.5px; color: var(--text-3); font-weight: 500; }
+.lc-check { width: 24px; height: 24px; border-radius: 7px; border: 2px solid var(--line-strong); display: grid; place-items: center; flex: 0 0 auto; }
+.lc-check svg { width: 16px; height: 16px; stroke: var(--sel-fg); fill: none; stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.lc-check.on { background: var(--sel-bg); border-color: var(--sel-bg); }
+.lc-check.on svg { opacity: 1; }
+.lc-fold svg { width: 22px; height: 22px; stroke: var(--text-2); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lc-ico { width: 52px; border-radius: 10px; border: 1px solid transparent; background: var(--surface-2); color: var(--fg); display: grid; place-items: center; }
+.lc-ico svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.lc-ico.danger { color: var(--err-fg); }
+.lc-ico:hover, .lc-ico.is-focus { background: var(--surface-3); }
+.lc-main.is-focus, .lc-ico.is-focus { outline: 3px solid var(--accent); outline-offset: 1px; }
+.lc-new { margin-top: 8px; align-self: flex-start; }
+.lc-new svg { width: 18px; height: 18px; stroke: currentColor; fill: none; stroke-width: 2.4; stroke-linecap: round; }
+.lc-none { margin: 6px 4px 10px; }
+
+/* ---------- Page du jeu : statut / note ---------- */
+.lib-d { margin-top: 14px; display: flex; flex-direction: column; gap: 10px; }
+.lib-d-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.lib-d-l { width: 62px; flex: 0 0 auto; font-size: 11.5px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); }
+.lib-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.lib-chips .lib-chip { min-height: 32px; padding: 0 12px; font-size: 13px; }
+.lib-stars { display: flex; gap: 4px; }
+.lib-star { width: 38px; height: 38px; display: grid; place-items: center; border-radius: 10px; border: 0; background: transparent; color: var(--text-3); }
+.lib-star svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linejoin: round; }
+.lib-star.on { color: var(--accent-text); }
+.lib-star.on svg { fill: currentColor; }
+.lib-star:hover { background: var(--surface-3); }
+.lib-star.is-focus, .lib-star:focus-visible { outline: 3px solid var(--accent); outline-offset: 1px; }
+.lib-coll-btn { margin-left: 18px; }
+
+/* ---------- Pastille de statut / note (bloc infos) ---------- */
+.lib-badge { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; }
+.lib-badge svg { width: 14px; height: 14px; stroke: currentColor; fill: currentColor; stroke-width: 1.5; }
+.lib-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--text-3); flex: 0 0 auto; }
+.lib-badge.st-todo .lib-dot { background: var(--accent); }
+.lib-badge.st-playing .lib-dot { background: var(--warn-fg); }
+.lib-badge.st-done .lib-dot, .lib-badge.st-complete .lib-dot { background: var(--ok-fg); }
+.lib-badge.st-dropped .lib-dot { background: var(--err-fg); }
+.lib-badge.rate { color: var(--accent-text); }
+
+/* ---------- Recherche + clavier virtuel ---------- */
+#libSearch { z-index: 25; background: rgba(var(--bg-rgb), .94); place-items: stretch; padding: calc(var(--top-h, 100px) * .55) 5vw calc(var(--bottom-h, 72px) + 10px); }
+.ls-wrap { width: min(1500px, 100%); margin: 0 auto; display: flex; flex-direction: column; gap: 16px; min-height: 0; height: 100%; animation: popIn var(--dur-med) var(--ease-out); }
+.ls-head { display: flex; align-items: center; gap: 16px; padding: 0 22px; min-height: 64px; border-radius: 16px; background: var(--surface-1); border: 2px solid var(--accent); box-shadow: var(--shadow-panel); }
+.ls-ico svg { width: 26px; height: 26px; stroke: var(--accent-text); fill: none; stroke-width: 2.2; stroke-linecap: round; }
+.ls-field { flex: 1; min-width: 0; display: flex; align-items: center; font-size: 26px; font-weight: 600; position: relative; overflow: hidden; white-space: nowrap; }
+.ls-title { margin-right: 14px; font-family: var(--font-display); font-size: 15px; letter-spacing: .06em; text-transform: uppercase; color: var(--accent-text); }
+.ls-caret { width: 2px; height: 1.1em; margin-left: 2px; background: var(--accent); animation: lsBlink 1s steps(2) infinite; }
+.ls-ph { position: absolute; left: 0; color: var(--text-3); font-weight: 500; pointer-events: none; }
+.is-name .ls-ph { left: auto; }
+.ls-title:not([hidden]) ~ .ls-ph { position: static; margin-left: 4px; }
+.ls-count { font-size: 14px; color: var(--text-3); white-space: nowrap; }
+@keyframes lsBlink { 50% { opacity: 0; } }
+.ls-results {
+  flex: 1; min-height: 0; display: flex; gap: 16px; overflow-x: auto; overflow-y: hidden; align-items: flex-start; padding: 6px 4px 10px; scrollbar-width: thin;
+}
+.ls-results[hidden] { display: none; }
+.ls-none { margin: auto; text-align: center; font-size: 18px; color: var(--text-2); }
+.ls-res {
+  flex: 0 0 auto; display: flex; flex-direction: column; gap: 6px; width: calc(150px * var(--ui, 1)); padding: 8px; border-radius: 14px;
+  border: 0; background: transparent; color: var(--fg); text-align: left; transition: background var(--dur-fast), transform var(--dur-fast) var(--ease-out);
+}
+.ls-cov {
+  display: grid; place-items: center; width: 100%; max-height: calc(170px * var(--ui, 1)); aspect-ratio: var(--r, .7); margin: 0 auto;
+  border-radius: 8px; background: var(--surface-3) center / cover no-repeat; box-shadow: 0 6px 16px rgba(var(--shade-rgb), .25), 0 0 0 1px var(--line);
+}
+.ls-cov.ph { background: color-mix(in oklab, var(--c, var(--accent)) 55%, var(--surface-1)); font-family: var(--font-display); font-size: 40px; color: #fff; }
+.ls-rn { font-size: 14px; font-weight: 700; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.ls-rp { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ls-rp i { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
+.ls-res:hover { background: var(--surface-3); }
+.ls-res.is-focus, .ls-res:focus-visible { background: var(--sel-bg); color: var(--sel-fg); transform: translateY(-3px); }
+.ls-res.is-focus .ls-rp, .ls-res:focus-visible .ls-rp { color: inherit; opacity: .8; }
+.is-name .ls-results, .is-name .ls-count { display: none; }
+.is-name .ls-wrap { justify-content: center; }
+.is-name .ls-kbd { margin-top: 0; }
+
+.ls-kbd { flex: 0 0 auto; display: grid; grid-template-columns: repeat(12, 1fr); gap: 8px; width: min(1100px, 100%); margin: 0 auto; }
+.ls-key {
+  min-height: calc(54px * var(--ui, 1)); border-radius: 12px; border: 1px solid var(--line-strong); background: var(--surface-1); color: var(--fg);
+  font-size: calc(21px * var(--ui, 1)); font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background var(--dur-fast), transform var(--dur-fast) var(--ease-out);
+}
+.ls-key.fn { font-size: calc(15px * var(--ui, 1)); color: var(--text-2); }
+.ls-key svg { width: 24px; height: 24px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.ls-key.ok { background: var(--accent); border-color: transparent; color: #fff; }
+.ls-key:hover { background: var(--surface-3); }
+.ls-key.ok:hover { background: var(--accent-deep); }
+.ls-key:active { transform: scale(.95); }
+.ls-key.is-focus, .ls-key:focus-visible { background: var(--sel-bg); color: var(--sel-fg); border-color: var(--sel-bg); transform: scale(1.08); position: relative; z-index: 1; }
+
+@media (max-height: 800px) {
+  #libSearch { padding-top: 70px; }
+  .ls-wrap { gap: 10px; }
+  .ls-head { min-height: 52px; }
+  .ls-field { font-size: 22px; }
+  .ls-kbd { gap: 6px; }
+  .ls-key { min-height: 42px; font-size: 18px; }
+  .ls-res { width: 120px; padding: 4px; }
+  .ls-cov { max-height: 120px; }
+  .lf-row { grid-template-columns: 96px 1fr; }
+}
+@media (prefers-reduced-motion: reduce) { .ls-caret { animation: none; } .ls-wrap { animation: none; } }
