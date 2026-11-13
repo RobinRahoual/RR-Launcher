@@ -1777,7 +1777,7 @@ async function runScan(mode) {
   }
   scan.items = res.items;
   scan.emulators = res.emulators;
-  scan.checked = new Set(res.items.filter((x) => !x.exists).map((x) => x.key));
+  scan.checked = new Set(res.items.filter((x) => !x.exists && !x.uncertain).map((x) => x.key)); // « à vérifier » : non cochés
   renderScanResults(res);
   sfx('confirm');
 }
@@ -1811,7 +1811,7 @@ function renderScanResults(res) {
       <button class="scan-item ${it.exists ? 'exists' : ''}" role="checkbox" aria-checked="${scan.checked.has(it.key)}" data-key="${it.key}" data-nav>
         <span class="chk"></span>
         <span><span class="si-name">${esc(it.name)}</span><span class="si-path">${esc(ltr(it.romPath || it.exePath || it.installDir || ''))}</span></span>
-        <span class="si-src">${it.exists ? 'DÉJÀ AJOUTÉ' : src(it)}</span>
+        <span class="si-src">${it.exists ? 'DÉJÀ AJOUTÉ' : it.uncertain ? 'À VÉRIFIER' : src(it)}</span>
       </button>`).join('')}`).join('') || '<p class="results-empty">Aucun jeu trouvé dans ces dossiers. Les émulateurs détectés peuvent quand même être configurés.</p>';
   updateScanButton();
   renderHints();

@@ -24,6 +24,8 @@ Les portages recompilés (.exe) peuvent être rangés sous leur console d'origin
 - **Steam, Epic & GOG** : importe tous les jeux installés (lancés via leur launcher).
 - **Scanner des dossiers** / **tout le PC** : trouve les jeux PC (un exe par dossier de jeu), les ROMs, les dumps PS3 (titre lu dans `PARAM.SFO`) et les émulateurs, qui sont configurés automatiquement. Tu coches ce que tu veux ajouter.
 
+Le scan vérifie chaque fichier par son **contenu** (en-tête de la ROM) et pas seulement son extension : un `README.md`, un `.wad` de Doom ou un `.iso` d'installation Windows ne sont pas proposés. Pour les **.exe**, seuls les dossiers qui contiennent des indices de jeu (moteur Unity / Unreal / Godot / Ren'Py / RPG Maker, `steam_api`, GOG Galaxy, Epic Online Services, Bink, FMOD…) sont retenus ; les logiciels (Electron, Qt, Python, Adobe, Microsoft, Blender…) sont ignorés. Un exe sans indice rangé dans un dossier *Jeux* / *Games* est proposé **non coché** (« À VÉRIFIER »). Les images `.chd` / `.cue` sans console reconnaissable sont classées d'après le nom du dossier (`PS1`, `PS2`, `Dreamcast`…).
+
 Le launcher télécharge alors tout seul : jaquette, image de fond, logo, description, développeur, date, genres et captures d'écran.
 
 **Sources** : Steam (jeux PC, en français) ; TheGamesDB (clé gratuite optionnelle : vrais scans du **dos des boîtes** et jaquettes console) ; libretro-thumbnails (ROMs nommées No-Intro/Redump) ; SteamGridDB (clé gratuite optionnelle, utile pour les consoles et les jeux hors Steam) ; Wikipédia (descriptions et jaquettes console). Sans jaquette, une jaquette est générée à partir du fond et du logo.

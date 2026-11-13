@@ -53,7 +53,7 @@ const PLATFORMS = [
   P({ id: 'snes', tgdb: 6, name: 'Super Nintendo', short: 'SUPER NINTENDO', maker: 'Nintendo', year: '1990', color: '#7b5aa6', wiki: 'Super Nintendo Entertainment System', libretro: 'Nintendo_-_Super_Nintendo_Entertainment_System',
     logos: ['Super_Nintendo_Entertainment_System_logo.svg', 'SNES_logo.svg', 'Super_Famicom_logo.svg'],
     case: { style: 'card', ratio: 1.38, body: '#d9d6d0', fg: '#4a3f73', label: 'SUPER NINTENDO' },
-    exts: ['sfc', 'smc'], hints: [/snes|super ?nintendo|super ?famicom/i],
+    exts: ['sfc', 'smc', 'fig', 'swc'], hints: [/snes|super ?nintendo|super ?famicom/i],
     emulators: [
       { name: 'Mesen', match: /mesen/i, args: '"{rom}" --fullscreen' },
       { name: 'Snes9x', match: /snes9x/i, args: '-fullscreen "{rom}"' },
@@ -63,7 +63,7 @@ const PLATFORMS = [
   P({ id: 'nes', tgdb: 7, name: 'NES', short: 'NES', maker: 'Nintendo', year: '1985', color: '#c4161c', wiki: 'Nintendo Entertainment System', libretro: 'Nintendo_-_Nintendo_Entertainment_System',
     logos: ['NES_logo.svg', 'Nes_logo_en.svg'],
     case: { style: 'card', ratio: 0.72, body: '#151515', fg: '#ffffff', label: 'NES' },
-    exts: ['nes', 'fds'], hints: [/\bnes\b|famicom/i],
+    exts: ['nes', 'fds', 'unf', 'unif'], hints: [/\bnes\b|famicom/i],
     emulators: [
       { name: 'Mesen', match: /mesen/i, args: '"{rom}" --fullscreen' },
       { name: 'RetroArch (Mesen)', match: /retroarch/i, args: '-f -L "cores/mesen_libretro.dll" "{rom}"' },
@@ -72,7 +72,7 @@ const PLATFORMS = [
   P({ id: 'gb', tgdb: 4, name: 'Game Boy / Color', short: 'GAME BOY', maker: 'Nintendo', year: '1989', color: '#8bac0f', wiki: 'Game Boy', libretro: 'Nintendo_-_Game_Boy',
     logos: ['Nintendo_Game_Boy_Logo.svg', 'Gameboy_logo.svg'],
     case: { style: 'card', ratio: 0.9, body: '#e7e3d6', fg: '#3d3d3d', label: 'GAME BOY' },
-    exts: ['gb', 'gbc'], hints: [/game ?boy(?! ?adv)|\bgbc?\b/i],
+    exts: ['gb', 'gbc', 'sgb'], hints: [/game ?boy(?! ?adv)|\bgbc?\b/i],
     emulators: [
       { name: 'mGBA', match: /mgba/i, args: '-f "{rom}"' },
       { name: 'RetroArch (Gambatte)', match: /retroarch/i, args: '-f -L "cores/gambatte_libretro.dll" "{rom}"' },
@@ -90,7 +90,7 @@ const PLATFORMS = [
   P({ id: 'nds', tgdb: 8, name: 'Nintendo DS', short: 'DS', maker: 'Nintendo', year: '2004', color: '#9aa0a6', wiki: 'Nintendo DS', libretro: 'Nintendo_-_Nintendo_DS',
     logos: ['Nintendo_DS_Logo.svg', 'Nintendo_DS_logo.png'],
     case: { style: 'small', ratio: 0.88, body: '#d9dcdf', band: '#c4c8cc', fg: '#2a2a2a', label: 'NINTENDO DS' },
-    exts: ['nds'], hints: [/\bnds\b|nintendo ?ds(?!i)/i],
+    exts: ['nds', 'dsi'], hints: [/\bnds\b|nintendo ?ds(?!i)/i],
     emulators: [
       { name: 'melonDS', match: /melonds/i, args: '-f "{rom}"' },
       { name: 'DeSmuME', match: /desmume/i, args: '"{rom}"' },
@@ -99,7 +99,7 @@ const PLATFORMS = [
   P({ id: '3ds', tgdb: 4912, name: 'Nintendo 3DS', short: '3DS', maker: 'Nintendo', year: '2011', color: '#ce181e', wiki: 'Nintendo 3DS', libretro: 'Nintendo_-_Nintendo_3DS',
     logos: ['3ds_logo.svg', '3ds_logo_3.svg'],
     case: { style: 'small', ratio: 0.88, body: '#f2f2f2', band: '#f2f2f2', fg: '#ce181e', label: 'NINTENDO 3DS' },
-    exts: ['3ds', 'cci', 'cia', 'cxi'], hints: [/3ds/i],
+    exts: ['3ds', 'cci', 'cia', 'cxi', '3dsx'], hints: [/3ds/i],
     emulators: [{ name: 'Azahar / Citra / Lime3DS', match: /azahar|citra|lime3ds/i, args: '"{rom}"' }] }),
 
   P({ id: 'ps1', tgdb: 10, name: 'PlayStation', short: 'PlayStation', maker: 'Sony', year: '1994', color: '#9aa1ab', wiki: 'PlayStation (console)', libretro: 'Sony_-_PlayStation',
@@ -126,7 +126,7 @@ const PLATFORMS = [
   P({ id: 'psp', tgdb: 13, name: 'PSP', short: 'PSP', maker: 'Sony', year: '2004', color: '#4d4d55', wiki: 'PlayStation Portable', libretro: 'Sony_-_PlayStation_Portable',
     logos: ['PSP_Logo.svg', 'Logo_psp.svg'],
     case: { style: 'small', ratio: 0.58, body: '#0e0e10', band: '#0e0e10', fg: '#ffffff', label: 'PSP' },
-    exts: ['cso', 'pbp'], hints: [/\bpsp\b|playstation ?portable/i],
+    exts: ['cso', 'zso', 'pbp'], hints: [/\bpsp\b|playstation ?portable/i],
     emulators: [{ name: 'PPSSPP', match: /ppsspp/i, args: '"{rom}" --fullscreen' }] }),
 
   P({ id: 'vita', tgdb: 39, name: 'PS Vita', short: 'PS VITA', maker: 'Sony', year: '2011', color: '#1e5bd8', wiki: 'PlayStation Vita', libretro: null,
@@ -159,7 +159,7 @@ const PLATFORMS = [
   P({ id: 'md', tgdb: 18, name: 'Mega Drive', short: 'MEGA DRIVE', maker: 'Sega', year: '1988', color: '#2b2b2b', wiki: 'Sega Genesis', libretro: 'Sega_-_Mega_Drive_-_Genesis',
     logos: ['MegaDriveJPLogo.svg', 'Sega_genesis_logo.svg'],
     case: { style: 'dvd', ratio: 0.7, body: '#101010', band: '#101010', fg: '#ffffff', label: 'MEGA DRIVE' },
-    exts: ['md', 'gen', 'smd'], hints: [/mega ?drive|genesis/i],
+    exts: ['md', 'gen', 'smd', '68k', 'sgd'], hints: [/mega ?drive|genesis/i],
     emulators: [
       { name: 'BlastEm', match: /blastem/i, args: '-f "{rom}"' },
       { name: 'RetroArch (Genesis Plus GX)', match: /retroarch/i, args: '-f -L "cores/genesis_plus_gx_libretro.dll" "{rom}"' },
@@ -169,13 +169,16 @@ const PLATFORMS = [
 const BY_ID = Object.fromEntries(PLATFORMS.map((p) => [p.id, p]));
 
 // Extensions dont la plateforme ne peut être devinée que par le chemin (dossier "PS2", "GameCube"…).
-const AMBIGUOUS = ['iso', 'chd', 'cue', 'm3u', 'rvz', 'img', 'ecm', 'mdf'];
+const AMBIGUOUS = ['iso', 'chd', 'cue', 'm3u', 'rvz', 'wia', 'img', 'ecm', 'mdf', 'ccd', 'bin'];
 const AMBIGUOUS_CANDIDATES = {
   iso: ['ps2', 'psp', 'gc', 'wii', 'xbox', 'x360', 'ps1', 'ps3', 'dc'],
   chd: ['ps1', 'ps2', 'dc', 'psp'],
   cue: ['ps1', 'dc'],
   m3u: ['ps1', 'dc', 'ps2'],
   rvz: ['gc', 'wii'],
+  wia: ['gc', 'wii'],
+  ccd: ['ps1'],
+  bin: ['md', 'ps1'],
   img: ['ps1'],
   ecm: ['ps1'],
   mdf: ['ps1', 'ps2'],
@@ -186,6 +189,7 @@ function platformForFile(filePath) {
   const base = lower.split(/[\\/]/).pop();
   const ext = base.includes('.') ? base.split('.').pop() : '';
   if (base === 'eboot.bin' && /usrdir/.test(lower)) return 'ps3';
+  if (ext === 'bin') return /mega ?drive|genesis/i.test(lower) ? 'md' : AMBIGUOUS_CANDIDATES.bin.some((id) => BY_ID[id].hints.some((h) => h.test(lower))) ? 'ps1' : null;
   if (ext === 'exe') return null;
   for (const p of PLATFORMS) if (p.exts.includes(ext)) return p.id;
   if (AMBIGUOUS.includes(ext)) {
@@ -197,6 +201,13 @@ function platformForFile(filePath) {
     if (ext === 'cue' || ext === 'ecm' || ext === 'img') return 'ps1';
     return 'unknown';
   }
+  return null;
+}
+
+// Plateforme suggérée par les noms de dossiers (« ROMs/PS2/… », « GameCube »…) — sans regarder le fichier.
+function folderHint(filePath) {
+  const dirs = filePath.split(/[\\/]/).slice(0, -1).join('/');
+  for (const p of PLATFORMS) if (p.hints.length && p.hints.some((h) => h.test(dirs))) return p.id;
   return null;
 }
 
@@ -227,4 +238,4 @@ function publicPlatforms() {
   }));
 }
 
-module.exports = { PLATFORMS, BY_ID, platformForFile, romExtensions, detectEmulator, publicPlatforms, AMBIGUOUS };
+module.exports = { PLATFORMS, BY_ID, platformForFile, folderHint, romExtensions, detectEmulator, publicPlatforms, AMBIGUOUS };
