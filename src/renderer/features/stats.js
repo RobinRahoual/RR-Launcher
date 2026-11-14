@@ -5,7 +5,7 @@
 (() => {
   'use strict';
   const PERIODS = [['week', 'Cette semaine'], ['month', 'Ce mois'], ['year', 'Cette année'], ['all', 'Tout']];
-  const ST = { period: 'week', offset: 0, data: null, built: false, req: 0 };
+  const ST = { period: 'all', offset: 0, data: null, built: false, req: 0 };
   const SV = (d) => `<svg viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
   const ICON_BARS = '<path d="M5 20V11M12 20V4M19 20v-6"/>';
 
@@ -341,7 +341,7 @@
     if (S.mode === 'stats') return;
     build();
     closeAll();
-    ST.offset = 0;
+    ST.period = 'all'; ST.offset = 0;
     await refresh();
     openOverlay('stats');
   };
