@@ -31,3 +31,11 @@ test('waitPort attend l’ouverture du port', async () => {
   assert.strictEqual(await S.waitPort(1, { tries: 3, every: 0, sleep: async () => {}, check: async () => false }), false);
   srv.close();
 });
+test('elevatedScript : copie + redémarrage du service, guillemets PowerShell', () => {
+  const a = S.elevatedScript("C:\\tmp\\a b.json", "C:\\Program Files\\Sunshine\\config\\apps.json", 'SunshineService');
+  assert.match(a, /-Verb RunAs -Wait/);
+  assert.ok(a.includes('copy /Y "C:\\tmp\\a b.json" "C:\\Program Files\\Sunshine\\config\\apps.json" & net stop SunshineService & net start SunshineService'));
+  const b = S.elevatedScript(null, null, 'SunshineService');
+  assert.ok(b.includes("'/c net stop SunshineService & net start SunshineService'"));
+  assert.ok(!S.elevatedScript("C:\\o'brien\\x", 'd', null).includes("o'brien"));
+});

@@ -9,7 +9,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const net = require('net');
-const { spawn } = require('child_process');
+const { spawn, spawnSync, execFile } = require('child_process');
 
 const SUNSHINE_PORT = 47990;
 const SUNSHINE_UI = `https://localhost:${SUNSHINE_PORT}`;
@@ -88,6 +88,17 @@ async function waitPort(port, { tries = 30, every = 1000, check = portOpen, slee
   for (let i = 0; i < tries; i++) { if (await check(port)) return true; await sleep(every); }
   return false;
 }
+// PowerShell : '…' avec ' doublé
+const psq = (v) => `'${String(v).replace(/'/g, "''")}'`;
+// Commande exécutée en administrateur (une invite UAC) : copie du fichier, puis redémarrage éventuel du service Sunshine
+function elevatedScript(src, dest, service) {
+  const steps = src ? [`copy /Y "${src}" "${dest}"`] : [];
+  if (service) steps.push(`net stop ${service}`, `net start ${service}`);
+  return `Start-Process -FilePath cmd.exe -ArgumentList ${psq('/c ' + steps.join(' & '))} -Verb RunAs -Wait -WindowStyle Hidden`;
+}
+function runPs(script, run = execFile) {
+  return new Promise((res) => run('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', script], { windowsHide: true, timeout: 90000 }, (err) => res(!err)));
+}
 const moonlightArgs = (host, app) => ['stream', host, app || 'Desktop'];
 
 function init(ctx) {
@@ -131,32 +142,58 @@ function init(ctx) {
     }
     return { ...status(), ready: true };
   });
-  // Déclare le launcher (ou un jeu) dans Sunshine. Sans droit d'écriture (Program Files) : renvoie la commande à saisir à la main.
-  ipcMain.handle('x:stream:register', (_e, gameId) => {
+  const SERVICE = 'SunshineService';
+  const hasService = () => { try { return spawnSync('sc', ['query', SERVICE], { windowsHide: true }).status === 0; } catch { return false; } };
+  const protectedErr = (e) => ['EPERM', 'EACCES', 'EBUSY', 'EROFS'].includes(e?.code);
+  // Écrit apps.json ; dossier protégé (Program Files) → copie en administrateur (invite UAC) et redémarrage de Sunshine.
+  // Renvoie { elevated, restarted } ou lève une erreur (UAC refusé…).
+  async function writeApps(sun, json) {
+    const dest = appsFile(sun), text = JSON.stringify(json, null, 2), service = hasService();
+    let elevated = false, restarted = false;
+    try { fs.writeFileSync(dest, text); }
+    catch (e) {
+      if (!protectedErr(e) || process.platform !== 'win32') throw e;
+      const tmp = path.join(os.tmpdir(), `rr-sunshine-apps-${Date.now()}.json`);
+      fs.writeFileSync(tmp, text);
+      elevated = true; restarted = service;
+      const ok = await runPs(elevatedScript(tmp, dest, service ? SERVICE : null));
+      try { fs.rmSync(tmp, { force: true }); } catch {}
+      let now = ''; try { now = fs.readFileSync(dest, 'utf8'); } catch {}
+      if (!ok || now !== text) throw Object.assign(new Error('Autorisation administrateur refusée'), { code: 'UAC' });
+    }
+    if (!restarted) {
+      if (service) restarted = await runPs(elevatedScript(null, null, SERVICE)); // service sans écriture protégée : redémarrage seul
+      else if (isRunning(sun)) { // lancé par le launcher : on le relance simplement
+        try { spawnSync('taskkill', ['/IM', path.win32.basename(sun), '/F'], { windowsHide: true }); await new Promise((r) => setTimeout(r, 800)); spawn(sun, [], { cwd: path.win32.dirname(sun), detached: true, stdio: 'ignore', windowsHide: true }).unref(); restarted = true; } catch {}
+      }
+    }
+    return { elevated, restarted };
+  }
+  const readApps = (sun) => { try { return JSON.parse(fs.readFileSync(appsFile(sun), 'utf8')); } catch { return {}; } };
+  // Déclare le launcher (ou un jeu) dans Sunshine
+  ipcMain.handle('x:stream:register', async (_e, gameId) => {
     const sun = find(sunshineCandidates());
     if (!sun) return { ok: false, error: 'Sunshine n’est pas installé' };
     const g = gameId ? findGame(gameId) : null;
     if (gameId && !g) return { ok: false, error: 'Jeu introuvable' };
     const entry = appEntry(selfExe(), g);
     try {
-      let json = {};
-      try { json = JSON.parse(fs.readFileSync(appsFile(sun), 'utf8')); } catch {}
-      const r = addApp(json, entry);
-      fs.writeFileSync(appsFile(sun), JSON.stringify(r.json, null, 2));
-      log(`stream : « ${entry.name} » ${r.added ? 'ajouté à' : 'mis à jour dans'} Sunshine`);
-      return { ok: true, name: entry.name, added: r.added, restart: true };
+      const r = addApp(readApps(sun), entry);
+      const w = await writeApps(sun, r.json);
+      log(`stream : « ${entry.name} » ${r.added ? 'ajouté à' : 'mis à jour dans'} Sunshine${w.elevated ? ' (administrateur)' : ''}`);
+      return { ok: true, name: entry.name, added: r.added, restarted: w.restarted };
     } catch (e) {
-      return { ok: false, error: 'Sunshine est installé dans un dossier protégé : ajoute l’application à la main (Applications → Ajouter) avec la commande ci-dessous.', manual: { name: entry.name, cmd: entry.cmd, dir: entry['working-dir'] }, code: e.code };
+      return { ok: false, error: e.code === 'UAC' ? 'Autorisation administrateur refusée : réessaie et accepte la fenêtre Windows.' : `Écriture impossible : ${e.message}`, manual: { name: entry.name, cmd: entry.cmd, dir: entry['working-dir'] } };
     }
   });
-  ipcMain.handle('x:stream:unregister', (_e, name) => {
+  ipcMain.handle('x:stream:unregister', async (_e, name) => {
     const sun = find(sunshineCandidates());
     if (!sun) return { ok: false, error: 'Sunshine n’est pas installé' };
     try {
-      const r = removeApp(JSON.parse(fs.readFileSync(appsFile(sun), 'utf8')), String(name));
-      fs.writeFileSync(appsFile(sun), JSON.stringify(r.json, null, 2));
+      const r = removeApp(readApps(sun), String(name));
+      await writeApps(sun, r.json);
       return { ok: true, removed: r.removed };
-    } catch (e) { return { ok: false, error: e.code === 'EPERM' || e.code === 'EACCES' ? 'Dossier protégé : retire-la dans l’interface de Sunshine' : e.message }; }
+    } catch (e) { return { ok: false, error: e.code === 'UAC' ? 'Autorisation administrateur refusée' : e.message }; }
   });
   // Moonlight sur CE PC (pour recevoir le flux d'un autre PC) : hôte et application facultatifs
   ipcMain.handle('x:stream:moonlight', (_e, o = {}) => {
@@ -169,4 +206,4 @@ function init(ctx) {
   });
 }
 
-module.exports = { init, portOpen, waitPort, launchArg, sunshineCandidates, moonlightCandidates, localAddresses, appEntry, addApp, removeApp, moonlightArgs, SUNSHINE_UI };
+module.exports = { init, elevatedScript, portOpen, waitPort, launchArg, sunshineCandidates, moonlightCandidates, localAddresses, appEntry, addApp, removeApp, moonlightArgs, SUNSHINE_UI };

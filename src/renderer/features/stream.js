@@ -27,7 +27,7 @@
   }
   async function reg(id) {
     const r = await rr.x('x:stream:register', id).catch((e) => ({ ok: false, error: e.message }));
-    if (r.ok) { toast(`« ${r.name} » ${r.added ? 'ajouté' : 'mis à jour'} — redémarre Sunshine pour l’afficher`, 'success'); refresh(); return; }
+    if (r.ok) { toast(`« ${r.name} » ${r.added ? 'ajouté' : 'mis à jour'}${r.restarted ? ' — Sunshine redémarré' : ' — redémarre Sunshine pour l’afficher'}`, 'success'); refresh(); return; }
     toast(r.error, true);
     if (r.manual) { const m = $('#stManual'); m.hidden = false; m.innerHTML = `Dans Sunshine (Applications → Ajouter) : nom <code>${esc(r.manual.name)}</code>, commande <code>${esc(r.manual.cmd)}</code>, dossier <code>${esc(r.manual.dir)}</code>.`; }
   }
