@@ -10,6 +10,7 @@
     discord: '<path d="M8.5 5.5 7.6 4a14 14 0 0 0-3.9 1.3C1.4 8.8.9 12.2 1.1 15.6a14 14 0 0 0 4.4 2.2l1-1.5M15.5 5.5l.9-1.5a14 14 0 0 1 3.9 1.3c2.3 3.5 2.8 6.9 2.6 10.3a14 14 0 0 1-4.4 2.2l-1-1.5M6.5 16.3c3.6 1.6 7.4 1.6 11 0"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/>',
     steam: '<circle cx="15.5" cy="8.5" r="3.5"/><circle cx="15.5" cy="8.5" r="1"/><circle cx="8" cy="16" r="2.5"/><path d="m10.3 15 2.6-3.8M2.5 12.5l3.6 1.6"/><path d="M2.6 13.5A9.5 9.5 0 1 0 3 8.5"/>',
     live: '<rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="11" r="2"/>',
+    pad: '<path d="M7 8h10a4 4 0 0 1 4 4v1.5a3 3 0 0 1-5.4 1.8L14.5 14h-5l-1.1 1.3A3 3 0 0 1 3 13.5V12a4 4 0 0 1 4-4z"/><path d="M7.5 11v2.5M6.25 12.25h2.5"/><circle cx="16" cy="11.5" r=".6"/><circle cx="17.5" cy="13" r=".6"/>',
     lib: '<path d="m5 12.5 4.5 4.5L19 7.5"/>',
     chev: '<path d="m6 9 6 6 6-6"/>',
     close: '<path d="M6 6l12 12M18 6 6 18"/>',
@@ -229,8 +230,11 @@
     const r = f.pending ? null : await rr.x('x:friends:rrStats', f.uid).catch(() => null);
     const st = r?.stats;
     const line = (x, right) => {
-      const own = S.lib.games.find((g) => (g.name || '').toLowerCase() === (x.name || '').toLowerCase());
-      return `<li><span><b>${esc(x.name)}</b><small>${esc(x.pname || '')}${x.recomp ? ' · Recomp PC' : ''}${own ? ' · tu l’as' : ''}</small></span><span class="dim">${right}</span></li>`;
+      const own = S.lib.games.find((g) => (x.appid && Number(g.appid) === x.appid) || (g.name || '').toLowerCase() === (x.name || '').toLowerCase());
+      const it = { gameId: own?.id, appid: x.appid || own?.appid || 0, platform: x.platform || 'pc', recomp: x.recomp, source: 'rr' };
+      const art = gameArt(it);
+      return `<li><span class="fr-st-art${art ? '' : ' none'}" style="--pc:${esc(plat(it.platform).color || '#555')}">${art || SV(I.pad)}</span>
+        <span class="fr-st-txt"><b>${esc(x.name)}</b><span class="fr-st-meta">${platTag(it)}${own ? '<small>tu l’as</small>' : ''}</span></span><span class="dim fr-st-r">${right}</span></li>`;
     };
     const body = f.pending
       ? `<p class="dim">Demande envoyée : ${esc(f.name)} doit t’ajouter à son tour (code <b>${esc(f.code)}</b>) pour que vous voyiez vos activités et statistiques.</p>`
@@ -240,7 +244,7 @@
           ${st.recent?.length ? `<h4>Derniers jeux</h4><ul class="fr-st-list">${st.recent.map((x) => line(x, esc(ago(x.at)))).join('')}</ul>` : ''}`
         : '<p class="dim">Statistiques non partagées.</p>'}`;
     openPrompt({
-      title: f.name, icon: 'emu', wide: true,
+      title: f.name, icon: 'emu',
       body: `<div class="fr-st">${body}</div>`,
       actions: [
         { label: 'Retirer de mes amis', danger: true, onClick: async () => { closeOverlay(true); await rrAction('x:friends:rrRemove', f.uid, `${f.name} retiré de tes amis`); } },
@@ -248,6 +252,14 @@
         { label: 'Fermer', primary: true, focus: true, onClick: () => closeOverlay() },
       ],
     });
+    // en-tête : la photo de l'ami à la place de l'icône ; vignettes manquantes retirées (pas d'onerror inline : CSP)
+    const ic = $('#pIcon');
+    if (ic) { ic.className = 'p-icon fr-st-head'; ic.innerHTML = avatar({ ...f, status: f.status || 'offline' }, true); }
+    $$('#pBody .fr-st-art img').forEach((im) => im.addEventListener('error', () => {
+      if (im.dataset.alt) { im.src = im.dataset.alt; delete im.dataset.alt; im.parentNode.classList.add('wide'); }
+      else { const box = im.parentNode; im.remove(); box.classList.add('none'); box.innerHTML = SV(I.pad); }
+    }));
+    $$('#pBody .frt-plat img').forEach((im) => im.addEventListener('error', () => im.closest('.frt-plat')?.remove()));
   }
   function activate(el) {
     const f = friendOf(el?.dataset.key);

@@ -21,7 +21,7 @@ const normCode = (s) => String(s || '').toUpperCase().replace(/[^A-Z0-9]/g, '').
 function statsOf(games, { platName = (p) => p, now = Date.now() } = {}) {
   const played = games.filter((g) => (g.playtime || 0) > 0 || g.lastPlayed);
   const total = played.reduce((n, g) => n + (g.playtime || 0), 0);
-  const item = (g) => ({ name: String(g.name || '').slice(0, 120), platform: g.platform || 'pc', pname: platName(g.platform), recomp: g.source === 'recomp' || undefined });
+  const item = (g) => ({ name: String(g.name || '').slice(0, 120), platform: g.platform || 'pc', pname: platName(g.platform), recomp: g.source === 'recomp' || undefined, appid: Number(g.appid) || undefined });
   const top = [...played].filter((g) => g.playtime > 0).sort((a, b) => b.playtime - a.playtime).slice(0, 10).map((g) => ({ ...item(g), sec: Math.round(g.playtime) }));
   const recent = [...played].filter((g) => g.lastPlayed).sort((a, b) => b.lastPlayed - a.lastPlayed).slice(0, 6).map((g) => ({ ...item(g), at: g.lastPlayed }));
   return { total: Math.round(total), count: games.length, played: played.length, top, recent, recentWeek: recent.filter((r) => now - r.at < 7 * 864e5).length };
