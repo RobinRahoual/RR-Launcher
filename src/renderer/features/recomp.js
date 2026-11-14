@@ -126,7 +126,8 @@
       if (!by.has(k)) by.set(k, { key: k, name: x.platform ? plat(x.platform).name : x.originName, color: pc(x), list: [] });
       by.get(k).list.push(x);
     }
-    const rank = (g) => (g.key.startsWith('o:') ? 1000 : order.indexOf(g.key));
+    // ordre des consoles du launcher, puis les autres consoles du catalogue, et les jeux PC tout à la fin
+    const rank = (g) => (g.key === 'pc' || g.key === 'o:pc' ? 2000 : g.key.startsWith('o:') ? 1000 : order.indexOf(g.key));
     return [...by.values()].sort((a, b) => rank(a) - rank(b) || b.list.length - a.list.length);
   }
   function roomHtml() {
@@ -167,7 +168,17 @@
     const st = x.installed ? `installé (${x.installed.version || '?'})` : x.soon ? 'à venir' : !x.installable ? (x.repo && !x.windows ? 'pas de version Windows' : 'page du projet') : 'installable';
     c.innerHTML = `<b>${esc(x.name)}</b> · ${esc(x.game)} <span class="dim">· ${esc(x.originName || '')} · ${esc(st)}</span>`;
   }
-  ov.addEventListener('focusin', (e) => { const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen); });
+  ov.addEventListener('focusin', (e) => {
+    const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen);
+    const j = e.target.closest?.('[data-rc-jump]'); if (j) j.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // manette / clavier
+  });
+  // Barre des consoles : la molette fait défiler horizontalement
+  ov.addEventListener('wheel', (e) => {
+    const bar = e.target.closest?.('.rc-jumps');
+    if (!bar || bar.scrollWidth <= bar.clientWidth) return;
+    e.preventDefault();
+    bar.scrollLeft += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+  }, { passive: false });
   ov.addEventListener('mouseover', (e) => { const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen); });
   let qt;
   ov.addEventListener('input', (e) => {
