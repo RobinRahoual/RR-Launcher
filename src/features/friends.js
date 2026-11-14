@@ -66,11 +66,31 @@ function init(ctx) {
   // ------------------------------------------------------------ Amis RR Launcher (Firebase)
   const { BY_ID } = require('../platforms');
   const rrNet = require('electron').net;
+  const avatarCache = { key: null, img: '' };
   const rr = createRR({
     fetchImpl: (u, o) => rrNet.fetch(u, o), store, log: say,
     getConfig: () => (S().rrFirebaseApiKey && S().rrFirebaseDb ? { apiKey: S().rrFirebaseApiKey, databaseURL: S().rrFirebaseDb } : FIREBASE),
     profileName: () => { const P = store.data.profiles; const p = P?.list?.find((x) => x.id === P.current); return S().friendsRRName || p?.name || require('os').userInfo().username || 'Joueur'; },
     gamesFn: () => store.data.games || [],
+    profileCard: () => {
+      // Avatar du profil actif pour les amis : pictogramme + couleur, ou miniature JPEG 96 px de la photo
+      const P = store.data.profiles; const p = P?.list?.find((x) => x.id === P.current);
+      if (!p) return {};
+      const card = { av: { g: String(p.avatar || 'star').slice(0, 20), c: String(p.color || '#3C91E6').slice(0, 9) } };
+      if (p.image) {
+        const key = `${p.image}`;
+        if (avatarCache.key !== key) {
+          avatarCache.key = key; avatarCache.img = '';
+          try {
+            const { nativeImage } = require('electron');
+            const im = nativeImage.createFromPath(require('path').join(ctx.DATA, 'profiles', require('path').basename(p.image)));
+            if (!im.isEmpty()) avatarCache.img = `data:image/jpeg;base64,${im.resize({ width: 96, height: 96, quality: 'best' }).toJPEG(78).toString('base64')}`;
+          } catch (e) { say(`rr : avatar ${e.message}`); }
+        }
+        if (avatarCache.img) card.img = avatarCache.img;
+      }
+      return card;
+    },
     platName: (id) => BY_ID[id]?.name || id || 'PC',
     onChange: () => schedulePush(),
   });

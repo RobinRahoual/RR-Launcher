@@ -135,7 +135,7 @@
   ed.id = 'pfEdit'; ed.hidden = true;
   ed.setAttribute('role', 'dialog'); ed.setAttribute('aria-modal', 'true'); ed.setAttribute('aria-labelledby', 'pfEdT');
   ed.innerHTML = `<div class="panel pf-panel">
-    <div class="pf-ed-head"><span id="pfEdPrev"></span><div class="pf-ed-hd"><h2 id="pfEdT">Nouveau profil</h2>
+    <div class="pf-ed-head"><span class="pf-prev-wrap"><span id="pfEdPrev"></span><button type="button" class="btn small pf-crop-btn" data-nav data-pfe="crop" hidden>Recadrer</button></span><div class="pf-ed-hd"><h2 id="pfEdT">Nouveau profil</h2>
       <label class="pf-field"><span class="dim">Nom</span><input id="pfName" type="text" maxlength="20" autocomplete="off" spellcheck="false" data-nav data-default></label></div></div>
     <h3 class="set-group">Avatar</h3><div class="pf-grid" id="pfAvs" role="radiogroup" aria-label="Avatar"></div>
     <h3 class="set-group">Couleur</h3><div class="pf-colors" id="pfCols" role="radiogroup" aria-label="Couleur"></div>
@@ -144,10 +144,73 @@
       <button type="button" class="btn" data-nav data-pfe="cancel">Annuler</button><button type="button" class="btn primary" data-nav data-pfe="save">Enregistrer</button></div></div>`;
   document.body.append(ed);
   OVERLAYS.pfEdit = '#pfEdit';
-  const E = { id: null, avatar: 'star', color: '#3C91E6', image: '' };
+  const E = { id: null, avatar: 'star', color: '#3C91E6', image: '', src: '' };
+
+  // ---------------------------------------------------------------- Recadrage de la photo (cercle)
+  // Glisser pour déplacer, molette / curseur / boutons pour zoomer ; manette : croix = déplacer, LB/RB ou ± = zoom.
+  function cropImage(file) {
+    return new Promise((resolve) => {
+      const V = 300; // diamètre de la vue
+      const C = { x: 0, y: 0, z: 1, min: 1, w: 0, h: 0 };
+      let done = false;
+      const finish = (v) => { if (done) return; done = true; document.removeEventListener('keydown', onKey, true); resolve(v); };
+      openPrompt({
+        title: 'Recadrer la photo',
+        body: `<div class="pf-crop" style="--v:${V}px"><div class="pf-crop-view" tabindex="0" data-nav data-default aria-label="Zone de recadrage : flèches pour déplacer, + et − pour zoomer"><img alt="" draggable="false"></div><i class="pf-crop-ring" aria-hidden="true"></i></div>
+          <div class="pf-crop-zoom"><button type="button" class="btn small" data-cz="-" data-nav aria-label="Dézoomer">−</button><input type="range" min="100" max="400" step="1" value="100" aria-label="Zoom" data-nav><button type="button" class="btn small" data-cz="+" data-nav aria-label="Zoomer">+</button></div>
+          <p class="dim pf-crop-tip">Glisse la photo pour la centrer, zoome avec la molette.</p>`,
+        actions: [
+          { label: 'Annuler', onClick: () => { closeOverlay(); finish(null); } },
+          { label: 'Valider', primary: true, onClick: async () => {
+            const cv = document.createElement('canvas'); cv.width = cv.height = 512;
+            const k = 512 / V, g = cv.getContext('2d');
+            g.imageSmoothingQuality = 'high';
+            g.drawImage(img, (V / 2 + C.x - (C.w * C.z) / 2) * k, (V / 2 + C.y - (C.h * C.z) / 2) * k, C.w * C.z * k, C.h * C.z * k);
+            const f = await rr.x('x:profiles:saveCrop', cv.toDataURL('image/jpeg', 0.9)).catch(() => null);
+            closeOverlay(true);
+            finish(f);
+          } },
+        ],
+      });
+      const box = $('#pBody'), img = $('.pf-crop-view img', box), view = $('.pf-crop-view', box), zr = $('input[type=range]', box);
+      const clamp = () => {
+        const mx = Math.max(0, (C.w * C.z - V) / 2), my = Math.max(0, (C.h * C.z - V) / 2);
+        C.x = Math.max(-mx, Math.min(mx, C.x)); C.y = Math.max(-my, Math.min(my, C.y));
+      };
+      const paint = () => { clamp(); img.style.transform = `translate(-50%, -50%) translate(${C.x}px, ${C.y}px) scale(${C.z})`; zr.value = Math.round((C.z / C.min) * 100); };
+      const zoom = (f) => { const z = Math.max(C.min, Math.min(C.min * 4, C.z * f)); C.x *= z / C.z; C.y *= z / C.z; C.z = z; paint(); };
+      img.onload = () => {
+        C.w = img.naturalWidth; C.h = img.naturalHeight;
+        C.min = C.z = V / Math.min(C.w, C.h); // le cercle est toujours couvert
+        img.style.width = `${C.w}px`; img.style.height = `${C.h}px`;
+        paint();
+      };
+      img.onerror = () => { toast('Image illisible', true); closeOverlay(true); finish(null); };
+      // via data: (et pas rr://) pour que le canvas ne soit pas « contaminé » au moment d'exporter
+      fetch(imgUrl(file)).then((r) => r.blob()).then((b) => new Promise((ok, ko) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = ko; fr.readAsDataURL(b); }))
+        .then((u) => { img.src = u; }).catch(() => img.onerror());
+      let drag = null;
+      view.addEventListener('pointerdown', (e) => { drag = { x: e.clientX - C.x, y: e.clientY - C.y }; view.setPointerCapture(e.pointerId); view.classList.add('is-drag'); });
+      view.addEventListener('pointermove', (e) => { if (!drag) return; C.x = e.clientX - drag.x; C.y = e.clientY - drag.y; paint(); });
+      view.addEventListener('pointerup', () => { drag = null; view.classList.remove('is-drag'); });
+      view.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.08 : 1 / 1.08); }, { passive: false });
+      zr.addEventListener('input', () => { const z = C.min * (+zr.value / 100); C.x *= z / C.z; C.y *= z / C.z; C.z = z; paint(); });
+      box.addEventListener('click', (e) => { if (done) return; const b = e.target.closest('[data-cz]'); if (b) zoom(b.dataset.cz === '+' ? 1.15 : 1 / 1.15); });
+      function onKey(e) {
+        if (S.mode !== 'prompt' || document.activeElement !== view) return;
+        const d = { ArrowLeft: [12, 0], ArrowRight: [-12, 0], ArrowUp: [0, 12], ArrowDown: [0, -12] }[e.key];
+        if (d) { e.preventDefault(); e.stopImmediatePropagation(); C.x += d[0]; C.y += d[1]; paint(); }
+        else if (e.key === '+' || e.key === '=' || e.key === 'PageUp') { e.preventDefault(); zoom(1.15); }
+        else if (e.key === '-' || e.key === 'PageDown') { e.preventDefault(); zoom(1 / 1.15); }
+      }
+      document.addEventListener('keydown', onKey, true);
+      window.rrCropPad = (dir) => { if (done || document.activeElement !== view) return false; const d = { left: [12, 0], right: [-12, 0], up: [0, 12], down: [0, -12] }[dir]; if (!d) return false; C.x += d[0]; C.y += d[1]; paint(); return true; };
+    });
+  }
   function renderEdit() {
     const p = { name: $('#pfName', ed).value || '?', avatar: E.avatar, color: E.color, image: E.image };
     $('#pfEdPrev', ed).innerHTML = avatarHTML(p, 'pf-big');
+    $('.pf-crop-btn', ed).hidden = !E.image;
     $('#pfAvs', ed).innerHTML = PF.avatars.map((a) => `<button type="button" class="pf-pick${!E.image && a === E.avatar ? ' on' : ''}" role="radio" aria-checked="${!E.image && a === E.avatar}" aria-label="Avatar ${a}" data-nav data-av="${a}">${avatarSVG(a, E.color)}</button>`).join('')
       + `<button type="button" class="pf-pick pf-img${E.image ? ' on' : ''}" role="radio" aria-checked="${!!E.image}" data-nav data-av="__img" title="Image du PC">${E.image ? `<img src="${imgUrl(E.image)}" alt="">` : '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></svg>'}<span>Image…</span></button>`;
     $('#pfCols', ed).innerHTML = PF.colors.map((c) => `<button type="button" class="pf-col${c === E.color ? ' on' : ''}" role="radio" aria-checked="${c === E.color}" aria-label="Couleur ${c}" data-nav data-col="${c}" style="--pf-c:${c}"></button>`).join('');
@@ -158,7 +221,7 @@
     E.id = p?.id || null;
     E.avatar = p?.avatar || PF.avatars[PF.list.length % PF.avatars.length] || 'star';
     E.color = p?.color || PF.colors.find((c) => !PF.list.some((x) => x.color === c)) || PF.colors[0];
-    E.image = p?.image || '';
+    E.image = p?.image || ''; E.src = '';
     $('#pfEdT', ed).textContent = p ? 'Modifier le profil' : 'Nouveau profil';
     $('#pfName', ed).value = p?.name || '';
     $('#pfDel', ed).hidden = !p || p.id === 'main';
@@ -178,12 +241,17 @@
   ed.addEventListener('click', async (e) => {
     const av = e.target.closest('[data-av]'), col = e.target.closest('[data-col]'), act = e.target.closest('[data-pfe]')?.dataset.pfe;
     if (av) {
-      if (av.dataset.av === '__img') { const f = await rr.x('x:profiles:pickImage').catch(() => null); if (f) E.image = f; else if (!E.image) return; }
+      if (av.dataset.av === '__img') {
+        const f = await rr.x('x:profiles:pickImage').catch(() => null);
+        if (f) { const c = await cropImage(f); if (c) { E.src = f; E.image = c; } else if (!E.image) return; }
+        else if (!E.image) return;
+      }
       else { E.avatar = av.dataset.av; E.image = ''; }
       sfx('toggle'); return keepFocus(`[data-av="${av.dataset.av}"]`);
     }
     if (col) { E.color = col.dataset.col; sfx('toggle'); return keepFocus(`[data-col="${col.dataset.col}"]`); }
     if (act === 'cancel') return closeOverlay();
+    if (act === 'crop') { const c = await cropImage(E.src || E.image); if (c) { E.image = c; renderEdit(); } return; }
     if (act === 'save') {
       const r = await rr.x('x:profiles:save', { id: E.id, name: $('#pfName', ed).value, avatar: E.avatar, color: E.color, image: E.image }).catch(() => ({ ok: false, error: 'Erreur' }));
       if (!r.ok) { toast(r.error, true); return; }
@@ -305,11 +373,25 @@
   }
   RR.actions.profiles = () => openWho();
   rr.onX('x:profiles:changed', apply);
-  window.rrProfiles = { get state() { return PF; }, current: cur, avatarHTML, open: openWho, switchTo, profileGame };
+  window.rrProfiles = { get state() { return PF; }, current: cur, avatarHTML, avatarSVG, open: openWho, switchTo, profileGame, edit: openEdit };
   renderTop(); renderMenu();
 
   rr.x('x:profiles:get').then((st) => {
     apply(st);
+    // Premier lancement, ou profil encore nommé « Joueur 1 » : on propose d'abord de le personnaliser
+    const me = cur();
+    if (!st.running && (!S.lib.settings?.profileSetupDone || /^joueur\s*1$/i.test(me.name || ''))) {
+      const t0 = performance.now();
+      const tryEdit = () => {
+        if (performance.now() - t0 > 15000) return;
+        if (shellSplashActive() || LD.active || BO.busy || S.mode !== 'main' || (S.lib.running || []).length) return setTimeout(tryEdit, 250);
+        openEdit(me.id);
+        $('#pfEdT', ed).textContent = 'Bienvenue ! Choisis ton nom et ta photo';
+        rr.setSettings({ profileSetupDone: true });
+      };
+      setTimeout(tryEdit, 400);
+      return;
+    }
     // Démarrage : « Qui joue ? » si plusieurs profils et l'option « Demander »
     if (multi() && S.lib.settings?.profilesAsk !== 'last' && !st.running) {
       const t0 = performance.now();

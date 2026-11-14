@@ -83,3 +83,16 @@ body[data-view="home"] .topbar .sys-btn.pf-top { background: transparent; backdr
   .pf-tile .pf-big, .pf-pick, .pf-col { transition: none; }
   .pf-tile.is-focus .pf-big, .pf-tile:hover .pf-big, .pf-pick:hover, .pf-col:hover { transform: none; }
 }
+
+/* Recadrage de la photo */
+.pf-prev-wrap { display: grid; justify-items: center; gap: 8px; }
+.pf-crop { position: relative; width: var(--v); height: var(--v); margin: 8px auto 14px; }
+.pf-crop-view { position: absolute; inset: 0; overflow: hidden; border-radius: 16px; background: #000; cursor: grab; touch-action: none; outline: none; }
+.pf-crop-view.is-drag { cursor: grabbing; }
+.pf-crop-view img { position: absolute; left: 50%; top: 50%; max-width: none; transform-origin: center; user-select: none; pointer-events: none; }
+.pf-crop-ring { position: absolute; inset: 0; border-radius: 16px; pointer-events: none; background: radial-gradient(circle at center, transparent calc(var(--v) / 2 - 1px), rgba(0,0,0,.55) calc(var(--v) / 2)); box-shadow: inset 0 0 0 2px rgba(255,255,255,.12); }
+.pf-crop-ring::after { content: ''; position: absolute; inset: 0; border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.85); }
+.pf-crop-view:focus-visible + .pf-crop-ring::after, .pf-crop-view.is-focus + .pf-crop-ring::after { box-shadow: 0 0 0 3px var(--accent); }
+.pf-crop-zoom { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.pf-crop-zoom input { width: 200px; accent-color: var(--accent); }
+.pf-crop-tip { text-align: center; margin-top: 8px; }

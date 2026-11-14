@@ -32,14 +32,16 @@ function toItem(uid, user, pres, { now = Date.now(), pending = false } = {}) {
   const fresh = pres && pres.at && now - pres.at < ONLINE_MS && pres.state !== 'offline';
   const playing = fresh && pres.state === 'playing' && pres.game?.name;
   return {
-    key: `rr:${uid}`, uid, source: 'rr', name: user?.name || 'Joueur RR', avatar: null, code: user?.code || '',
+    key: `rr:${uid}`, uid, source: 'rr', name: user?.name || 'Joueur RR',
+    avatar: typeof user?.img === 'string' && user.img.startsWith('data:image/') ? user.img : null,
+    av: user?.av && typeof user.av.g === 'string' ? { g: user.av.g, c: /^#[0-9a-f]{3,8}$/i.test(user.av.c) ? user.av.c : '#3C91E6' } : null, code: user?.code || '',
     status: pending ? 'offline' : fresh ? 'online' : 'offline', pending,
     activity: playing ? { kind: 'playing', name: pres.game.name, details: [pres.game.pname, pres.game.recomp ? 'Recomp PC' : ''].filter(Boolean).join(' · '), state: '', since: pres.since || null, url: '', appid: 0 } : null,
     lastSeen: pres?.at || null, mobile: false, custom: pending ? 'Demande envoyée, en attente' : '', handle: user?.code || '',
   };
 }
 
-function createRR({ fetchImpl, getConfig, store, log = () => {}, profileName = () => 'Joueur', gamesFn = () => [], platName = (p) => p, onChange = () => {} }) {
+function createRR({ fetchImpl, getConfig, store, log = () => {}, profileName = () => 'Joueur', profileCard = () => ({}), gamesFn = () => [], platName = (p) => p, onChange = () => {} }) {
   const R = () => (store.data.rrFriends ||= {});
   let token = null, tokenExp = 0, state = { state: 'off' };
   let friends = [], requests = [], heartbeat = null, playing = null;
@@ -96,13 +98,24 @@ function createRR({ fetchImpl, getConfig, store, log = () => {}, profileName = (
       if (!S.code) throw new Error('Impossible de réserver un code ami');
       store.save();
     }
-    await db('PUT', `users/${S.uid}`, { name: String(profileName() || 'Joueur').slice(0, 40), code: S.code, at: TS });
+    await publishUser();
     return { uid: S.uid, code: S.code };
+  }
+  // Fiche publique : pseudo + avatar ; republiée quand le profil change (vérifié à chaque battement)
+  let userSig = '';
+  async function publishUser(force = true) {
+    const S = R();
+    const doc = { name: String(profileName() || 'Joueur').slice(0, 40), code: S.code, ...profileCard() };
+    const sig = JSON.stringify(doc);
+    if (!force && sig === userSig) return;
+    await db('PUT', `users/${S.uid}`, { ...doc, at: TS });
+    userSig = sig;
   }
 
   async function publishPresence(stateName = playing ? 'playing' : 'online') {
     const S = R();
     if (!S.uid) return;
+    if (S.code && stateName !== 'offline') await publishUser(false).catch((e) => log(`rr : profil ${e.message}`));
     await db('PUT', `presence/${S.uid}`, stateName === 'playing' && playing
       ? { state: 'playing', game: playing.game, since: playing.since, at: TS }
       : { state: stateName, at: TS });
@@ -141,6 +154,7 @@ function createRR({ fetchImpl, getConfig, store, log = () => {}, profileName = (
     if (!uid || typeof uid !== 'string') return { ok: false, error: 'Aucun joueur avec ce code' };
     await db('PUT', `friends/${S.uid}/${uid}`, true);
     await db('PUT', `requests/${uid}/${S.uid}`, { name: String(profileName() || 'Joueur').slice(0, 40), code: S.code, at: TS });
+    userSig = ''; // republier la fiche au prochain battement
     await db('DELETE', `requests/${S.uid}/${uid}`).catch(() => {}); // il t'avait déjà demandé : c'est accepté
     await refresh();
     const f = friends.find((x) => x.uid === uid);

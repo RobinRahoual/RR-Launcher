@@ -216,6 +216,15 @@ function init(ctx) {
     fs.copyFileSync(r.filePaths[0], path.join(dir, file));
     return file;
   });
+  // Recadrage : PNG carré produit par le renderer (data URL), remplace l'image choisie
+  ipcMain.handle('x:profiles:saveCrop', (_e, dataUrl) => {
+    const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+    if (!m || m[2].length > 4e6) return null;
+    fs.mkdirSync(dir, { recursive: true });
+    const file = `avatar-${Date.now()}.${m[1] === 'jpeg' ? 'jpg' : m[1]}`;
+    fs.writeFileSync(path.join(dir, file), Buffer.from(m[2], 'base64'));
+    return file; // l'original reste à côté : il sert si on recadre à nouveau
+  });
   ipcMain.handle('x:profiles:statsScope', (_e, v) => {
     scope.stats = v === 'all' ? 'all' : 'active';
     send('x:stats:changed', {});

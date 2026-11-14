@@ -32,6 +32,10 @@ test('toItem : en ligne, en jeu, hors ligne, en attente', () => {
   assert.equal(p.activity.name, 'Zelda');
   assert.equal(toItem('u1', u, { state: 'online', at: now - ONLINE_MS - 1 }, { now }).status, 'offline');
   assert.equal(toItem('u1', u, { state: 'offline', at: now }, { now }).status, 'offline');
+  const pic = toItem('u2', { name: 'Zoé', img: 'data:image/jpeg;base64,AAA', av: { g: 'leaf', c: '#ff0000' } }, null, { now });
+  assert.equal(pic.avatar, 'data:image/jpeg;base64,AAA'); assert.deepEqual(pic.av, { g: 'leaf', c: '#ff0000' });
+  assert.equal(toItem('u3', { name: 'X', img: 'javascript:alert(1)', av: { g: 'star', c: 'red;x' } }, null, { now }).avatar, null);
+  assert.equal(toItem('u3', { name: 'X', av: { g: 'star', c: 'red;x' } }, null, { now }).av.c, '#3C91E6');
   const w = toItem('u1', u, null, { now, pending: true });
   assert.equal(w.pending, true); assert.equal(w.activity, null);
 });
@@ -92,10 +96,10 @@ function fakeFirebase() {
   return { fetchImpl, data };
 }
 
-function player(fb, name, games = []) {
+function player(fb, name, games = [], card = {}) {
   const store = { data: { settings: {} }, save() {} };
   const rr = createRR({
-    fetchImpl: fb.fetchImpl, store, profileName: () => name, gamesFn: () => games,
+    fetchImpl: fb.fetchImpl, store, profileName: () => name, gamesFn: () => games, profileCard: () => card.v || {},
     getConfig: () => ({ apiKey: 'k', databaseURL: 'https://rr-test.firebaseio.com' }),
   });
   return { rr, store };
@@ -103,7 +107,8 @@ function player(fb, name, games = []) {
 
 test('parcours complet : code, demande, acceptation, présence, statistiques, retrait', async () => {
   const fb = fakeFirebase();
-  const a = player(fb, 'Robin', [{ name: 'Zelda', platform: 'n64', playtime: 5000, lastPlayed: Date.now() }]);
+  const card = { v: { av: { g: 'star', c: '#3C91E6' } } };
+  const a = player(fb, 'Robin', [{ name: 'Zelda', platform: 'n64', playtime: 5000, lastPlayed: Date.now() }], card);
   const b = player(fb, 'Léo');
   await a.rr.start(); await b.rr.start();
   try {
@@ -129,6 +134,12 @@ test('parcours complet : code, demande, acceptation, présence, statistiques, re
     const seen = b.rr.list()[0];
     assert.equal(seen.name, 'Robin'); assert.equal(seen.pending, false);
     assert.equal(seen.activity.name, 'Zelda');
+    assert.deepEqual(seen.av, { g: 'star', c: '#3C91E6' });
+    // nouvelle photo de profil : republiée au battement suivant
+    card.v = { av: { g: 'star', c: '#3C91E6' }, img: 'data:image/jpeg;base64,QUJD' };
+    await a.rr.setPlaying(null);
+    await b.rr.refresh();
+    assert.equal(b.rr.list()[0].avatar, 'data:image/jpeg;base64,QUJD');
     assert.equal(a.rr.list()[0].pending, false);
 
     const st = await b.rr.stats(a.store.data.rrFriends.uid);

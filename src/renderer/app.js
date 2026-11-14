@@ -1258,6 +1258,13 @@ function openOverlay(mode) {
   for (const [m, sel] of Object.entries(OVERLAYS)) {
     if (m === mode || S.stack.includes(m)) showOverlayEl($(sel)); else hideOverlayEl($(sel), false);
   }
+  // Un overlay ouvert par-dessus un autre (ex. fiche d'un ami sur l'écran Amis) passe toujours devant
+  const el = $(OVERLAYS[mode]);
+  if (el) {
+    el.style.zIndex = '';
+    const under = S.stack.map((m) => $(OVERLAYS[m])).filter(Boolean).map((x) => parseInt(getComputedStyle(x).zIndex, 10) || 0);
+    if (under.length) el.style.zIndex = String(Math.max(parseInt(getComputedStyle(el).zIndex, 10) || 0, Math.max(...under) + 1));
+  }
   document.body.classList.add('has-overlay');
   setTimeout(() => focusFirst(), 30);
   renderHints();
@@ -2371,7 +2378,7 @@ function onPadDir(dir, repeat) {
   if (BO.kind === 'open' || BO.kind === 'cancel') return; // BOXOPEN
   if (BO.busy) boFinish();
   if (S.topFocus >= 0 && shellTopInput(dir)) return; // SHELL : barre du haut
-  if (S.mode !== 'main') return volStep(dir) || spatial(dir);
+  if (S.mode !== 'main') return volStep(dir) || window.rrCropPad?.(dir) || spatial(dir);
   if (!S.lib.games.length) { if (!repeat) spatial(dir); return; }
   if (S.view === 'home') {
     if (dir === 'left') homeSelect(S.home.sel - 1);
