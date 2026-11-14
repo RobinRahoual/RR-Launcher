@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const { updatePlan, uninstallPlan } = require('../src/features/gameactions/core');
 
 test('updatePlan : Steam, Epic, GOG, rien pour une ROM', () => {
-  assert.strictEqual(updatePlan({ kind: 'steam', appid: 620 }).uri, 'steam://install/620');
+  assert.strictEqual(updatePlan({ kind: 'steam', appid: 620 }).uri, 'steam://validate/620');
   assert.strictEqual(updatePlan({ kind: 'epic' }).via, 'epic');
   assert.strictEqual(updatePlan({ kind: 'exe', source: 'gog', galaxyId: '123' }).uri, 'goggalaxy://openGameView/123');
   assert.strictEqual(updatePlan({ kind: 'rom' }), null);

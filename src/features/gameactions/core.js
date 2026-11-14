@@ -5,7 +5,7 @@ const path = require('path');
 // Mise à jour : on déclenche le téléchargement dans le launcher d'origine (le launcher RR ne télécharge rien lui-même)
 function updatePlan(g) {
   if (!g) return null;
-  if (g.kind === 'steam' && g.appid) return { via: 'steam', uri: `steam://install/${Number(g.appid)}`, label: 'Steam' };
+  if (g.kind === 'steam' && g.appid) return { via: 'steam', uri: `steam://validate/${Number(g.appid)}`, label: 'Steam' };
   if (g.kind === 'epic') return { via: 'epic', uri: 'com.epicgames.launcher://store/library', label: 'Epic Games', manual: 'Epic ne permet pas de lancer la mise à jour depuis une application tierce : sa bibliothèque s’ouvre, clique sur la mise à jour du jeu.' };
   if (g.source === 'gog' || g.galaxyId) return { via: 'gog', uri: g.galaxyId ? `goggalaxy://openGameView/${encodeURIComponent(g.galaxyId)}` : 'goggalaxy://', label: 'GOG Galaxy', manual: 'La page du jeu s’ouvre dans GOG Galaxy : lance la mise à jour depuis là.' };
   return null;
