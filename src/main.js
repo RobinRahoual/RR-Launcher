@@ -209,7 +209,13 @@ function send(ch, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(ch, payload);
 }
 
-app.on('second-instance', showWindow);
+// STREAM : « RR Launcher.exe --launch=<id> » (application Sunshine d'un jeu) lance le jeu, au démarrage comme à chaud
+function launchFromArgv(argv) {
+  const id = require('./features/stream').launchArg(argv);
+  if (id && findGame(id)) launchGame(id).then((r) => { if (r?.ok === false) meta.log(`--launch ${id} : ${r.error}`); });
+  else if (id) meta.log(`--launch ${id} : jeu introuvable`);
+}
+app.on('second-instance', (_e, argv) => { if (require('./features/stream').launchArg(argv)) launchFromArgv(argv); else showWindow(); });
 app.on('before-quit', () => { quitting = true; guideWatch.stop(); guideWatch.setConnect(false); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 
@@ -271,6 +277,7 @@ app.whenReady().then(() => {
   createWindow();
   loadFeatures();
   scheduleHeroUpgrade(25000);
+  setTimeout(() => launchFromArgv(process.argv), 1500); // STREAM : --launch=<id>
   createTray();
   setupUpdater();
   refreshShellIcons();

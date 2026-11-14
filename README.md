@@ -133,6 +133,20 @@ Une vraie liste d’amis dans le launcher, sans Steam ni Discord, portée par un
 - **Rich Presence** : ton profil Discord affiche le jeu en cours, la console et la durée. Crée une application gratuite sur [discord.com/developers/applications](https://discord.com/developers/applications) (son nom est affiché : appelle-la « RR Launcher »), copie l'**Application ID** dans **Réglages → Fonctions → Discord**, puis « Tester ». Optionnel : image `logo` dans *Rich Presence → Art Assets*. Les jeux Steam affichent leur jaquette.
 - **Stream (Go Live) sans quitter le jeu** : menu en jeu → **Streamer sur Discord**, ou **Guide + Y** (PS + △). Il faut être déjà en vocal. Discord ne laisse pas les applications démarrer un partage d'écran : le launcher appuie à ta place sur le raccourci Discord du stream — crée-le une fois dans Discord → Paramètres → Raccourcis clavier (action stream / Go Live) avec la même combinaison que dans le launcher (par défaut **Ctrl+Shift+F9**).
 
+## Nouveautés 1.19
+- **Mode Kiosque / TV** : s'active tout seul quand une manette est branchée (Réglages → Kiosque : auto / toujours / jamais) — plein écran, curseur masqué, interface agrandie.
+- **Epic & GOG** : import des jeux installés et lancement direct (Epic sans client si le jeu n'a pas de protection ; GOG direct ou via Galaxy). Réglable jeu par jeu.
+- **BIOS** : vérification des empreintes MD5 (« non conforme » signalé, sans bloquer).
+- **Reprise** : relance un émulateur sur le dernier état sauvegardé (option globale ou par jeu).
+- **Collections intelligentes** : règles (jamais lancé, court, coop, récent, oublié, adoré…) affichées comme onglets ; éditeur dans les réglages.
+- **Journal de lancement** : commande exacte, code de sortie, erreurs — consultable et exportable.
+- **Mods & patchs** : activer / ordonner des mods de fichiers (réversible, sauvegardes) et appliquer des patchs IPS / BPS / UPS sur une copie de la ROM (« <ROM> (patché) »).
+- **Vocal Discord à la manette** : Guide + X rejoint / quitte le salon, Guide + A coupe le micro (+ entrées du menu en jeu). Réglages → Discord : renseigner le *Client Secret* de ton application Discord, choisir le salon, « Se connecter ». Le redirect `http://127.0.0.1` doit être ajouté dans l'application Discord (OAuth2).
+- **Streaming vers un autre écran** : Réglages → Streaming. Détecte / démarre Sunshine, affiche l'adresse à saisir dans Moonlight, ajoute « RR Launcher » ou un jeu précis comme application Sunshine (`RR Launcher.exe --launch=<id>` lance le jeu directement).
+
+### Signature de l'installateur (SignPath)
+Le workflow `release.yml` signe l'installateur si le secret `SIGNPATH_API_TOKEN` existe (sinon publication non signée, comme avant). Prérequis : candidature **SignPath Foundation** (gratuit pour l'open source, validation manuelle), puis dans GitHub → Settings : secret `SIGNPATH_API_TOKEN` et variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`. Après signature, `build/finalize-release.js` recalcule `latest.yml` (sha512 / taille) pour que la mise à jour automatique reste valide.
+
 ## Thème
 
 **Réglages → Apparence → Thème** : Clair (défaut), Sombre ou Auto (suit Windows).
