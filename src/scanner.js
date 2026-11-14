@@ -82,45 +82,9 @@ async function scanSteam() {
 }
 
 // ---------------------------------------------------------------- Epic Games
-async function scanEpic() {
-  const dir = 'C:\\ProgramData\\Epic\\EpicGamesLauncher\\Data\\Manifests';
-  let files = [];
-  try { files = (await fsp.readdir(dir)).filter((f) => f.endsWith('.item')); } catch { return { ok: false, error: 'Epic Games Launcher introuvable.', items: [] }; }
-  const out = [];
-  for (const f of files) {
-    try {
-      const j = JSON.parse(await readText(path.join(dir, f)));
-      if (j.bIsIncompleteInstall || !j.DisplayName || /unreal engine/i.test(j.DisplayName)) continue;
-      if (Array.isArray(j.AppCategories) && !j.AppCategories.some((c) => /games/i.test(c))) continue;
-      out.push({
-        kind: 'epic', source: 'epic', platform: 'pc', name: j.DisplayName,
-        installDir: j.InstallLocation,
-        exePath: j.LaunchExecutable ? path.join(j.InstallLocation, j.LaunchExecutable) : '',
-        launchUri: `com.epicgames.launcher://apps/${encodeURIComponent(j.CatalogNamespace)}%3A${encodeURIComponent(j.CatalogItemId)}%3A${encodeURIComponent(j.AppName)}?action=launch&silent=true`,
-      });
-    } catch { /* manifeste illisible */ }
-  }
-  return { ok: true, items: out };
-}
-
-// ---------------------------------------------------------------- GOG Galaxy
-async function scanGog() {
-  const out = [];
-  for (const key of ['HKLM\\SOFTWARE\\WOW6432Node\\GOG.com\\Games', 'HKLM\\SOFTWARE\\GOG.com\\Games']) {
-    const txt = await regQuery(key);
-    if (!txt) continue;
-    for (const block of txt.split(/\r?\n(?=HKEY_)/)) {
-      const v = (k) => (block.match(new RegExp(`^\\s+${k}\\s+REG_SZ\\s+(.+)$`, 'mi')) || [])[1]?.trim();
-      const name = v('gameName'), exe = v('exe') || v('launchCommand');
-      if (!name || !exe) continue;
-      const exePath = exe.replace(/^"|"$/g, '').split('" ')[0];
-      if (!/\.exe$/i.test(exePath) || out.some((o) => o.exePath === exePath)) continue;
-      out.push({ kind: 'exe', source: 'gog', platform: 'pc', name, exePath, installDir: v('path') || path.dirname(exePath) });
-    }
-  }
-  if (!out.length) return { ok: false, error: 'Aucun jeu GOG trouvé.', items: [] };
-  return { ok: true, items: out };
-}
+// STORES : Epic et GOG (exécutable, arguments, identifiants pour le lancement direct) → src/features/importer/stores.js
+const scanEpic = () => require('./features/importer/stores').scanEpic();
+const scanGog = () => require('./features/importer/stores').scanGog();
 
 // ---------------------------------------------------------------- Dossiers
 const SKIP_DIRS = /^(windows|\$recycle\.bin|system volume information|programdata|appdata|node_modules|\.git|\.svn|msocache|recovery|perflogs|intel|amd|nvidia( corporation)?|drivers|windowsapps|microsoft.*|common files|windows (defender|mail|media player|nt|photo viewer|portable devices|security|sidebar|kits)|internet explorer|reference assemblies|dotnet|packages|cache|temp|tmp|logs?|crashdumps|redist|_commonredist|directx|vcredist|__installer|installers?|support|prerequisites|steamapps|epic games|epicgameslauncher|steam|gog galaxy|shadercache|\.cache|site-packages|python\d*|jdk.*|java|bios|saves?|savestates?|states|shaders?|cheats|screenshots|themes|overlays|thumbnails|downloaded_media|manuals?|docs?|documentation|nand|sdmc|cores|autoconfig|assets)$/i;

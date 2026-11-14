@@ -109,4 +109,19 @@ function enableNetCmd(cfgText = '') {
 }
 const netEnabled = (cfgText) => /^\s*network_cmd_enable\s*=\s*"true"/m.test(String(cfgText || ''));
 
-module.exports = { HOTKEYS, LABELS, table, parseKeys, plan, udp, netCommands, retroarchNet, enableNetCmd, netEnabled };
+// ---- Reprise du dernier état au lancement
+// info = résultat de infoFor() (emu.js). g.lastState = { slot, at } est posé à chaque sauvegarde faite via le launcher :
+// sans elle, rien à reprendre. g.launch.resume : 'default' | 'on' | 'off' ; réglage global settings.emuResume.
+function resumePlan(g, settings = {}, info = null) {
+  if (!g || g.kind !== 'rom' || !info?.supported) return { resume: false, reason: 'unsupported' };
+  const mode = g.launch?.resume || 'default';
+  if (!(mode === 'on' || (mode === 'default' && settings.emuResume === true))) return { resume: false, reason: 'off' };
+  if (!g.lastState) return { resume: false, reason: 'no-state' };
+  if (info.admin && !info.net) return { resume: false, reason: 'admin' }; // Windows bloque l'envoi de touches vers un processus élevé
+  const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+  const slot = clamp(Number.isFinite(Number(g.lastState.slot)) ? Number(g.lastState.slot) : info.min, info.min, info.max);
+  const delaySec = clamp(Number(settings.emuResumeDelay) || 6, 2, 30);
+  return { resume: true, slot, delayMs: delaySec * 1000, tries: info.kind === 'retroarch' && info.net ? 8 : 1 };
+}
+
+module.exports = { resumePlan, HOTKEYS, LABELS, table, parseKeys, plan, udp, netCommands, retroarchNet, enableNetCmd, netEnabled };

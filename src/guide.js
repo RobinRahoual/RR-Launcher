@@ -307,6 +307,7 @@ function createGuideWatcher({
   let native = null, nativeErr = null, HID = null, hidErr = null;
   let timer = null, timerMs = 0, scanTimer = null, lastGuide = 0;
   let guideOn = false, connectOn = false;
+  let xiCount = 0; // KIOSK : nombre de manettes XInput vues au dernier sondage
   const hidOpen = new Map(); // path -> device (null = ouverture impossible, ne pas réessayer)
 
   function loadNative() {
@@ -422,6 +423,7 @@ function createGuideWatcher({
         else handle('xi' + i, states[i]);
       }
     }
+    xiCount = states.filter((x) => x != null).length;
     seen('xinput', xinputKeys(states));
   }
 
@@ -495,6 +497,7 @@ function createGuideWatcher({
       if (on) { log('manette : surveillance des connexions active'); if (native?.xinputOk) pollXInput(); }
     },
     get running() { return guideOn; },
+    get padCount() { return xiCount + [...hidOpen.values()].filter(Boolean).length; }, // KIOSK
     navFlush, // NAV : à appeler quand wantNav() change (fenêtre affichée / masquée)
     get connecting() { return connectOn; },
     // Pour les tests : injecter un masque comme s'il venait d'une source

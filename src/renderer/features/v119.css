@@ -1,0 +1,19 @@
+/* v1.19 — styles communs : kiosque, journal de lancement, patchs, stream, vocal Discord */
+
+/* Kiosque : curseur masqué (revient 3 s quand la souris bouge), boutons de fenêtre cachés */
+html.kiosk, html.kiosk * { cursor: none !important; }
+html.kiosk.kiosk-mouse, html.kiosk.kiosk-mouse * { cursor: auto !important; }
+html.kiosk .win-ctrl, html.kiosk [data-action="fullscreen"] { display: none !important; }
+
+.v119-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 8px; }
+.v119-list { display: flex; flex-direction: column; gap: 4px; max-height: 280px; overflow: auto; margin-top: 8px; font-size: 13px; }
+.v119-item { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; padding: 6px 10px; border-radius: 8px; background: rgba(127, 127, 127, .12); }
+.v119-item .ok { color: #2e9e5b; font-weight: 600; }
+.v119-item .ko { color: #d4142c; font-weight: 600; }
+.v119-item code { opacity: .75; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.v119-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: rgba(60, 145, 230, .18); font-size: 12px; }
+.v119-input { min-width: 220px; }
+
+/* Collections intelligentes */
+.sm-rule { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 6px; margin: 6px 0; }
+.sm-rule select, .sm-rule input { width: 100%; }

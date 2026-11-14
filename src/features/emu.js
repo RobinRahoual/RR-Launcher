@@ -111,7 +111,7 @@ function init(ctx) {
   });
 
   // ---------------------------------------------------------------- C. Profils de lancement
-  ipcMain.handle('x:emu:caps', (_e, exe) => L.capabilities(exe));
+  ipcMain.handle('x:emu:caps', (_e, exe) => { const c = L.capabilities(exe); return { ...c, states: !!ST.HOTKEYS[c.kind] }; });
   ipcMain.handle('x:emu:pickExe', async (_e, title) => {
     const { dialog } = require('electron');
     const r = await dialog.showOpenDialog(ctx.getWin(), { title: title || 'Émulateur pour ce jeu', properties: ['openFile'], filters: [{ name: 'Programmes', extensions: ['exe', 'bat', 'cmd'] }, { name: 'Tous', extensions: ['*'] }] });
@@ -142,6 +142,8 @@ function init(ctx) {
       emuPath: s(o.emuPath, 1000), emuArgs: s(o.emuArgs), emuName: s(o.emuName, 120), args: s(o.args), env: s(o.env, 4000),
       admin: !!o.admin, fullscreen: ['on', 'off'].includes(o.fullscreen) ? o.fullscreen : 'default',
       resolution: Math.max(0, Math.min(8, Number(o.resolution) || 0)),
+      resume: ['on', 'off'].includes(o.resume) ? o.resume : 'default',
+      via: ['direct', 'client', 'galaxy'].includes(o.via) ? o.via : '', // STORES
     };
   }
 
@@ -158,7 +160,7 @@ function init(ctx) {
     const sl = slots.get(id);
     return { supported: true, kind, name: ST.LABELS[kind], save: t.save, load: t.load, net: !!t.net && S().emuNetCmd !== false, slot: sl.want, min: t.slots[0], max: t.slots[1], admin: !!g.launch?.admin };
   }
-  hub.on('session:start', (id) => slots.delete(id));
+  hub.on('session:start', (id, info) => { slots.delete(id); if (!info?.auto) maybeResume(id); });
   async function gameWindow(id, n) {
     const g = findGame(id), r = running.get(id);
     const pids = new Set();
@@ -171,7 +173,15 @@ function init(ctx) {
     pids.delete(process.pid);
     return n.findMainWindow([...pids]);
   }
-  async function doState(id, action, { focus = true } = {}) {
+  // Toute sauvegarde réussie via le launcher mémorise l'emplacement (g.lastState) pour la reprise au lancement
+  async function doState(id, action, opts = {}) {
+    id = id && running.has(id) ? id : [...running.keys()].pop();
+    const r = await doStateRaw(id, action, opts);
+    const g = id && findGame(id);
+    if (r?.ok && action === 'save' && g?.kind === 'rom' && Number.isFinite(r.slot)) { g.lastState = { slot: r.slot, at: Date.now() }; commit(); }
+    return r;
+  }
+  async function doStateRaw(id, action, { focus = true } = {}) {
     id = id && running.has(id) ? id : [...running.keys()].pop();
     if (!id) return { ok: false, error: 'Aucun jeu en cours' };
     const info = infoFor(id);
@@ -204,6 +214,25 @@ function init(ctx) {
     log(`emu : ${action} via clavier (${info.kind}, emplacement ${p.slot})`);
     return { ok: true, via: 'keys', slot: p.slot, action };
   }
+  // Reprise automatique du dernier état : attend que l'émulateur ait chargé le jeu, puis « Charger la sauvegarde »
+  async function maybeResume(id) {
+    const g = findGame(id);
+    const plan = ST.resumePlan(g, S(), g ? infoFor(id) : null);
+    if (!plan.resume) return;
+    slots.get(id).want = plan.slot;
+    log(`emu : reprise de l'état (emplacement ${plan.slot}) dans ${Math.round(plan.delayMs / 1000)} s pour ${g.name}`);
+    await sleep(plan.delayMs);
+    for (let i = 0; i < plan.tries; i++) {
+      if (!running.has(id)) return;
+      const r = await doState(id, 'load', { focus: true });
+      if (r.ok) { send('x:emu:done', { ...r, action: 'load', origin: 'resume' }); log(`emu : état repris (${r.via})`); return; }
+      if (/Aucun jeu chargé|NO_NET/.test(r.error || '')) { await sleep(2500); continue; }
+      log(`emu : reprise impossible : ${r.error}`);
+      return;
+    }
+    log('emu : reprise abandonnée (jeu non chargé)');
+  }
+  ipcMain.handle('x:emu:resumePlan', (_e, id) => { const g = findGame(id); return ST.resumePlan(g, S(), g ? infoFor(id) : null); });
   ipcMain.handle('x:emu:info', (_e, id) => infoFor(id));
   ipcMain.handle('x:emu:slot', (_e, id, delta) => {
     const info = infoFor(id);

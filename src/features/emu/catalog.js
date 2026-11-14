@@ -54,6 +54,27 @@ const RECO = {
   xbox: [{ emu: 'xemu' }], x360: [{ emu: 'xenia' }],
 };
 
+// Empreintes MD5 de référence (nom de fichier en minuscules → empreintes acceptées) pour les BIOS courants
+// (tables des documentations libretro / Redump). Un fichier présent mais à l'empreinte différente n'est PAS refusé :
+// il est signalé (dump modifié, autre révision, fichier corrompu). Fichier sans référence connue : non vérifié.
+const BIOS_MD5 = {
+  'scph1001.bin': ['924e392ed05558ffdb115408c263dccf'],
+  'scph5500.bin': ['8dd7d5296a650fac7319bce665a6a53c'],
+  'scph5501.bin': ['490f666e1afb15b7362b406ed1cea246'],
+  'scph5502.bin': ['32736f17079d0b2b7024407c39bd3050'],
+  'scph7001.bin': ['1e68c231d0896b7eadcad1d7d8e76129'],
+  'gba_bios.bin': ['a860e8c0b6d573d191e4ec7db1b1e4f6'],
+  'gb_bios.bin': ['32fbbd84168d3482956eb3c5051637f5'],
+  'gbc_bios.bin': ['dbfce9db9deaa2567f6a84fde55f9680'],
+  'disksys.rom': ['ca30b50f880eb660a320674ed365ef7a'],
+  'dc_boot.bin': ['e10c53c2f8b90bab96ead2d368858623'],
+  'bios_cd_e.bin': ['e66fa1dc5820d254611fdcdba0662372'],
+  'bios_cd_u.bin': ['2efd74e3232ff260e371b99f84024f7f'],
+  'bios_cd_j.bin': ['278a9397d192149e84e820ac621a8edd'],
+  'bios7.bin': ['df692a80a5b1bc90728bc3dfc76cd948'],
+  'bios9.bin': ['a392174eb3e572fed6447e956bde4b25'],
+};
+
 // BIOS : jamais téléchargés (droits d'auteur) — détection seulement.
 // where : 'system' (dossier system de RetroArch) | 'bios' (dossier bios de l'émulateur) | 'dir' (dossier de l'exe)
 // any : au moins un des fichiers ; size : taille attendue (octets) ; optional : recommandé seulement
@@ -95,4 +116,4 @@ function pickAsset(release, re) {
   return list[0] || null;
 }
 
-module.exports = { EMULATORS, CORES, RECO, BIOS, STABLE_FALLBACK, BUILDBOT, GITHUB_API, coreUrl, retroarchUrl, latestStable, pickAsset };
+module.exports = { EMULATORS, CORES, RECO, BIOS, BIOS_MD5, STABLE_FALLBACK, BUILDBOT, GITHUB_API, coreUrl, retroarchUrl, latestStable, pickAsset };

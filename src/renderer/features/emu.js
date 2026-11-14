@@ -54,7 +54,8 @@
   function biosHtml(p) {
     return (p.bios || []).map((b) => {
       if (b.note) return `<div class="ew-bios note">${ICO.info}<span>${esc(b.label)}</span></div>`;
-      if (b.ok) return `<div class="ew-bios ok">${ICO.ok}<span>BIOS présent : ${esc(b.found.split(/[\\/]/).pop())}</span></div>`;
+      if (b.ok && b.verified === false) return `<div class="ew-bios warn">${ICO.warn}<span><b>BIOS présent mais non conforme : ${esc(b.found.split(/[\\/]/).pop())}</b><br/>${esc(b.warn || '')}</span></div>`;
+      if (b.ok) return `<div class="ew-bios ok">${ICO.ok}<span>BIOS présent : ${esc(b.found.split(/[\\/]/).pop())}${b.verified ? ' <span class="dim">· empreinte vérifiée ✓</span>' : ''}</span></div>`;
       const what = b.files?.length ? b.files.slice(0, 3).join(' ou ') : b.label;
       return `<div class="ew-bios ${b.optional ? 'opt' : 'warn'}">${ICO.warn}<span><b>${b.optional ? 'BIOS conseillé' : 'BIOS manquant'} : ${esc(what)}</b> — à placer dans <code>${esc(ltr(b.folder))}</code>${b.warn ? `<br/>${esc(b.warn)}` : ''}<br/><span class="dim">${esc(b.label)}. Le launcher ne télécharge jamais de BIOS : utilise le dump de ta propre console.</span></span><button class="btn small" data-ew-folder="${esc(b.folder)}" data-nav>Ouvrir le dossier</button></div>`;
     }).join('');
@@ -207,7 +208,7 @@
   });
   async function openLaunch(g) {
     LO.g = g;
-    LO.v = { emuPath: '', emuArgs: '', emuName: '', args: '', env: '', admin: false, fullscreen: 'default', resolution: 0, ...(g.launch || {}) };
+    LO.v = { emuPath: '', emuArgs: '', emuName: '', args: '', env: '', admin: false, fullscreen: 'default', resolution: 0, resume: 'default', via: '', ...(g.launch || {}) };
     renderLaunch(true);
     openOverlay('emulaunch');
     await preview();
@@ -228,6 +229,9 @@
           <input id="eloArgs" value="${esc(v.args)}" spellcheck="false" data-nav /></div>
         ${rom && caps.fullscreen ? `<div class="setting"><div><strong>Plein écran</strong><span class="dim">Option de ligne de commande de l’émulateur.</span></div>${seg('fullscreen', [['default', 'Par défaut'], ['on', 'Oui'], ['off', 'Non']])}</div>` : ''}
         ${rom && caps.resolution ? `<div class="setting"><div><strong>Résolution interne</strong><span class="dim">Dolphin (-C GFX.Settings.InternalResolution).</span></div>${seg('resolution', [[0, 'Défaut'], [1, 'Native'], [2, '2×'], [3, '3×'], [4, '4×'], [6, '6×']])}</div>` : ''}
+        ${g.source === 'epic' ? `<div class="setting"><div><strong>Lancement Epic</strong><span class="dim">« Direct » lance l'exécutable sans le client (jeux sans DRM Epic).</span></div>${seg('via', [['', 'Selon réglage'], ['direct', 'Direct'], ['client', 'Via le client']])}</div>` : ''}
+        ${g.source === 'gog' && g.galaxyId ? `<div class="setting"><div><strong>Lancement GOG</strong><span class="dim">« Via Galaxy » : succès, cloud et overlay.</span></div>${seg('via', [['', 'Selon réglage'], ['direct', 'Direct'], ['galaxy', 'Via Galaxy']])}</div>` : ''}
+        ${rom && caps.states ? `<div class="setting"><div><strong>Reprendre le dernier état</strong><span class="dim">Au lancement, charge la dernière sauvegarde rapide faite depuis le launcher.</span></div>${seg('resume', [['default', 'Selon réglage'], ['on', 'Oui'], ['off', 'Non']])}</div>` : ''}
         <div class="setting col"><div><label for="eloEnv"><strong>Variables d’environnement</strong></label><span class="dim">Une par ligne : <code>NOM=valeur</code> (ex. <code>DXVK_HUD=fps</code>).</span></div>
           <textarea id="eloEnv" rows="2" spellcheck="false" data-nav>${esc(v.env)}</textarea></div>
         <div class="setting"><div><strong id="eloAdmL">Lancer en administrateur</strong><span class="dim">Fenêtre UAC à chaque lancement. Les variables d’environnement ne sont pas transmises et Windows bloque l’envoi des raccourcis de sauvegarde vers un jeu administrateur.</span></div>
@@ -278,7 +282,7 @@
       LO.v.emuArgs ||= (S.lib.settings.emulators?.[LO.g.platform]?.args) || ex[0]?.args || '"{rom}"';
       renderLaunch(); setFocus($('#eloEmuArgs', lo)); preview();
     } else if (a === 'unpick') { LO.v.emuPath = ''; LO.v.emuArgs = ''; LO.v.emuName = ''; renderLaunch(); setFocus($('[data-lo="pick"]', lo)); preview(); }
-    else if (a === 'reset') { LO.v = { emuPath: '', emuArgs: '', emuName: '', args: '', env: '', admin: false, fullscreen: 'default', resolution: 0 }; renderLaunch(); setFocus($('[data-lo="save"]', lo)); preview(); }
+    else if (a === 'reset') { LO.v = { emuPath: '', emuArgs: '', emuName: '', args: '', env: '', admin: false, fullscreen: 'default', resolution: 0, resume: 'default', via: '' }; renderLaunch(); setFocus($('[data-lo="save"]', lo)); preview(); }
     else if (a === 'cancel') closeOverlay();
     else if (a === 'save') {
       const r = await rr.x('x:emu:setLaunch', LO.g.id, LO.v);
@@ -397,6 +401,10 @@
     <div class="setting">
       <div><strong id="lbEmuQuit">Sauvegarde automatique avant de quitter</strong><span class="dim">« Quitter le jeu » fait une sauvegarde rapide, attend 1,5 s, puis ferme l’émulateur.</span></div>
       <button class="toggle" data-toggle="emuSaveOnQuit" role="switch" aria-labelledby="lbEmuQuit" data-nav></button>
+    </div>
+    <div class="setting">
+      <div><strong id="lbEmuResume">Reprendre le dernier état au lancement</strong><span class="dim">Après une sauvegarde rapide faite depuis le launcher, le jeu repart de là au prochain lancement (réglable jeu par jeu dans les options de lancement). Compter ~6 s d'attente le temps que l'émulateur charge le jeu.</span></div>
+      <button class="toggle" data-toggle="emuResume" role="switch" aria-labelledby="lbEmuResume" data-nav></button>
     </div>
     <div class="setting">
       <div><strong id="lbEmuPad">Manette : Guide + ↑ sauvegarde, Guide + ↓ charge</strong><span class="dim">Pendant le jeu, sans ouvrir le menu (PS + ↑ / ↓ sur PlayStation). Le jeu reçoit aussi la flèche.</span></div>
