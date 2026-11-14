@@ -42,7 +42,7 @@ const S = {
 // Évènements : 'library' (state), 'selection' (jeu), 'view' (home|games), 'mode' (mode), 'play' (jeu),
 // 'session' ({ id, running }), 'input' (source) — toute entrée clavier / manette / souris.
 const RR = {
-  _h: {}, actions: {}, hints: [],
+  _h: {}, actions: {}, hints: [], ovHints: [], navHooks: [], // ovHints : aides de la barre du bas dans les panneaux ; navHooks : (dir) => true si la direction est gérée par le module
   on(e, f) { (this._h[e] ||= []).push(f); },
   emit(e, ...a) { for (const f of this._h[e] || []) { try { f(...a); } catch (err) { console.error('RR.' + e, err); } } },
 };
@@ -1311,6 +1311,7 @@ function focusFirst() {
   setFocus(S.mode === 'add' && !$('#addStep2').hidden ? $('#addConfirm') : pref);
 }
 function spatial(dir) {
+  for (const f of RR.navHooks) { try { if (f(dir)) return; } catch (err) { console.error('RR.navHook', err); } }
   const list = navables();
   if (!list.length) return;
   const cur = list.includes(document.activeElement) ? document.activeElement : null;
@@ -2198,7 +2199,7 @@ function glyph(btn) {
     const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB' }[btn];
     return `<span class="glyph pill">${pill}</span>`;
   }
-  const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
+  const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', pgud: 'PgUp/PgDn', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
   const k = keys[btn];
   if (!k) return '';
   // LOOK : touche d'un caractère ou flèches → glyphe rond ; nom de touche → pastille arrondie
@@ -2245,6 +2246,7 @@ function renderHints() {
       h(['a'], 'Ouvrir', 'details'); // BOXOPEN : A ouvre la page du jeu (Jouer y est focalisé)
     }
   }
+  if (S.mode !== 'main') for (const f of RR.ovHints) { try { f(h, S.mode); } catch (err) { console.error(err); } }
   if (S.mode === 'main') for (const f of RR.hints) { try { f(h); } catch (err) { console.error(err); } }
   $('#hintList').innerHTML = H.map((x, i) => `<button class="hint" data-hint="${i}" ${x.act ? '' : 'tabindex="-1"'}>${x.btns.map(glyph).join('')}<span class="hint-label">${esc(x.label)}</span></button>`).join('');
   $$('#hints .hint').forEach((b) => b.addEventListener('click', () => { const a = H[+b.dataset.hint].act; if (a) action(a); }));
