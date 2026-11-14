@@ -982,7 +982,7 @@ function updateChrome(force = false) {
     logo.hidden = true; logo.removeAttribute('src');
   }
   const p = plat(g.platform);
-  const bits = [p.name, g.developer?.split(',')[0], yearOf(g), (g.genres || [])[0]].filter(Boolean);
+  const bits = [p.name, g.source === 'recomp' ? 'Recomp PC' : null, g.developer?.split(',')[0], yearOf(g), (g.genres || [])[0]].filter(Boolean); // RECOMP
   $('#subtitle').textContent = bits.join(' · ');
   renderCapBadges(g);
   renderCapActions(g);
@@ -1000,6 +1000,7 @@ function renderCapBadges(g) {
   if (!g) { box.innerHTML = ''; return; }
   const b = [];
   if (S.lib.running.includes(g.id)) b.push('<span class="badge live"><i class="dot"></i>En cours</span>');
+  if (g.source === 'recomp') b.push('<span class="badge recomp">Recomp PC</span>'); // RECOMP : portage natif installé depuis Recomps
   if (g.metaStatus === 'loading') b.push(`<span class="badge busy"><span class="spinner tiny"></span>${esc(S.progress[g.id] || 'Récupération des infos…')}</span>`);
   if (g.kind === 'rom' && !S.lib.settings.emulators?.[g.platform]) b.push(`<span class="badge warn">${BADGE_ICON.emu}Émulateur à configurer</span>`);
   if (g.lastPlayed) {
@@ -1234,7 +1235,7 @@ async function toggleFav(id = S.items[S.sel]?.id) {
 
 // ---------------------------------------------------------------- Overlays & focus spatial
 // IMPORTER : libellés des launchers importés
-const SRC_LABEL = { xbox: 'Xbox', ea: 'EA app', ubisoft: 'Ubisoft Connect', battlenet: 'Battle.net', amazon: 'Amazon Games', itch: 'itch.io' };
+const SRC_LABEL = { recomp: 'Recomp PC',  xbox: 'Xbox', ea: 'EA app', ubisoft: 'Ubisoft Connect', battlenet: 'Battle.net', amazon: 'Amazon Games', itch: 'itch.io' };
 const OVERLAYS = { details: '#details', add: '#addDialog', hub: '#addHub', scan: '#scan', menu: '#menu', settings: '#settings', prompt: '#prompt', ingame: '#ingame' };
 // Affichage / masquage des overlays avec une courte sortie animée (plus rapide que l'entrée)
 function showOverlayEl(el) {
