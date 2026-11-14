@@ -1,0 +1,47 @@
+{
+  "rules": {
+    "codes": {
+      "$code": {
+        ".read": "auth != null",
+        ".write": "auth != null && !data.exists() && newData.val() === auth.uid",
+        ".validate": "$code.matches(/^[A-Z2-9]{8}$/)"
+      }
+    },
+    "users": {
+      "$uid": {
+        ".read": "auth != null",
+        ".write": "auth != null && auth.uid === $uid",
+        ".validate": "newData.hasChildren(['name', 'code']) && newData.child('name').isString() && newData.child('name').val().length <= 40"
+      }
+    },
+    "friends": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$other": {
+          ".write": "auth != null && auth.uid === $uid",
+          ".validate": "newData.isBoolean()"
+        }
+      }
+    },
+    "requests": {
+      "$uid": {
+        ".read": "auth != null && auth.uid === $uid",
+        "$from": {
+          ".write": "auth != null && (auth.uid === $from || auth.uid === $uid)"
+        }
+      }
+    },
+    "presence": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friends').child($uid).child(auth.uid).exists())",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    },
+    "stats": {
+      "$uid": {
+        ".read": "auth != null && (auth.uid === $uid || root.child('friends').child($uid).child(auth.uid).exists())",
+        ".write": "auth != null && auth.uid === $uid"
+      }
+    }
+  }
+}

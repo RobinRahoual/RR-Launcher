@@ -1,0 +1,5 @@
+{
+  "note": "Projet Firebase des amis RR Launcher (configuration web publique, pas un secret). Vide : les amis RR se configurent dans Réglages → Fonctions → Amis.",
+  "apiKey": "",
+  "databaseURL": ""
+}

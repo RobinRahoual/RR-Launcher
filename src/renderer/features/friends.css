@@ -104,3 +104,29 @@
   .fr-card.is-focus, .fr-card:focus-visible, .fr-row.is-focus, .fr-row:focus-visible { transform: none; }
   .fr-count.pop { animation: none; }
 }
+
+/* Amis RR Launcher */
+.fr-rr { display: grid; gap: 10px; margin: 0 0 18px; padding: 14px 16px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); }
+.fr-rr-me { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.fr-rr-lbl { display: inline-flex; align-items: center; gap: 6px; opacity: .8; }
+.fr-rr-lbl svg { width: 16px; height: 16px; }
+.fr-code { font: 700 1.25rem/1 ui-monospace, Consolas, monospace; letter-spacing: .12em; padding: 6px 10px; border-radius: 8px; background: rgba(0,0,0,.3); }
+.fr-rr-add { display: flex; gap: 8px; }
+.fr-rr-add input { flex: 1; max-width: 280px; text-transform: uppercase; font-family: ui-monospace, Consolas, monospace; letter-spacing: .08em; }
+.fr-rr-add .btn svg { width: 14px; height: 14px; margin-right: 4px; }
+.fr-reqs h3 { font-size: .9rem; margin: 4px 0 6px; opacity: .85; }
+.fr-reqs h3 span { background: var(--accent, #4f8cff); border-radius: 99px; padding: 0 7px; font-size: .75rem; }
+.fr-req { display: flex; align-items: center; gap: 10px; padding: 6px 0; }
+.fr-req .fr-row-txt { flex: 1; }
+.fr-st-now { display: flex; align-items: center; gap: 6px; }
+.fr-st-now svg { width: 16px; height: 16px; color: #4ade80; }
+.fr-st-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 12px 0; }
+.fr-st-nums div { display: grid; padding: 10px; border-radius: 10px; background: rgba(255,255,255,.05); text-align: center; }
+.fr-st-nums b { font-size: 1.2rem; }
+.fr-st-nums span { font-size: .8rem; opacity: .7; }
+.fr-st h4 { margin: 14px 0 6px; font-size: .9rem; opacity: .85; }
+.fr-st-list { margin: 0; padding: 0 0 0 18px; display: grid; gap: 4px; max-height: 32vh; overflow: auto; }
+ul.fr-st-list { list-style: none; padding-left: 0; }
+.fr-st-list li > span:first-child { display: inline-grid; }
+.fr-st-list li { display: flex; justify-content: space-between; gap: 10px; }
+.fr-st-list small { opacity: .6; font-size: .75rem; }

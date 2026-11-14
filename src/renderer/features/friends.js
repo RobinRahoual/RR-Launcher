@@ -16,6 +16,9 @@
     refresh: '<path d="M20.5 12a8.5 8.5 0 1 1-2.5-6"/><path d="M20.5 3.5V8H16"/>',
     gear: '<path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/>',
     phone: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+    rr: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M5 7h14M9 17h6"/>',
+    copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3"/>',
+    add: '<path d="M12 5v14M5 12h14"/>',
   };
   const FR = { data: null, built: false, offlineOpen: false, lastCount: -1 };
   const STATUS = { online: 'En ligne', idle: 'Absent', dnd: 'Ne pas déranger', offline: 'Hors ligne' };
@@ -37,7 +40,9 @@
   function avatar(f, big) {
     return `<span class="fr-av${big ? ' big' : ''}" data-status="${f.status}"><span class="fr-av-in">${initials(f.name)}${f.avatar ? `<img src="${esc(f.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span><i class="fr-dot" aria-hidden="true"></i></span>`;
   }
-  const srcBadge = (f) => `<span class="fr-badge fr-src">${SV(f.source === 'steam' ? I.steam : I.discord)}${f.source === 'steam' ? 'Steam' : 'Discord'}</span>`;
+  const SRC = { steam: [I.steam, 'Steam'], discord: [I.discord, 'Discord'], rr: [I.rr, 'RR Launcher'] };
+  const srcOf = (f) => SRC[f.source] || SRC.discord;
+  const srcBadge = (f) => `<span class="fr-badge fr-src">${SV(srcOf(f)[0])}${srcOf(f)[1]}</span>`;
 
   // ------------------------------------------------------------ Structure
   function build() {
@@ -68,6 +73,20 @@
       else if (k === 'settings') openSettings();
       else if (k === 'offline') { FR.offlineOpen = !FR.offlineOpen; sfx('move'); render(); }
       else if (k === 'card') activate(b);
+      else if (k === 'rr-copy') { navigator.clipboard.writeText(FR.data?.rr?.code || '').then(() => toast('Code ami copié', 'success'), () => toast('Copie impossible', true)); }
+      else if (k === 'rr-accept' || k === 'rr-decline') rrAction(k === 'rr-accept' ? 'x:friends:rrAccept' : 'x:friends:rrDecline', b.dataset.uid, k === 'rr-accept' ? 'Ami ajouté' : 'Demande refusée');
+    });
+    el.addEventListener('submit', async (e) => {
+      if (!e.target.matches('[data-fr-form="add"]')) return;
+      e.preventDefault();
+      const inp = $('#frRRCode');
+      const code = inp.value.trim();
+      if (!code) return;
+      const r = await rr.x('x:friends:rrAdd', code).catch((er) => ({ ok: false, error: er.message }));
+      if (!r?.ok) return toast(r?.error || 'Ajout impossible', true);
+      inp.value = '';
+      toast(r.pending ? `Demande envoyée à ${r.name} : il apparaîtra quand il t’aura accepté` : `${r.name} ajouté`, 'success');
+      refresh();
     });
   }
 
@@ -99,12 +118,13 @@
     return `<button class="fr-row" data-nav data-fr="card" data-key="${esc(f.key)}" aria-label="${esc(`${f.name}, ${STATUS[f.status]}${a ? `, ${line}` : ''}`)}">
       ${avatar(f)}
       <span class="fr-row-txt"><span class="fr-name">${esc(f.name)}${f.mobile ? SV(I.phone, 'fr-mob') : ''}</span><span class="fr-sub">${esc(line)}</span></span>
-      <span class="fr-src-ico" title="${f.source === 'steam' ? 'Steam' : 'Discord'}">${SV(f.source === 'steam' ? I.steam : I.discord)}</span>
+      <span class="fr-src-ico" title="${srcOf(f)[1]}">${SV(srcOf(f)[0])}</span>
     </button>`;
   }
   function setupCard(d) {
     const dc = d?.discord || {}, st = d?.steam || {};
     const lines = [];
+    if (!d?.rr?.configured) lines.push(`<li>${SV(I.rr)}<span><b>RR Launcher</b> — amis directement dans le launcher, avec un code ami : renseigne le projet Firebase dans les réglages.</span></li>`);
     if (!dc.hasToken) lines.push(`<li>${SV(I.discord)}<span><b>Discord</b> — crée un bot (gratuit) et colle son jeton : le guide pas à pas est dans les réglages.</span></li>`);
     if (!st.configured) lines.push(`<li>${SV(I.steam)}<span><b>Steam</b> — ajoute ta clé API et ton SteamID (Réglages → Fonctions → Succès).</span></li>`);
     return `<div class="fr-empty"><p class="fr-empty-t">Retrouve tes amis ici</p><ul>${lines.join('')}</ul>
@@ -123,6 +143,23 @@
     }
     return out.join('');
   }
+  // Amis RR Launcher : ton code ami, ajout par code, demandes reçues
+  function rrPanel(d) {
+    const r = d.rr;
+    if (!r?.enabled || !r.configured) return '';
+    if (r.state === 'connecting' || (!r.code && r.state !== 'error')) return `<section class="fr-rr"><p class="dim"><span class="spinner tiny"></span> Connexion aux amis RR Launcher…</p></section>`;
+    if (!r.code) return '';
+    const reqs = (r.requests || []).map((q) => `<div class="fr-req"><span class="fr-av"><span class="fr-av-in">${initials(q.name)}</span></span><span class="fr-row-txt"><span class="fr-name">${esc(q.name)}</span><span class="fr-sub">veut t’ajouter en ami</span></span>
+      <button class="btn small primary" data-nav data-fr="rr-accept" data-uid="${esc(q.uid)}">Accepter</button><button class="btn small" data-nav data-fr="rr-decline" data-uid="${esc(q.uid)}">Refuser</button></div>`).join('');
+    return `<section class="fr-rr" aria-label="Amis RR Launcher">
+      <div class="fr-rr-me"><span class="fr-rr-lbl">${SV(I.rr)}Ton code ami</span><b class="fr-code">${esc(r.code.slice(0, 4))}-${esc(r.code.slice(4))}</b>
+        <button class="fr-icon-btn" data-nav data-fr="rr-copy" aria-label="Copier mon code ami" title="Copier">${SV(I.copy)}</button>
+        <span class="dim">· ${esc(r.name || '')}</span></div>
+      <form class="fr-rr-add" data-fr-form="add"><input id="frRRCode" placeholder="Code d’un ami (ex. K7QM-2XPA)" maxlength="9" autocomplete="off" spellcheck="false" aria-label="Code ami à ajouter" data-nav />
+        <button class="btn small" type="submit" data-nav>${SV(I.add)}Ajouter</button></form>
+      ${reqs ? `<div class="fr-reqs"><h3>Demandes d’ami <span>${r.requests.length}</span></h3>${reqs}</div>` : ''}
+    </section>`;
+  }
   function render() {
     const d = FR.data, root = $('#friends');
     if (!d || !root || root.hidden) return;
@@ -135,8 +172,10 @@
     if (d.discord.enabled && d.discord.state === 'error') errs.push(`Discord : ${d.discord.error}`);
     if (d.steam.enabled && d.steam.state === 'error') errs.push(`Steam : ${d.steam.error}`);
     const none = !d.playing.length && !d.online.length && !d.offline.length;
-    const unconfigured = !(d.discord.enabled && d.discord.hasToken) && !(d.steam.enabled && d.steam.configured);
-    let html = errs.map((e) => `<p class="fr-err" role="status">${esc(e)}</p>`).join('');
+    const rrOn = d.rr?.enabled && d.rr?.configured;
+    const unconfigured = !rrOn && !(d.discord.enabled && d.discord.hasToken) && !(d.steam.enabled && d.steam.configured);
+    if (d.rr?.enabled && d.rr.state === 'error') errs.push(`RR Launcher : ${d.rr.error}`);
+    let html = errs.map((e) => `<p class="fr-err" role="status">${esc(e)}</p>`).join('') + rrPanel(d);
     if (unconfigured) html += setupCard(d);
     else if (none) html += `<div class="fr-empty"><p class="fr-empty-t">Personne pour l’instant</p><p class="dim">${d.discord.state === 'ready' && !d.discord.guilds.length ? 'Le bot n’est dans aucun serveur : invite-le depuis les réglages.' : 'Les présences arrivent dans quelques secondes.'}</p></div>`;
     else {
@@ -177,9 +216,42 @@
     syncSlots(); updateChrome(true);
     setTimeout(() => openGame(), reduceMotion ? 0 : 450); // ouvre la page du jeu (boîte)
   }
+  async function rrAction(ch, uid, ok) {
+    const r = await rr.x(ch, uid).catch((e) => ({ ok: false, error: e.message }));
+    if (!r?.ok) return toast(r?.error || 'Échec', true);
+    toast(ok, 'success');
+    refresh();
+  }
+  // Fiche d'un ami RR : ce qu'il fait, son temps de jeu, ses jeux les plus joués et ses derniers jeux
+  async function openRRFriend(f) {
+    sfx('confirm');
+    const r = f.pending ? null : await rr.x('x:friends:rrStats', f.uid).catch(() => null);
+    const st = r?.stats;
+    const line = (x, right) => {
+      const own = S.lib.games.find((g) => (g.name || '').toLowerCase() === (x.name || '').toLowerCase());
+      return `<li><span><b>${esc(x.name)}</b><small>${esc(x.pname || '')}${x.recomp ? ' · Recomp PC' : ''}${own ? ' · tu l’as' : ''}</small></span><span class="dim">${right}</span></li>`;
+    };
+    const body = f.pending
+      ? `<p class="dim">Demande envoyée : ${esc(f.name)} doit t’ajouter à son tour (code <b>${esc(f.code)}</b>) pour que vous voyiez vos activités et statistiques.</p>`
+      : `${f.activity ? `<p class="fr-st-now">${SV(I.live)}Joue à <b>${esc(f.activity.name)}</b>${f.activity.details ? ` · ${esc(f.activity.details)}` : ''}${f.activity.since ? ` · depuis ${ago(f.activity.since)}` : ''}</p>` : `<p class="dim">${f.status === 'online' ? 'En ligne sur le launcher' : f.lastSeen ? `Vu il y a ${ago(f.lastSeen)}` : 'Hors ligne'}</p>`}
+        ${st ? `<div class="fr-st-nums"><div><b>${esc(fmtTime(st.total || 0))}</b><span>de jeu</span></div><div><b>${st.played || 0}</b><span>jeux lancés</span></div><div><b>${st.count || 0}</b><span>dans sa bibliothèque</span></div></div>
+          ${st.top?.length ? `<h4>Ses jeux les plus joués</h4><ol class="fr-st-list">${st.top.map((x) => line(x, esc(fmtTime(x.sec)))).join('')}</ol>` : ''}
+          ${st.recent?.length ? `<h4>Derniers jeux</h4><ul class="fr-st-list">${st.recent.map((x) => line(x, esc(ago(x.at)))).join('')}</ul>` : ''}`
+        : '<p class="dim">Statistiques non partagées.</p>'}`;
+    openPrompt({
+      title: f.name, icon: 'emu', wide: true,
+      body: `<div class="fr-st">${body}</div>`,
+      actions: [
+        { label: 'Retirer de mes amis', danger: true, onClick: async () => { closeOverlay(true); await rrAction('x:friends:rrRemove', f.uid, `${f.name} retiré de tes amis`); } },
+        ...(f.gameId && gameById(f.gameId) ? [{ label: 'Voir le jeu', onClick: () => { closeOverlay(true); openInLauncher(gameById(f.gameId)); } }] : []),
+        { label: 'Fermer', primary: true, focus: true, onClick: () => closeOverlay() },
+      ],
+    });
+  }
   function activate(el) {
     const f = friendOf(el?.dataset.key);
     if (!f) return;
+    if (f.source === 'rr') return openRRFriend(f);
     const g = f.gameId && gameById(f.gameId);
     if (g) { sfx('confirm'); return openInLauncher(g); }
     if (f.streaming && f.activity?.url && /^https:\/\//.test(f.activity.url)) { rr.openExternal(f.activity.url); return toast('Stream ouvert dans le navigateur', 'success'); }
@@ -308,6 +380,27 @@
     return `
     <h3 class="set-group">Amis</h3>
     <div class="setting">
+      <div><strong id="lbFrRR">Amis RR Launcher</strong><span class="dim">Ta liste d’amis directement dans le launcher : un code ami à échanger, ce à quoi jouent tes amis et leurs statistiques, sans Steam ni Discord.</span></div>
+      <button class="toggle" data-toggle="friendsRR" role="switch" aria-labelledby="lbFrRR" data-nav></button>
+    </div>
+    <div class="setting">
+      <div><strong id="lbFrRRSt">Partager mes statistiques</strong><span class="dim">Temps de jeu, jeux les plus joués et derniers jeux, visibles uniquement par tes amis.</span></div>
+      <button class="toggle" data-toggle="friendsRRStats" role="switch" aria-labelledby="lbFrRRSt" data-nav></button>
+    </div>
+    <div class="setting col">
+      <div><label for="frRRName"><strong>Pseudo</strong></label><span class="dim">Vide : le nom de ton profil joueur.</span></div>
+      <input id="frRRName" maxlength="40" spellcheck="false" data-nav />
+    </div>
+    <div class="setting col fr-guide" id="frRRFb">
+      <div><strong>Projet Firebase</strong><span class="dim" id="frRRFbState"></span></div>
+      <div class="fr-tok-row">
+        <input id="frRRKey" placeholder="apiKey" autocomplete="off" spellcheck="false" aria-label="Clé API Firebase (apiKey)" data-nav />
+        <input id="frRRDb" placeholder="https://…firebasedatabase.app" autocomplete="off" spellcheck="false" aria-label="Adresse de la base (databaseURL)" data-nav />
+        <button class="btn" id="frRRSave" data-nav>Se connecter</button>
+      </div>
+      <span class="dim">Déjà renseigné dans le launcher pour tes amis : ce champ ne sert qu’à changer de projet.</span>
+    </div>
+    <div class="setting">
       <div><strong id="lbFrNotify">Prévenir quand un ami lance un jeu</strong><span class="dim">Petite notification en bas de l’écran (jamais pendant une partie).</span></div>
       <button class="toggle" data-toggle="friendsNotify" role="switch" aria-labelledby="lbFrNotify" data-nav></button>
     </div>
@@ -360,6 +453,15 @@
       test();
     });
     $('#frClear').addEventListener('click', async () => { await rr.x('x:friends:clearToken'); toast('Jeton du bot retiré', 'success'); setStatus('', ''); refresh(); });
+    $('#frRRSave').addEventListener('click', async () => {
+      const k = $('#frRRKey').value.trim(), u = $('#frRRDb').value.trim().replace(/\/+$/, '');
+      if ((k || u) && !(k && /^https:\/\/[\w.-]+\.(firebaseio\.com|firebasedatabase\.app)$/.test(u))) return toast('Il faut l’apiKey et l’adresse de la base (databaseURL)', true);
+      await rr.setSettings({ rrFirebaseApiKey: k, rrFirebaseDb: u });
+      const r = await rr.x('x:friends:rrRestart');
+      toast(r?.state === 'ok' ? `Amis RR connectés · code ${r.code}` : r?.error || 'Connexion…', r?.state === 'ok' ? 'success' : r?.state === 'error');
+      refresh();
+    });
+    $('#frRRName').addEventListener('change', async (e) => { await rr.setSettings({ friendsRRName: e.target.value.trim().slice(0, 40) }); rr.x('x:friends:rrRestart'); toast('Pseudo enregistré', 'success'); });
     $('#frUnhide').addEventListener('click', async () => { await rr.x('x:friends:unhideAll'); toast('Tous les membres sont réaffichés', 'success'); });
   }
   function setStatus(t, tone) { const s = $('#frStatus'); if (s) { s.textContent = t; s.dataset.tone = tone || ''; } }
@@ -380,6 +482,12 @@
       $('#frInviteHint').textContent = /^\d{15,22}$/.test(id) ? '' : '(renseigne d’abord l’ID d’application dans la section Discord, ou génère l’URL dans OAuth2 → URL Generator)';
     }
     const d = FR.data;
+    if ($('#frRRName') && document.activeElement !== $('#frRRName')) $('#frRRName').value = s.friendsRRName || '';
+    if ($('#frRRKey') && !$('#frRRKey').value && s.rrFirebaseApiKey) { $('#frRRKey').value = s.rrFirebaseApiKey; $('#frRRDb').value = s.rrFirebaseDb || ''; }
+    if (d && $('#frRRFbState')) {
+      const r = d.rr || {};
+      $('#frRRFbState').textContent = !r.configured ? 'Pas encore configuré.' : r.state === 'ok' ? `Connecté · ton code : ${r.code}` : r.state === 'error' ? r.error : r.state === 'off' ? 'Désactivé' : 'Connexion…';
+    }
     if (d) {
       $('#frClear').hidden = !d.discord.hasToken;
       $('#frToken').placeholder = d.discord.hasToken ? 'Jeton enregistré — colle un nouveau jeton pour le remplacer' : 'Jeton du bot';
@@ -397,9 +505,9 @@
   function onLibrary(st) {
     const s = st.settings || {};
     const defaults = {};
-    for (const k of ['friendsNotify', 'friendsSteam', 'friendsDiscord']) if (s[k] === undefined) defaults[k] = true;
+    for (const k of ['friendsNotify', 'friendsSteam', 'friendsDiscord', 'friendsRR', 'friendsRRStats']) if (s[k] === undefined) defaults[k] = true;
     if (Object.keys(defaults).length) rr.setSettings(defaults);
-    const sig = [s.friendsDiscord, s.friendsSteam, s.steamApiKey, s.steamId64].join('|');
+    const sig = [s.friendsDiscord, s.friendsSteam, s.steamApiKey, s.steamId64, s.friendsRR, s.friendsRRStats].join('|');
     if (cfgSig !== null && sig !== cfgSig) rr.x('x:friends:config').then(() => refresh());
     cfgSig = sig;
     settingsState(st);

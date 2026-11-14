@@ -17,6 +17,8 @@ const { createGateway } = require('./friends/gateway');
 const { createDiscordState } = require('./friends/discord-state');
 const { steamFriends } = require('./friends/steam');
 const model = require('./friends/model');
+const { createRR } = require('./friends/rr');
+const FIREBASE = require('./friends/firebase.json');
 
 const STEAM_VISIBLE_MS = 60 * 1000; // onglet Amis ouvert
 const STEAM_BACKGROUND_MS = 5 * 60 * 1000; // compteur / notifications en arrière-plan
@@ -55,11 +57,37 @@ function init(ctx) {
   let gw = null, dStatus = { state: 'off' }, readyTimer = null;
   let steamList = [], steamStatus = { state: 'off' }, steamAt = 0, steamTimer = null, steamBusy = false;
   const steamSeen = new Map();
-  const primed = { discord: false, steam: false };
+  const primed = { discord: false, steam: false, rr: false };
   let prevPlaying = new Map();
   const notified = new Map(); // `${key}|${jeu}` → ts
   let overlayVisible = false, winVisible = true, lastSent = '', pushTimer = null;
   let demo = null;
+
+  // ------------------------------------------------------------ Amis RR Launcher (Firebase)
+  const { BY_ID } = require('../platforms');
+  const rrNet = require('electron').net;
+  const rr = createRR({
+    fetchImpl: (u, o) => rrNet.fetch(u, o), store, log: say,
+    getConfig: () => (S().rrFirebaseApiKey && S().rrFirebaseDb ? { apiKey: S().rrFirebaseApiKey, databaseURL: S().rrFirebaseDb } : FIREBASE),
+    profileName: () => { const P = store.data.profiles; const p = P?.list?.find((x) => x.id === P.current); return S().friendsRRName || p?.name || require('os').userInfo().username || 'Joueur'; },
+    gamesFn: () => store.data.games || [],
+    platName: (id) => BY_ID[id]?.name || id || 'PC',
+    onChange: () => schedulePush(),
+  });
+  ctx.hub?.on('session:start', (id) => {
+    const g = (store.data.games || []).find((x) => x.id === id);
+    if (g) rr.setPlaying({ name: String(g.name).slice(0, 120), platform: g.platform || 'pc', pname: BY_ID[g.platform]?.name || 'PC', recomp: g.source === 'recomp' || null });
+  });
+  ctx.hub?.on('session:end', () => setTimeout(() => rr.setPlaying(null), 1500));
+  require('electron').app?.on?.('before-quit', () => { rr.goOffline(); });
+  let rrTimer = null;
+  async function pollRR() {
+    clearTimeout(rrTimer);
+    await rr.refresh();
+    push();
+    primed.rr = true; // pas de notification pour les amis déjà en jeu au démarrage
+    rrTimer = setTimeout(pollRR, overlayVisible ? 20000 : 90000);
+  }
 
   // ------------------------------------------------------------ Discord (bot + Gateway)
   function stopDiscord() {
@@ -127,7 +155,7 @@ function init(ctx) {
   }
 
   // ------------------------------------------------------------ Instantané → renderer
-  function all() { return demo ? [...demo.discord, ...demo.steam] : [...dstate.friends(), ...steamList]; }
+  function all() { return demo ? [...demo.discord, ...demo.steam] : [...rr.list(), ...dstate.friends(), ...steamList]; }
   function snapshot() {
     const list = all();
     const sec = model.build(list, store.data.games || [], { hidden: new Set(F().hidden) });
@@ -140,6 +168,7 @@ function init(ctx) {
         bot: demo ? 'RR Launcher' : dStatus.user?.name || gw?.user?.username || '',
         guilds: demo ? ['Les potes'] : dstate.guilds.map((g) => g.name),
       },
+      rr: { enabled: on('friendsRR'), ...rr.info() },
       steam: { enabled: on('friendsSteam'), configured: demo ? true : steamConfigured(), state: demo ? 'ok' : steamStatus.state, error: steamStatus.error || '', code: steamStatus.code || '', at: steamAt },
       demo: !!demo,
     };
@@ -206,6 +235,7 @@ function init(ctx) {
   });
   ipcMain.handle('x:friends:visible', (_e, v) => {
     overlayVisible = !!v;
+    if (overlayVisible) pollRR();
     if (overlayVisible && Date.now() - steamAt > 30000) pollSteam();
     else if (!demo) { clearTimeout(steamTimer); steamTimer = setTimeout(pollSteam, overlayVisible ? STEAM_VISIBLE_MS : STEAM_BACKGROUND_MS); }
     return true;
@@ -242,10 +272,19 @@ function init(ctx) {
     F().hidden = [...h]; store.save(); push();
     return F().hidden.length;
   });
+  // Amis RR Launcher
+  const rrCall = (fn) => async (...a) => { try { const r = await fn(...a); push(); return r; } catch (e) { say(`rr : ${e.message}`); return { ok: false, error: e.message }; } };
+  ipcMain.handle('x:friends:rrAdd', rrCall((_e, code) => rr.add(code)));
+  ipcMain.handle('x:friends:rrAccept', rrCall((_e, uid) => rr.accept(String(uid))));
+  ipcMain.handle('x:friends:rrDecline', rrCall((_e, uid) => rr.decline(String(uid))));
+  ipcMain.handle('x:friends:rrRemove', rrCall((_e, uid) => rr.remove(String(uid))));
+  ipcMain.handle('x:friends:rrStats', async (_e, uid) => { try { return { ok: true, stats: await rr.stats(String(uid)) }; } catch (e) { return { ok: false, error: e.message }; } });
+  ipcMain.handle('x:friends:rrRestart', async () => { await rr.start(); await pollRR(); return rr.info(); });
   ipcMain.handle('x:friends:unhideAll', () => { F().hidden = []; store.save(); push(); return 0; });
-  ipcMain.handle('x:friends:refresh', async () => { await pollSteam(); push(); return snapshot(); });
+  ipcMain.handle('x:friends:refresh', async () => { await Promise.all([pollSteam(), pollRR()]); push(); return snapshot(); });
   // Réglages modifiés (interrupteurs, clé Steam) : le renderer prévient
   ipcMain.handle('x:friends:config', () => {
+    rr.start().then(pollRR);
     const wantDc = on('friendsDiscord') && !!getToken();
     if (wantDc !== !!gw) startDiscord();
     pollSteam();
@@ -253,7 +292,7 @@ function init(ctx) {
   });
 
   // ------------------------------------------------------------ Démarrage
-  setTimeout(() => { startDiscord(); pollSteam(); }, demo ? 0 : 4000);
+  setTimeout(() => { startDiscord(); pollSteam(); if (!demo) rr.start().then(pollRR); }, demo ? 0 : 4000);
 }
 
 module.exports = { init, cleanToken, TOKEN_RE };

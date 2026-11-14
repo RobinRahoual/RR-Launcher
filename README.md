@@ -102,6 +102,17 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 - **Succès** Steam (clé Web API + profil public) et RetroAchievements (utilisateur + clé) ; état des **mises à jour** Steam / Epic sur les boîtes.
 - **Confort** : vibrations, notifications, taille de l'interface (TV).
 
+## Amis RR Launcher (1.15)
+
+Une vraie liste d’amis dans le launcher, sans Steam ni Discord, portée par un projet Firebase (offre gratuite) :
+
+- **Code ami** : chaque launcher reçoit un code de 8 caractères (ex. `K7QM-2XPA`) à donner à ses amis. Écran Amis → « Ajouter » avec le code d’un ami ; il reçoit une demande à accepter.
+- **À quoi ils jouent** : en ligne, en jeu (jeu, console, depuis quand), vu il y a… La présence est publiée au lancement et à la fermeture d’un jeu, puis toutes les 4 minutes.
+- **Statistiques** : clic sur un ami → temps de jeu total, jeux lancés, ses 10 jeux les plus joués et ses derniers jeux (avec « tu l’as » si tu possèdes le jeu). Partage désactivable dans les réglages.
+- **Confidentialité** : connexion anonyme, aucune adresse ni mot de passe ; seuls les amis que tu as ajoutés voient ta présence et tes statistiques (règles dans `firebase/database.rules.json`).
+
+**Mise en place (une fois)** : créer un projet sur console.firebase.google.com, ajouter une *Realtime Database*, activer *Authentication → Anonyme*, coller `firebase/database.rules.json` dans l’onglet Règles de la base, puis renseigner `apiKey` et `databaseURL` dans `src/features/friends/firebase.json` (ou dans Réglages → Amis → Projet Firebase).
+
 ## Accueil, profils, amis (1.9)
 
 - **Continuer** : le dernier jeu joué en grande tuile au démarrage — A pour le relancer (ou le reprendre s'il tourne).
