@@ -39,7 +39,7 @@
   const initials = (n) => esc(String(n || '?').trim().split(/\s+/).map((x) => x[0]).join('').slice(0, 2).toUpperCase());
   function avatar(f, big) {
     const glyph = !f.avatar && f.av && window.rrProfiles?.avatarSVG ? window.rrProfiles.avatarSVG(f.av.g, f.av.c) : '';
-    return `<span class="fr-av${big ? ' big' : ''}${glyph ? ' has-glyph' : ''}" data-status="${f.status}"><span class="fr-av-in">${glyph || initials(f.name)}${f.avatar ? `<img src="${esc(f.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span><i class="fr-dot" aria-hidden="true"></i></span>`;
+    return `<span class="fr-av${big ? ' big' : ''}${glyph ? ' has-glyph' : ''}" data-status="${f.status}"><span class="fr-av-in"${f.avatar && f.av?.c ? ` style="background:${esc(f.av.c)}"` : ''}>${glyph || initials(f.name)}${f.avatar ? `<img src="${esc(f.avatar)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.remove()">` : ''}</span><i class="fr-dot" aria-hidden="true"></i></span>`;
   }
   const SRC = { steam: [I.steam, 'Steam'], discord: [I.discord, 'Discord'], rr: [I.rr, 'RR Launcher'] };
   const srcOf = (f) => SRC[f.source] || SRC.discord;

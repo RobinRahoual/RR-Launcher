@@ -84,7 +84,14 @@ function init(ctx) {
           try {
             const { nativeImage } = require('electron');
             const im = nativeImage.createFromPath(require('path').join(ctx.DATA, 'profiles', require('path').basename(p.image)));
-            if (!im.isEmpty()) avatarCache.img = `data:image/jpeg;base64,${im.resize({ width: 96, height: 96, quality: 'best' }).toJPEG(78).toString('base64')}`;
+            // PNG pour garder la transparence (la couleur du profil apparaît derrière chez l'ami), plus petit si trop lourd
+            if (!im.isEmpty()) {
+              for (const w of [96, 72, 56]) {
+                const b64 = im.resize({ width: w, height: w, quality: 'best' }).toPNG().toString('base64');
+                if (b64.length < 22000) { avatarCache.img = `data:image/png;base64,${b64}`; break; }
+              }
+              if (!avatarCache.img) avatarCache.img = `data:image/jpeg;base64,${im.resize({ width: 96, height: 96, quality: 'best' }).toJPEG(78).toString('base64')}`;
+            }
           } catch (e) { say(`rr : avatar ${e.message}`); }
         }
         if (avatarCache.img) card.img = avatarCache.img;

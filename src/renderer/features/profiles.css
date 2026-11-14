@@ -87,7 +87,7 @@ body[data-view="home"] .topbar .sys-btn.pf-top { background: transparent; backdr
 /* Recadrage de la photo */
 .pf-prev-wrap { display: grid; justify-items: center; gap: 8px; }
 .pf-crop { position: relative; width: var(--v); height: var(--v); margin: 8px auto 14px; }
-.pf-crop-view { position: absolute; inset: 0; overflow: hidden; border-radius: 16px; background: #000; cursor: grab; touch-action: none; outline: none; }
+.pf-crop-view { position: absolute; inset: 0; overflow: hidden; border-radius: 16px; background: var(--pf-c, #222); cursor: grab; touch-action: none; outline: none; }
 .pf-crop-view.is-drag { cursor: grabbing; }
 .pf-crop-view img { position: absolute; left: 50%; top: 50%; max-width: none; transform-origin: center; user-select: none; pointer-events: none; }
 .pf-crop-ring { position: absolute; inset: 0; border-radius: 16px; pointer-events: none; background: radial-gradient(circle at center, transparent calc(var(--v) / 2 - 1px), rgba(0,0,0,.55) calc(var(--v) / 2)); box-shadow: inset 0 0 0 2px rgba(255,255,255,.12); }

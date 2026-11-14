@@ -148,17 +148,18 @@
 
   // ---------------------------------------------------------------- Recadrage de la photo (cercle)
   // Glisser pour déplacer, molette / curseur / boutons pour zoomer ; manette : croix = déplacer, LB/RB ou ± = zoom.
-  function cropImage(file) {
+  function cropImage(file, color = E.color) {
     return new Promise((resolve) => {
       const V = 300; // diamètre de la vue
-      const C = { x: 0, y: 0, z: 1, min: 1, w: 0, h: 0 };
+      // min = l'image peut devenir plus petite que le cercle (vide autour) ; cover = remplit le cercle
+      const C = { x: 0, y: 0, z: 1, min: 1, max: 4, cover: 1, w: 0, h: 0 };
       let done = false;
       const finish = (v) => { if (done) return; done = true; document.removeEventListener('keydown', onKey, true); resolve(v); };
       openPrompt({
         title: 'Recadrer la photo',
-        body: `<div class="pf-crop" style="--v:${V}px"><div class="pf-crop-view" tabindex="0" data-nav data-default aria-label="Zone de recadrage : flèches pour déplacer, + et − pour zoomer"><img alt="" draggable="false"></div><i class="pf-crop-ring" aria-hidden="true"></i></div>
-          <div class="pf-crop-zoom"><button type="button" class="btn small" data-cz="-" data-nav aria-label="Dézoomer">−</button><input type="range" min="100" max="400" step="1" value="100" aria-label="Zoom" data-nav><button type="button" class="btn small" data-cz="+" data-nav aria-label="Zoomer">+</button></div>
-          <p class="dim pf-crop-tip">Glisse la photo pour la centrer, zoome avec la molette.</p>`,
+        body: `<div class="pf-crop" style="--v:${V}px;--pf-c:${esc(color)}"><div class="pf-crop-view" tabindex="0" data-nav data-default aria-label="Zone de recadrage : flèches pour déplacer, + et − pour zoomer"><img alt="" draggable="false"></div><i class="pf-crop-ring" aria-hidden="true"></i></div>
+          <div class="pf-crop-zoom"><button type="button" class="btn small" data-cz="-" data-nav aria-label="Dézoomer">−</button><input type="range" min="0" max="1000" step="1" value="500" aria-label="Zoom" data-nav><button type="button" class="btn small" data-cz="+" data-nav aria-label="Zoomer">+</button></div>
+          <p class="dim pf-crop-tip">Glisse la photo où tu veux, zoome avec la molette. Le vide (et la transparence d’un PNG) prend la couleur du profil.</p>`,
         actions: [
           { label: 'Annuler', onClick: () => { closeOverlay(); finish(null); } },
           { label: 'Valider', primary: true, onClick: async () => {
@@ -166,22 +167,30 @@
             const k = 512 / V, g = cv.getContext('2d');
             g.imageSmoothingQuality = 'high';
             g.drawImage(img, (V / 2 + C.x - (C.w * C.z) / 2) * k, (V / 2 + C.y - (C.h * C.z) / 2) * k, C.w * C.z * k, C.h * C.z * k);
-            const f = await rr.x('x:profiles:saveCrop', cv.toDataURL('image/jpeg', 0.9)).catch(() => null);
+            // PNG : la transparence et le vide autour restent transparents → la couleur du profil apparaît derrière
+            const f = await rr.x('x:profiles:saveCrop', cv.toDataURL('image/png')).catch(() => null);
             closeOverlay(true);
             finish(f);
           } },
         ],
       });
       const box = $('#pBody'), img = $('.pf-crop-view img', box), view = $('.pf-crop-view', box), zr = $('input[type=range]', box);
+      // Déplacement libre : il reste toujours au moins un quart de la photo dans le cadre
       const clamp = () => {
-        const mx = Math.max(0, (C.w * C.z - V) / 2), my = Math.max(0, (C.h * C.z - V) / 2);
+        const mx = (C.w * C.z + V) / 2 - Math.min(V, C.w * C.z) / 4, my = (C.h * C.z + V) / 2 - Math.min(V, C.h * C.z) / 4;
         C.x = Math.max(-mx, Math.min(mx, C.x)); C.y = Math.max(-my, Math.min(my, C.y));
       };
-      const paint = () => { clamp(); img.style.transform = `translate(-50%, -50%) translate(${C.x}px, ${C.y}px) scale(${C.z})`; zr.value = Math.round((C.z / C.min) * 100); };
-      const zoom = (f) => { const z = Math.max(C.min, Math.min(C.min * 4, C.z * f)); C.x *= z / C.z; C.y *= z / C.z; C.z = z; paint(); };
+      const toR = (z) => Math.round((Math.log(z / C.min) / Math.log(C.max / C.min)) * 1000);
+      const fromR = (r) => C.min * Math.pow(C.max / C.min, r / 1000);
+      const paint = () => { clamp(); img.style.transform = `translate(-50%, -50%) translate(${C.x}px, ${C.y}px) scale(${C.z})`; zr.value = toR(C.z); };
+      const setZ = (z) => { z = Math.max(C.min, Math.min(C.max, z)); C.x *= z / C.z; C.y *= z / C.z; C.z = z; paint(); };
+      const zoom = (f) => setZ(C.z * f);
       img.onload = () => {
         C.w = img.naturalWidth; C.h = img.naturalHeight;
-        C.min = C.z = V / Math.min(C.w, C.h); // le cercle est toujours couvert
+        C.cover = V / Math.min(C.w, C.h);
+        C.min = (V / Math.max(C.w, C.h)) * 0.35; // jusqu'à un petit bout d'image au milieu du cercle
+        C.max = C.cover * 4;
+        C.z = C.cover;
         img.style.width = `${C.w}px`; img.style.height = `${C.h}px`;
         paint();
       };
@@ -194,7 +203,7 @@
       view.addEventListener('pointermove', (e) => { if (!drag) return; C.x = e.clientX - drag.x; C.y = e.clientY - drag.y; paint(); });
       view.addEventListener('pointerup', () => { drag = null; view.classList.remove('is-drag'); });
       view.addEventListener('wheel', (e) => { e.preventDefault(); zoom(e.deltaY < 0 ? 1.08 : 1 / 1.08); }, { passive: false });
-      zr.addEventListener('input', () => { const z = C.min * (+zr.value / 100); C.x *= z / C.z; C.y *= z / C.z; C.z = z; paint(); });
+      zr.addEventListener('input', () => setZ(fromR(+zr.value)));
       box.addEventListener('click', (e) => { if (done) return; const b = e.target.closest('[data-cz]'); if (b) zoom(b.dataset.cz === '+' ? 1.15 : 1 / 1.15); });
       function onKey(e) {
         if (S.mode !== 'prompt' || document.activeElement !== view) return;
@@ -221,7 +230,7 @@
     E.id = p?.id || null;
     E.avatar = p?.avatar || PF.avatars[PF.list.length % PF.avatars.length] || 'star';
     E.color = p?.color || PF.colors.find((c) => !PF.list.some((x) => x.color === c)) || PF.colors[0];
-    E.image = p?.image || ''; E.src = '';
+    E.image = p?.image || ''; E.src = p?.imageSrc || '';
     $('#pfEdT', ed).textContent = p ? 'Modifier le profil' : 'Nouveau profil';
     $('#pfName', ed).value = p?.name || '';
     $('#pfDel', ed).hidden = !p || p.id === 'main';
@@ -246,14 +255,14 @@
         if (f) { const c = await cropImage(f); if (c) { E.src = f; E.image = c; } else if (!E.image) return; }
         else if (!E.image) return;
       }
-      else { E.avatar = av.dataset.av; E.image = ''; }
+      else { E.avatar = av.dataset.av; E.image = ''; E.src = ''; }
       sfx('toggle'); return keepFocus(`[data-av="${av.dataset.av}"]`);
     }
     if (col) { E.color = col.dataset.col; sfx('toggle'); return keepFocus(`[data-col="${col.dataset.col}"]`); }
     if (act === 'cancel') return closeOverlay();
-    if (act === 'crop') { const c = await cropImage(E.src || E.image); if (c) { E.image = c; renderEdit(); } return; }
+    if (act === 'crop') { const c = await cropImage(E.src || E.image, E.color); if (c) { E.image = c; renderEdit(); } return; }
     if (act === 'save') {
-      const r = await rr.x('x:profiles:save', { id: E.id, name: $('#pfName', ed).value, avatar: E.avatar, color: E.color, image: E.image }).catch(() => ({ ok: false, error: 'Erreur' }));
+      const r = await rr.x('x:profiles:save', { id: E.id, name: $('#pfName', ed).value, avatar: E.avatar, color: E.color, image: E.image, imageSrc: E.image ? E.src : '' }).catch(() => ({ ok: false, error: 'Erreur' }));
       if (!r.ok) { toast(r.error, true); return; }
       apply(r.state);
       closeOverlay(true);

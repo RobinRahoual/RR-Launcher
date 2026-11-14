@@ -142,6 +142,7 @@ function saveProfile(data, o = {}) {
   if (AVATARS.includes(o.avatar)) p.avatar = o.avatar;
   if (/^#[0-9a-f]{6}$/i.test(o.color || '')) p.color = o.color;
   if ('image' in o) p.image = typeof o.image === 'string' ? path.basename(o.image) : '';
+  if ('imageSrc' in o) p.imageSrc = p.image && typeof o.imageSrc === 'string' ? path.basename(o.imageSrc) : ''; // photo d'origine, pour recadrer plus tard
   return { ok: true, id: p.id };
 }
 
@@ -157,7 +158,7 @@ function init(ctx) {
   const state = () => {
     const p = P();
     return {
-      list: p.list.map(({ id, name, avatar, color, image, settings }) => ({ id, name, avatar, color, image: image || '', own: Object.keys(settings || {}).filter((k) => INHERIT_SETTINGS.includes(k)) })),
+      list: p.list.map(({ id, name, avatar, color, image, imageSrc, settings }) => ({ id, name, avatar, color, image: image || '', imageSrc: imageSrc || '', own: Object.keys(settings || {}).filter((k) => INHERIT_SETTINGS.includes(k)) })),
       current: p.current, last: p.last, statsScope: scope.stats, avatars: AVATARS, colors: COLORS, max: MAX, running: running.size > 0,
     };
   };
