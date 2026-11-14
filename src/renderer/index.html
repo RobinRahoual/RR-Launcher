@@ -401,9 +401,7 @@
         <div class="setting">
           <div><strong id="lbSounds">Sons d’interface</strong><span class="dim">Navigation, validation, lancement</span></div>
           <div class="row-gap">
-            <div class="seg" data-setting="volume" role="group" aria-label="Volume des sons">
-              <button data-value="0.35" data-nav>Doux</button><button data-value="0.7" data-nav>Normal</button><button data-value="1" data-nav>Fort</button>
-            </div>
+            <label class="vol" data-vol="volume"><input type="range" min="0" max="100" step="5" aria-label="Volume des sons d’interface" data-nav /><output>70 %</output></label>
             <button class="toggle" data-toggle="sounds" role="switch" aria-labelledby="lbSounds" data-nav></button>
           </div>
         </div>

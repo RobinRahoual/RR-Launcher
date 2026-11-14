@@ -15,6 +15,7 @@
   };
   const opt = (k) => (S.lib.settings?.[k] ?? DEF[k]);
   const num = (k) => Number(opt(k)) || 0;
+  const level = (k) => { const n = Number(opt(k)); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : Number(DEF[k]); }; // 0 % reste 0
   let winVisible = true;
   const visible = () => winVisible && !document.hidden;
   const running = () => (S.lib.running || []).length > 0;
@@ -56,7 +57,7 @@
     V.on = id;
     const gen = ++V.gen;
     vid.muted = !opt('mediaVideoSound');
-    vid.volume = Math.min(1, num('mediaVideoVolume') || 0.6);
+    vid.volume = level('mediaVideoVolume');
     vid.src = `rr://media/${encodeURIComponent(id)}/${encodeURIComponent(file)}?v=${v}`;
     vid.onplaying = () => {
       if (gen !== V.gen) return;
@@ -97,7 +98,7 @@
       verb.connect(wet).connect(synthG);
     }
     const ramp = (p, v, s) => { const t = ctx.currentTime; p.cancelScheduledValues(t); p.setValueAtTime(p.value, t); p.linearRampToValueAtTime(v, t + s); };
-    const vol = () => Math.min(1, num('mediaMusicVolume') || 0.3);
+    const vol = () => level('mediaMusicVolume');
 
     // ---- Nappes synthétisées : accords lents (la mineur / do majeur), filtre passe-bas, réverbe longue, cloches rares
     const CHORDS = [[45, 57, 60, 64, 67, 71], [41, 53, 57, 60, 64, 67], [36, 48, 55, 60, 64, 67], [43, 55, 59, 62, 67, 69]];
@@ -488,7 +489,7 @@
       <div class="setting">
         <div><strong id="lbMSnd">Son des vidéos</strong><span class="dim">Coupé par défaut ; la musique baisse pendant la vidéo</span></div>
         <div class="row-gap">
-          ${seg('mediaVideoVolume', 'Volume des vidéos', [['0.3', 'Doux'], ['0.6', 'Normal'], ['1', 'Fort']])}
+          ${volSlider('mediaVideoVolume', 'Volume des vidéos')}
           <button class="toggle" data-toggle="mediaVideoSound" role="switch" aria-labelledby="lbMSnd" data-nav></button>
         </div>
       </div>
@@ -509,7 +510,7 @@
       <div class="setting">
         <div><strong id="lbMMus">Musique</strong><span class="dim">Accueil et écran jeux ; coupée pendant une partie</span></div>
         <div class="row-gap">
-          ${seg('mediaMusicVolume', 'Volume de la musique', [['0.15', 'Doux'], ['0.3', 'Normal'], ['0.5', 'Fort']])}
+          ${volSlider('mediaMusicVolume', 'Volume de la musique')}
           <button class="toggle" data-toggle="mediaMusic" role="switch" aria-labelledby="lbMMus" data-nav></button>
         </div>
       </div>
@@ -535,7 +536,7 @@
   function renderMediaSettings() {
     if (!box) return;
     const s = S.lib.settings || {};
-    const dis = (k, off) => { const el = $(`.seg[data-setting="${k}"]`, box); if (!el) return; el.classList.toggle('is-off', off); $$('button', el).forEach((x) => { x.disabled = off; }); };
+    const dis = (k, off) => { const el = $(`.seg[data-setting="${k}"], .vol[data-vol="${k}"]`, box); if (!el) return; el.classList.toggle('is-off', off); $$('button, input', el).forEach((x) => { x.disabled = off; }); };
     dis('mediaVideoDelay', !opt('mediaVideos'));
     dis('mediaVideoVolume', !opt('mediaVideoSound'));
     dis('mediaMusicVolume', !opt('mediaMusic'));
@@ -555,7 +556,8 @@
     defaultsDone = true;
     if (s.mediaMusicSource !== prevSrc || s.mediaMusicDir !== prevDir) { if (prevSrc !== null) Music.resetFolder(); prevSrc = s.mediaMusicSource; prevDir = s.mediaMusicDir; }
     renderMediaSettings();
-    if (vid.src && V.on) { vid.muted = !opt('mediaVideoSound'); vid.volume = Math.min(1, num('mediaVideoVolume') || 0.6); Music.duck(!vid.muted); }
+    syncVolSliders(box);
+    if (vid.src && V.on) { vid.muted = !opt('mediaVideoSound'); vid.volume = level('mediaVideoVolume'); Music.duck(!vid.muted); }
     if (!opt('mediaVideos')) vStop();
     Music.apply();
   }

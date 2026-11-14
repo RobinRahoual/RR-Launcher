@@ -1958,6 +1958,46 @@ $('#scanImport').addEventListener('click', async () => {
   goHome();
 });
 
+// ---------------------------------------------------------------- Curseurs de volume (sons, vidéos, musique)
+// <label class="vol" data-vol="clé"><input type="range"> : 0–100 % ↔ 0–1 dans les réglages. Aperçu en direct,
+// enregistrement groupé ; flèches gauche / droite au clavier comme à la manette.
+const VOL_DEF = { volume: 0.7, mediaVideoVolume: 0.6, mediaMusicVolume: 0.3 };
+function volSlider(k, label) {
+  return `<label class="vol" data-vol="${k}"><input type="range" min="0" max="100" step="5" aria-label="${label}" data-nav /><output></output></label>`;
+}
+function volOf(k) { const n = Number(S.lib?.settings?.[k]); return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : VOL_DEF[k] ?? 0.5; }
+function paintVol(el, pct) {
+  el.style.setProperty('--p', `${pct}%`);
+  $('output', el).textContent = `${pct} %`;
+  $('input', el).setAttribute('aria-valuetext', `${pct} %`);
+}
+function syncVolSliders(root = document) {
+  $$('.vol[data-vol]', root).forEach((el) => {
+    const inp = $('input', el);
+    if (document.activeElement === inp && el._t) return; // en cours de réglage
+    const pct = Math.round(volOf(el.dataset.vol) * 100);
+    inp.value = pct; paintVol(el, pct);
+  });
+}
+document.addEventListener('input', (e) => {
+  const el = e.target.closest?.('.vol[data-vol]');
+  if (!el) return;
+  const k = el.dataset.vol, pct = +e.target.value;
+  paintVol(el, pct);
+  const v = Math.round(pct) / 100;
+  S.lib.settings[k] = k === 'volume' ? v : String(v); // valeurs des médias en texte, comme avant
+  if (k === 'volume') { Sfx.set(S.lib.settings.sounds, v); clearTimeout(el._s); el._s = setTimeout(() => sfx('move'), 60); }
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el._t = null; rr.setSettings({ [k]: S.lib.settings[k] }); }, 180);
+});
+function volStep(dir) {
+  const inp = document.activeElement;
+  if (!inp?.matches?.('.vol input[type="range"]') || inp.disabled || (dir !== 'left' && dir !== 'right')) return false;
+  inp.value = Math.max(0, Math.min(100, +inp.value + (dir === 'right' ? 5 : -5)));
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  return true;
+}
+
 // ---------------------------------------------------------------- Réglages
 let setPage = 'general';
 function renderSettings() {
@@ -1965,9 +2005,10 @@ function renderSettings() {
   $$('#settings .seg').forEach((seg) => $$('button', seg).forEach((b) => b.setAttribute('aria-pressed', String(s[seg.dataset.setting]) === b.dataset.value)));
   $$('#settings [data-toggle]').forEach((b) => b.setAttribute('aria-checked', !!s[b.dataset.toggle]));
   // Le volume n'a de sens que si les sons sont activés
-  const vol = $('#settings [data-setting="volume"]');
+  const vol = $('#settings [data-vol="volume"]');
   vol.classList.toggle('is-off', !s.sounds);
-  $$('button', vol).forEach((b) => { b.disabled = !s.sounds; });
+  $('input', vol).disabled = !s.sounds;
+  syncVolSliders($('#settings'));
   if (document.activeElement !== $('#sgdbKey')) $('#sgdbKey').value = s.sgdbKey || '';
   if (document.activeElement !== $('#tgdbKey')) $('#tgdbKey').value = s.tgdbKey || '';
   $$('.set-tab').forEach((t) => t.setAttribute('aria-selected', t.dataset.settab === setPage));
@@ -2330,7 +2371,7 @@ function onPadDir(dir, repeat) {
   if (BO.kind === 'open' || BO.kind === 'cancel') return; // BOXOPEN
   if (BO.busy) boFinish();
   if (S.topFocus >= 0 && shellTopInput(dir)) return; // SHELL : barre du haut
-  if (S.mode !== 'main') return spatial(dir);
+  if (S.mode !== 'main') return volStep(dir) || spatial(dir);
   if (!S.lib.games.length) { if (!repeat) spatial(dir); return; }
   if (S.view === 'home') {
     if (dir === 'left') homeSelect(S.home.sel - 1);
