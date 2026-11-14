@@ -16,6 +16,8 @@ const sqlite = require('./importer/sqlite');
 const core = require('./playtime/core');
 const { createEpic, LOGIN_URL } = require('./playtime/epic');
 
+const normTitle = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+
 function init(ctx) {
   const { ipcMain, store, send, commit, running, log } = ctx;
   const S = () => store.data.settings || {};
@@ -154,6 +156,12 @@ function init(ctx) {
       const itch = await safe('itch', readItch);
       const epicInfo = { entries: 0, games: 0, matched: 0, miss: [] };
       const epicT = epic.connected() ? await safe('epic', () => epic.playtime()) : null;
+      // Titres → identifiants Epic (bibliothèque possédée, en cache) : rattache aussi les jeux sans AppName connu
+      let epicByName = new Map();
+      if (epicT) {
+        try { if (!store.data.epicLib) await epic.library(); } catch (e) { log(`epic bibliothèque : ${e.message}`); }
+        for (const x of store.data.epicLib || []) epicByName.set(normTitle(x.title), [x.appName, x.item]);
+      }
       // Profil secondaire actif : son temps de jeu est le sien, on n'y verse pas les heures du compte Steam
       const P = store.data.profiles;
       if (P && P.current && P.current !== 'main') { status.error = 'Profil secondaire actif : synchronisation au retour sur le profil principal'; return status; }
@@ -168,12 +176,13 @@ function init(ctx) {
         }
         if (epicT) { // jeux Epic : AppName, sinon identifiant du catalogue
           const keys = core.epicKeys(g);
+          if (g.source === 'epic' || g.kind === 'epic' || keys.length) for (const x of epicByName.get(normTitle(g.name)) || []) if (x && !keys.includes(x)) keys.push(x);
           if (keys.length) { epicInfo.games++; const k = keys.find((x) => epicT.has(x)); if (k) { epicInfo.matched++; c.push({ src: 'Epic Games', ...epicT.get(k) }); } else epicInfo.miss.push(keys[0]); }
         }
         if (itch && g.source === 'itch' && g.installDir) { const r = itch.get(core.normDir(g.installDir)); if (r) c.push({ src: 'itch.io', ...r }); }
         return best(...c);
       });
-      if (epicT) { epicInfo.entries = epicT.size; epicInfo.ids = [...epicT.keys()].slice(0, 8); log(`epic : ${epicInfo.entries} jeu(x) avec du temps, ${epicInfo.games} jeu(x) Epic dans la bibliothèque, ${epicInfo.matched} associé(s)${epicInfo.miss.length ? ` — sans correspondance : ${epicInfo.miss.slice(0, 8).join(', ')}` : ''}`); }
+      if (epicT) { epicInfo.entries = epicT.size; epicInfo.ids = [...epicT.keys()].slice(0, 8); epicInfo.miss = epicInfo.miss.slice(0, 5); log(`epic : ${epicInfo.entries} jeu(x) avec du temps, ${epicInfo.games} jeu(x) Epic dans la bibliothèque, ${epicInfo.matched} associé(s)${epicInfo.miss.length ? ` — sans correspondance : ${epicInfo.miss.slice(0, 8).join(', ')}` : ''}`); }
       Object.assign(status, { epicInfo: epicT ? epicInfo : null, at: Date.now(), sources: src, errors: errs, updated: n, error: '' });
       if (n) commit();
       ctx.hub?.emit('playtime:ext');

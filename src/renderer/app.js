@@ -2085,7 +2085,7 @@ async function ptEpicRender() {
   const on = st.epic?.connected;
   b.textContent = on ? 'Déconnecter' : 'Connecter';
   b.dataset.on = on ? '1' : '';
-  if (on) t.textContent = `Connecté${st.epic.name ? ` : ${st.epic.name}` : ''}${st.errors?.epic ? ` · ${st.errors.epic}` : st.epicInfo ? ` · ${st.epicInfo.entries} jeu(x) avec du temps chez Epic, ${st.epicInfo.matched}/${st.epicInfo.games} de ta bibliothèque associé(s)` : ' · pas encore synchronisé'}`;
+  if (on) t.textContent = `Connecté${st.epic.name ? ` : ${st.epic.name}` : ''}${st.errors?.epic ? ` · ${st.errors.epic}` : st.epicInfo ? ` · ${st.epicInfo.entries} jeu(x) avec du temps chez Epic, ${st.epicInfo.matched}/${st.epicInfo.games} de ta bibliothèque associé(s)${st.epicInfo.miss?.length ? ` · sans correspondance : ${st.epicInfo.miss.join(', ')}` : ''}${st.epicInfo.entries && st.epicInfo.matched < st.epicInfo.games && st.epicInfo.ids?.length ? ` · ex. chez Epic : ${st.epicInfo.ids.slice(0, 4).join(', ')}` : ''}` : ' · pas encore synchronisé'}`;
   else t.textContent = 'Epic ne garde pas le temps de jeu sur le PC : connecte ton compte pour reprendre les heures affichées dans le launcher Epic.';
 }
 setTimeout(ptEpicRender, 1500);
