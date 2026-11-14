@@ -61,7 +61,43 @@ function createEpic({ store, fetchImpl, safe, log = () => {} }) {
     log(`epic : ${Array.isArray(list) ? list.length : 0} entrée(s) de temps de jeu reçues`);
     return core.epicTimes(list);
   }
+  // Bibliothèque possédée : records (library-service) puis titres / catégories (catalogue), mis en cache.
+  const CAT = (ns, id) => `https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/${encodeURIComponent(ns)}/bulk/items?id=${encodeURIComponent(id)}&includeDLCDetails=true&includeMainGameDetails=true&country=FR&locale=fr`;
+  async function library() {
+    const t = await bearer();
+    const H = { Authorization: `Bearer ${t}` };
+    const records = [];
+    let cursor = '';
+    for (let i = 0; i < 30; i++) {
+      const r = await fetchImpl(`https://library-service.live.use1a.on.epicgames.com/library/api/public/items?includeMetadata=true&platform=Windows${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { headers: H });
+      if (!r.ok) throw new Error(`Epic : HTTP ${r.status}`);
+      const j = await r.json();
+      records.push(...(j.records || []));
+      cursor = j.responseMetadata?.nextCursor || '';
+      if (!cursor) break;
+    }
+    const seen = new Set();
+    const recs = records.filter((x) => x.namespace && x.namespace !== 'ue' && x.catalogItemId && x.appName && !seen.has(x.appName) && seen.add(x.appName));
+    const cache = (store.data.epicCatalog ||= {});
+    const todo = recs.filter((x) => !cache[x.catalogItemId]);
+    let k = 0;
+    await Promise.all(Array.from({ length: 6 }, async () => {
+      while (k < todo.length) {
+        const x = todo[k++];
+        try {
+          const r = await fetchImpl(CAT(x.namespace, x.catalogItemId), { headers: H });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const c = j[x.catalogItemId];
+          cache[x.catalogItemId] = c ? { title: c.title, categories: (c.categories || []).map((y) => ({ path: y.path })), keyImages: (c.keyImages || []).map((y) => ({ type: y.type, url: y.url })), mainGameItem: c.mainGameItem ? { id: c.mainGameItem.id } : null } : { title: '' };
+        } catch { /* réessayé à la prochaine synchro */ }
+      }
+    }));
+    store.save?.();
+    return recs.map((rec) => ({ rec, cat: cache[rec.catalogItemId] || null }));
+  }
   return {
+    library,
     connected: () => !!(D().enc || D().plain),
     name: () => D().name || '',
     loginWithCode: (code) => token({ grant_type: 'authorization_code', code }),

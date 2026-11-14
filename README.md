@@ -133,6 +133,10 @@ Une vraie liste d’amis dans le launcher, sans Steam ni Discord, portée par un
 - **Rich Presence** : ton profil Discord affiche le jeu en cours, la console et la durée. Crée une application gratuite sur [discord.com/developers/applications](https://discord.com/developers/applications) (son nom est affiché : appelle-la « RR Launcher »), copie l'**Application ID** dans **Réglages → Fonctions → Discord**, puis « Tester ». Optionnel : image `logo` dans *Rich Presence → Art Assets*. Les jeux Steam affichent leur jaquette.
 - **Stream (Go Live) sans quitter le jeu** : menu en jeu → **Streamer sur Discord**, ou **Guide + Y** (PS + △). Il faut être déjà en vocal. Discord ne laisse pas les applications démarrer un partage d'écran : le launcher appuie à ta place sur le raccourci Discord du stream — crée-le une fois dans Discord → Paramètres → Raccourcis clavier (action stream / Go Live) avec la même combinaison que dans le launcher (par défaut **Ctrl+Shift+F9**).
 
+## Nouveautés 1.25
+
+- **Jeux à installer** (Menu) : tes jeux possédés mais pas installés sur Steam (clé API des Réglages), Epic (compte connecté) et GOG (Galaxy), avec recherche et filtre par store. « Installer » ouvre le client du store sur le jeu.
+
 ## Nouveautés 1.21
 
 - **Mettre à jour** et **Désinstaller** sur la page d’un jeu (Steam : direct ; Epic/GOG : ouvre leur client ; autres : désinstalleur du dossier du jeu).

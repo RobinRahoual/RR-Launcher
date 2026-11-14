@@ -132,3 +132,18 @@
 .cap-g-grid .cap-thumb { position: relative; width: 100%; aspect-ratio: 16 / 9; }
 .cap-g-cap { position: absolute; left: 0; right: 0; bottom: 0; padding: 18px 10px 6px; font-size: 12px; text-align: left; color: #fff; background: linear-gradient(transparent, rgba(0, 0, 0, .72)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .cap-g-empty { grid-column: 1 / -1; padding: 40px 0; text-align: center; }
+
+/* Jeux à installer */
+.un-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 11vw, 230px), 1fr)); gap: 16px; }
+.un-card { display: flex; flex-direction: column; gap: 6px; padding: 0; background: none; border: 0; text-align: left; color: inherit; cursor: pointer; border-radius: 12px; }
+.un-art { position: relative; display: block; aspect-ratio: 2 / 3; overflow: hidden; border-radius: 12px; background: rgba(255, 255, 255, .06); }
+.un-art.wide { aspect-ratio: 2 / 3; }
+.un-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.un-letter { position: absolute; inset: 0; display: grid; place-items: center; font-size: 42px; opacity: .25; z-index: 0; }
+.un-art img { z-index: 1; }
+.un-name { font-size: 13px; font-weight: 600; line-height: 1.25; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.un-sub { display: flex; align-items: center; gap: 6px; font-size: 11.5px; opacity: .8; }
+.un-sub .ico { width: 14px; height: 14px; margin-left: auto; }
+.un-store { font-style: normal; padding: 1px 7px; border-radius: 99px; background: rgba(255, 255, 255, .12); }
+.un-card:hover .un-art, .un-card.is-focus .un-art { outline: 3px solid var(--color-accent); outline-offset: 2px; }
+#unQ { min-width: 160px; }

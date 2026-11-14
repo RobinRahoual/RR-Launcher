@@ -24,6 +24,7 @@ function init(ctx) {
   let safeStore = null;
   try { safeStore = require('electron').safeStorage; } catch { /* tests */ }
   const epic = createEpic({ store, safe: safeStore, log, fetchImpl: (u, o) => require('electron').net.fetch(u, o) });
+  ctx.epic = epic; // UNINSTALLED : bibliothèque Epic possédée
 
   // ------------------------------------------------------------ Connexion Epic Games (page officielle d'Epic)
   let loginWin = null;
