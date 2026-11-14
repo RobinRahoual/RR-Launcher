@@ -441,3 +441,7 @@ body[data-view="home"] .cap-badges { display: none; }
 .set-search input { flex: 1; }
 .sx-hide { display: none !important; }
 #settings.searching .set-tabs { opacity: .55; }
+#settings .set-scroll { display: contents; }
+#settings.searching .set-scroll { display: block; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 10px; margin-right: -10px; scrollbar-width: thin; }
+#settings.searching .set-page, #settings.searching .set-page:not([hidden]) { flex: none; min-height: 0; overflow: visible; padding-right: 0; margin-right: 0; }
+#settings.searching .set-tab[aria-selected="true"] { background: transparent; box-shadow: none; color: inherit; }
