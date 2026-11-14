@@ -98,3 +98,47 @@ test('suivi hors launcher : dossiers et processus', () => {
   assert.deepEqual(hits.get('dlc').pids, [12]);
   assert.equal(hits.size, 2);
 });
+
+test('Epic : AppName, réponse playtime, code de connexion', () => {
+  const g = { kind: 'epic', launchUri: 'com.epicgames.launcher://apps/fn%3A4fe75bbc5a674f4f9b356b5c90567da5%3AFortnite?action=launch&silent=true' };
+  assert.equal(core.epicAppName(g), 'Fortnite');
+  assert.equal(core.epicAppName({ launchUri: 'steam://run/1' }), '');
+  const m = core.epicTimes([{ accountId: 'a', artifactId: 'Fortnite', totalTime: 9180 }, { artifactId: 'Zero', totalTime: 0 }, null]);
+  assert.deepEqual(m.get('Fortnite'), { sec: 9180, last: 0 });
+  assert.ok(!m.has('Zero'));
+  assert.equal(core.epicCodeFrom('{"redirectUrl":"x","authorizationCode":"abc123","sid":null}'), 'abc123');
+  assert.equal(core.epicCodeFrom('<html>'), '');
+});
+
+test('Epic : connexion, renouvellement du jeton, temps de jeu', async () => {
+  const { createEpic } = require('../src/features/playtime/epic');
+  const store = { data: {}, save() {} };
+  const calls = [];
+  const fetchImpl = async (url, o = {}) => {
+    calls.push(url);
+    const json = (status, body) => ({ ok: status < 400, status, json: async () => body });
+    if (url.includes('/oauth/token')) {
+      const p = new URLSearchParams(o.body);
+      assert.match(o.headers.Authorization, /^Basic /);
+      if (p.get('grant_type') === 'authorization_code' && p.get('code') === 'good') return json(200, { access_token: 'A1', refresh_token: 'R1', account_id: 'ACC', displayName: 'Robin', expires_at: new Date(Date.now() + 3600e3).toISOString() });
+      if (p.get('grant_type') === 'refresh_token' && p.get('refresh_token') === 'R1') return json(200, { access_token: 'A2', refresh_token: 'R2', account_id: 'ACC', displayName: 'Robin', expires_at: new Date(Date.now() + 3600e3).toISOString() });
+      return json(400, { errorCode: 'errors.com.epicgames.account.oauth.authorization_code_not_found', errorMessage: 'invalid' });
+    }
+    if (url.includes('/playtime/account/ACC/all')) { assert.match(o.headers.Authorization, /^Bearer A/); return json(200, [{ artifactId: 'Fortnite', totalTime: 9180 }]); }
+    return json(404, {});
+  };
+  const ep = createEpic({ store, fetchImpl });
+  assert.equal(ep.connected(), false);
+  await assert.rejects(ep.loginWithCode('bad'));
+  await ep.loginWithCode('good');
+  assert.ok(ep.connected()); assert.equal(ep.name(), 'Robin');
+  assert.ok(!JSON.stringify(store.data.epicAuth).includes('A1')); // jeton d'accès jamais stocké
+  assert.equal((await ep.playtime()).get('Fortnite').sec, 9180);
+  // nouvelle instance (redémarrage) : renouvellement par le refresh token
+  const ep2 = createEpic({ store, fetchImpl });
+  assert.equal((await ep2.playtime()).get('Fortnite').sec, 9180);
+  assert.ok(calls.some((u) => u.includes('oauth/token')));
+  ep2.logout();
+  assert.equal(ep2.connected(), false);
+  await assert.rejects(ep2.playtime(), /non connecté/);
+});

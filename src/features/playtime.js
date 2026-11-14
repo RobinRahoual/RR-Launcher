@@ -14,12 +14,57 @@ const path = require('path');
 const { execFile } = require('child_process');
 const sqlite = require('./importer/sqlite');
 const core = require('./playtime/core');
+const { createEpic, LOGIN_URL } = require('./playtime/epic');
 
 function init(ctx) {
   const { ipcMain, store, send, commit, running, log } = ctx;
   const S = () => store.data.settings || {};
   const on = (k) => S()[k] !== false;
   const status = { at: 0, sources: {}, updated: 0, error: '' };
+  let safeStore = null;
+  try { safeStore = require('electron').safeStorage; } catch { /* tests */ }
+  const epic = createEpic({ store, safe: safeStore, log, fetchImpl: (u, o) => require('electron').net.fetch(u, o) });
+
+  // ------------------------------------------------------------ Connexion Epic Games (page officielle d'Epic)
+  let loginWin = null;
+  function epicLogin() {
+    if (loginWin && !loginWin.isDestroyed()) { loginWin.focus(); return Promise.resolve({ ok: false, error: 'Connexion déjà ouverte' }); }
+    const { BrowserWindow } = require('electron');
+    return new Promise((resolve) => {
+      let done = false;
+      const finish = (r) => { if (done) return; done = true; if (loginWin && !loginWin.isDestroyed()) loginWin.close(); loginWin = null; resolve(r); };
+      loginWin = new BrowserWindow({
+        width: 520, height: 760, parent: ctx.getWin?.() || undefined, modal: false, autoHideMenuBar: true, title: 'Connexion à Epic Games',
+        webPreferences: { partition: 'persist:epic-login', contextIsolation: true, sandbox: true, nodeIntegration: false },
+      });
+      const check = async () => {
+        if (!loginWin || loginWin.isDestroyed()) return;
+        const url = loginWin.webContents.getURL();
+        if (!/epicgames\.com\/id\/api\/redirect/i.test(url)) return;
+        try {
+          const code = core.epicCodeFrom(await loginWin.webContents.executeJavaScript('document.body.innerText', true));
+          if (!code) return finish({ ok: false, error: 'Epic n’a pas renvoyé de code : réessaie' });
+          const j = await epic.loginWithCode(code);
+          finish({ ok: true, name: j.displayName || '' });
+        } catch (e) { log(`epic : ${e.message}`); finish({ ok: false, error: `Connexion refusée par Epic (${e.message})` }); }
+      };
+      loginWin.webContents.on('did-finish-load', check);
+      loginWin.webContents.on('did-navigate', check);
+      loginWin.webContents.setWindowOpenHandler(({ url }) => { loginWin.loadURL(url); return { action: 'deny' }; }); // « Se connecter avec… » reste dans la fenêtre
+      loginWin.on('closed', () => finish({ ok: false, cancelled: true }));
+      loginWin.loadURL(LOGIN_URL);
+    });
+  }
+  ipcMain.handle('x:playtime:epicLogin', async () => {
+    const r = await epicLogin();
+    if (r.ok) sync(true).catch(() => {});
+    return r;
+  });
+  ipcMain.handle('x:playtime:epicLogout', async () => {
+    epic.logout();
+    try { await require('electron').session.fromPartition('persist:epic-login').clearStorageData(); } catch { /* */ }
+    return { ok: true };
+  });
 
   // ------------------------------------------------------------ Suivi des jeux lancés hors du launcher
   const pending = new Map(); // id → première détection (ms)
@@ -101,11 +146,12 @@ function init(ctx) {
   async function sync(manual = false) {
     if (syncing) return syncing;
     syncing = (async () => {
-      const src = {};
-      const safe = async (name, fn) => { try { const m = await fn(); src[name] = m ? m.size : -1; return m; } catch (e) { src[name] = -2; log(`temps de jeu ${name} : ${e.message}`); return null; } };
+      const src = {}, errs = {};
+      const safe = async (name, fn) => { try { const m = await fn(); src[name] = m ? m.size : -1; return m; } catch (e) { src[name] = -2; errs[name] = e.message; log(`temps de jeu ${name} : ${e.message}`); return null; } };
       const steam = await safe('steam', readSteam);
       const gog = await safe('gog', readGog);
       const itch = await safe('itch', readItch);
+      const epicT = epic.connected() ? await safe('epic', () => epic.playtime()) : null;
       // Profil secondaire actif : son temps de jeu est le sien, on n'y verse pas les heures du compte Steam
       const P = store.data.profiles;
       if (P && P.current && P.current !== 'main') { status.error = 'Profil secondaire actif : synchronisation au retour sur le profil principal'; return status; }
@@ -118,10 +164,11 @@ function init(ctx) {
           const id = (g.source === 'gog' || !g.appid) && gogIdOf(g);
           if (id && gog.has(`gog_${id}`)) c.push({ src: 'GOG Galaxy', ...gog.get(`gog_${id}`) });
         }
+        if (epicT && (g.kind === 'epic' || g.source === 'epic')) { const r = epicT.get(core.epicAppName(g)); if (r) c.push({ src: 'Epic Games', ...r }); }
         if (itch && g.source === 'itch' && g.installDir) { const r = itch.get(core.normDir(g.installDir)); if (r) c.push({ src: 'itch.io', ...r }); }
         return best(...c);
       });
-      Object.assign(status, { at: Date.now(), sources: src, updated: n, error: '' });
+      Object.assign(status, { at: Date.now(), sources: src, errors: errs, updated: n, error: '' });
       if (n) commit();
       ctx.hub?.emit('playtime:ext');
       if (manual || n) log(`temps de jeu : ${n} jeu(x) mis à jour (${JSON.stringify(src)})`);
@@ -135,7 +182,7 @@ function init(ctx) {
   ctx.hub?.on('session:end', () => { if (on('syncPlaytime')) setTimeout(() => sync().catch(() => {}), 15000); });
 
   ipcMain.handle('x:playtime:sync', () => sync(true));
-  ipcMain.handle('x:playtime:status', () => status);
+  ipcMain.handle('x:playtime:status', () => ({ ...status, epic: { connected: epic.connected(), name: epic.name() } }));
 }
 
 module.exports = { init };

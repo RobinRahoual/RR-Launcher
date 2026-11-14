@@ -2005,8 +2005,33 @@ function volStep(dir) {
   return true;
 }
 
-// PLAYTIME : synchronisation manuelle des heures (Steam / GOG Galaxy / itch.io)
+// PLAYTIME : compte Epic Games (connexion par la page d'Epic) et synchronisation manuelle des heures
+async function ptEpicRender() {
+  const st = await rr.x('x:playtime:status').catch(() => null);
+  const b = $('#ptEpic'), t = $('#ptEpicState');
+  if (!b || !st) return;
+  const on = st.epic?.connected;
+  b.textContent = on ? 'Déconnecter' : 'Connecter';
+  b.dataset.on = on ? '1' : '';
+  if (on) t.textContent = `Connecté${st.epic.name ? ` : ${st.epic.name}` : ''}${st.errors?.epic ? ` · ${st.errors.epic}` : st.sources?.epic >= 0 ? ` · ${st.sources.epic} jeu(x) avec du temps de jeu` : ''}`;
+  else t.textContent = 'Epic ne garde pas le temps de jeu sur le PC : connecte ton compte pour reprendre les heures affichées dans le launcher Epic.';
+}
+setTimeout(ptEpicRender, 1500);
 document.addEventListener('click', async (e) => {
+  const eb = e.target.closest?.('#ptEpic');
+  if (eb) {
+    eb.disabled = true;
+    if (eb.dataset.on) { await rr.x('x:playtime:epicLogout').catch(() => null); toast('Compte Epic déconnecté', 'success'); }
+    else {
+      toast('Connecte-toi dans la fenêtre Epic Games qui s’ouvre');
+      const r = await rr.x('x:playtime:epicLogin').catch((er) => ({ ok: false, error: er.message }));
+      if (r?.ok) toast(`Compte Epic connecté${r.name ? ` : ${r.name}` : ''} · synchronisation…`, 'success');
+      else if (!r?.cancelled) toast(r?.error || 'Connexion Epic impossible', true);
+      setTimeout(ptEpicRender, 4000);
+    }
+    eb.disabled = false;
+    return ptEpicRender();
+  }
   const b = e.target.closest?.('#ptSync');
   if (!b) return;
   b.disabled = true;
@@ -2014,10 +2039,11 @@ document.addEventListener('click', async (e) => {
   b.disabled = false;
   if (!st) return toast('Synchronisation impossible', true);
   if (st.error) return toast(st.error, 'info');
-  const found = Object.entries(st.sources || {}).filter(([, n]) => n >= 0).map(([k]) => ({ steam: 'Steam', gog: 'GOG Galaxy', itch: 'itch.io' })[k]);
+  const found = Object.entries(st.sources || {}).filter(([, n]) => n >= 0).map(([k]) => ({ steam: 'Steam', gog: 'GOG Galaxy', itch: 'itch.io', epic: 'Epic Games' })[k]);
   const msg = !found.length ? 'Aucun launcher trouvé (Steam, GOG Galaxy, itch.io)' : st.updated ? `${st.updated} jeu${st.updated > 1 ? 'x' : ''} mis à jour depuis ${found.join(', ')}` : `Déjà à jour (${found.join(', ')})`;
   toast(msg, st.updated ? 'success' : 'info');
   const el = $('#ptStatus');
+  ptEpicRender();
   if (el) el.textContent = `Dernière synchronisation : ${new Date(st.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${found.join(', ') || 'aucun launcher trouvé'}`;
 });
 

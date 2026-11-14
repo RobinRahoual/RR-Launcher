@@ -128,4 +128,27 @@ function matchProcesses(procs, list, { helper = /$^/, selfPid = 0 } = {}) {
   return out;
 }
 
-module.exports = { steamLocalConfig, mergeMax, gogTimes, itchTimes, gogIdOf, applyTimes, watchList, matchProcesses, normDir };
+/** AppName Epic d'un jeu : dernier segment de com.epicgames.launcher://apps/<ns>%3A<item>%3A<AppName>?action=… */
+function epicAppName(g) {
+  if (g.epicAppName) return g.epicAppName;
+  const m = /^com\.epicgames\.launcher:\/\/apps\/([^?]+)/i.exec(g.launchUri || '');
+  if (!m) return '';
+  const parts = decodeURIComponent(m[1]).split(':');
+  return parts[parts.length - 1] || '';
+}
+/** Réponse de library-service …/playtime/account/<id>/all → Map AppName → { sec } */
+function epicTimes(list) {
+  const out = new Map();
+  for (const r of Array.isArray(list) ? list : []) {
+    const id = String(r?.artifactId || '');
+    const sec = Number(r?.totalTime || 0);
+    if (id && sec > 0) out.set(id, { sec: Math.round(Math.max(out.get(id)?.sec || 0, sec)), last: 0 });
+  }
+  return out;
+}
+/** Page /id/api/redirect après connexion : JSON { authorizationCode } (texte brut ou <pre>) */
+function epicCodeFrom(text) {
+  try { const j = JSON.parse(String(text || '').trim()); return typeof j.authorizationCode === 'string' && j.authorizationCode ? j.authorizationCode : ''; } catch { return ''; }
+}
+
+module.exports = { epicAppName, epicTimes, epicCodeFrom, steamLocalConfig, mergeMax, gogTimes, itchTimes, gogIdOf, applyTimes, watchList, matchProcesses, normDir };
