@@ -26,24 +26,50 @@ const n64 = (b) => { const o = Buffer.from(b); for (let i = 0; i < o.length; i +
 
 test('catalogue embarqué : entrées valides, identifiants uniques, règles de ROM cohérentes', () => {
   const list = R.merge(null);
-  assert.ok(list.length >= 10);
   assert.strictEqual(list.length, R.BUNDLED.recomps.length, 'aucune entrée embarquée rejetée');
   assert.strictEqual(new Set(list.map((e) => e.id)).size, list.length);
   const { BY_ID } = require('../src/platforms');
   for (const e of list) {
     assert.ok(BY_ID[e.platform], `${e.id} : console ${e.platform}`);
-    if (e.rom.codes) new RegExp(e.rom.codes); // compile
+    if (e.rom.codes) new RegExp(e.rom.codes);
   }
-  // Le distant remplace / ajoute ; les entrées invalides (chemin qui sort du dossier) sont ignorées
-  const m = R.merge({ recomps: [
-    { ...list[0], name: 'Renommée' },
-    { id: 'nouvelle', name: 'X', game: 'X', platform: 'n64', repo: 'a/b', rom: { system: 'n64', place: 'copy', label: 'x' } },
-    { id: 'piege', name: 'X', platform: 'n64', repo: 'a/b', rom: { system: 'n64', place: 'copy', target: '../../evil.z64', label: 'x' } },
-    { id: 'mauvais', name: 'X', platform: 'n64', repo: 'pas un depot', rom: { place: 'copy' } },
-  ] });
-  assert.strictEqual(m.find((e) => e.id === list[0].id).name, 'Renommée');
-  assert.ok(m.find((e) => e.id === 'nouvelle'));
-  assert.ok(!m.find((e) => e.id === 'piege' || e.id === 'mauvais'));
+});
+
+test('catalogue RecompLauncher : consoles, dépôts GitHub, manifeste, fusion avec les entrées embarquées', () => {
+  const remote = {
+    origins: [{ id: 'n64', name: 'Nintendo 64' }, { id: 'x360', name: 'Xbox 360' }, { id: 'ps4', name: 'PlayStation 4' }, { id: 'gamecube', name: 'GameCube' }],
+    apps: [
+      { id: 'donkey-kong-64-recompiled', name: 'Donkey Kong 64: Recompiled', game: 'Donkey Kong 64', origin: 'n64', repo: 'Rainchus/Donkey-Kong-64-Recompiled', cover: '/media/dk64.jpg', systems: ['windows', 'linux'] },
+      { id: 'skate3', name: 'Skate 3 Recomp', game: 'Skate 3', origin: 'x360', repo: 'https://github.com/someone/skate3-recomp', systems: ['windows'],
+        boot: { format: 1, game: { kind: 'iso', label: 'Ton image .iso de Skate 3' }, start: { program: ['bin/skate.exe'], args: ['--iso', '{game}'] } } },
+      { id: 'bloodborne', name: 'Bloodborne PC', game: 'Bloodborne', origin: 'ps4', repo: 'x/bb', systems: ['linux'] },
+      { id: 'soon-thing', name: 'Soon', game: 'Soon', origin: 'gamecube', soon: true, systems: ['windows'] },
+      { id: 'gitlab', name: 'Ailleurs', origin: 'n64', repo: 'https://gitlab.com/a/b' },
+      { id: '../evil', name: 'X' },
+    ],
+  };
+  const m = R.merge(remote);
+  const dk = m.find((e) => e.id === 'donkey-kong-64-recompiled');
+  assert.strictEqual(dk.cover, 'https://recomplauncher.com/media/dk64.jpg');
+  assert.strictEqual(dk.rom.codes, '^NDOE$', 'règle ROM embarquée reprise par dépôt');
+  assert.ok(!m.find((e) => e.id === 'dk64recomp'), 'pas de doublon embarqué');
+  const sk = m.find((e) => e.id === 'skate3');
+  assert.deepStrictEqual([sk.platform, sk.repo, sk.rom.place, sk.rom.system], ['x360', 'someone/skate3-recomp', 'arg', 'iso']);
+  const bb = m.find((e) => e.id === 'bloodborne');
+  assert.deepStrictEqual([bb.platform, bb.originName, bb.windows], [null, 'PlayStation 4', false]);
+  assert.strictEqual(m.find((e) => e.id === 'soon-thing').platform, 'gc');
+  assert.strictEqual(m.find((e) => e.id === 'gitlab').repo, null, 'dépôt non GitHub : non installable');
+  assert.ok(!m.find((e) => e.id.includes('evil')));
+  assert.ok(m.find((e) => e.id === 'zelda64recomp'), 'entrée embarquée absente du distant gardée');
+  // Lancement d'après le manifeste
+  const d = tmp();
+  fs.mkdirSync(path.join(d, 'bin'));
+  fs.writeFileSync(path.join(d, 'bin', 'skate.exe'), 'x');
+  const st = R.startFrom({ start: { program: ['missing.exe', 'bin/skate.exe'], args: ['--iso', '{game}', '--data', '{install}/data'], env: { SK_DIR: '{documents}/Skate', PATH: 'no' } } }, d, { game: 'D:\\Jeux\\Skate 3.iso', documents: 'C:\\Docs' });
+  assert.strictEqual(st.exe, path.join(d, 'bin', 'skate.exe'));
+  assert.deepStrictEqual(st.args, ['--iso', 'D:\\Jeux\\Skate 3.iso', '--data', `${d}/data`]);
+  assert.deepStrictEqual(st.env, ['SK_DIR=C:\\Docs/Skate']);
+  assert.strictEqual(R.joinArgs(['--iso', 'D:\\a b.iso']), '--iso "D:\\a b.iso"');
 });
 
 test('archive Windows : écarte Linux / macOS / sources / symboles', () => {
@@ -117,7 +143,10 @@ test('installation : catalogue distant, ROM copiée, jeu ajouté, mise à jour, 
   fs.writeFileSync(path.join(work, 'SpaghettiKart', 'Spaghettify.exe'), Buffer.alloc(4000));
   fs.writeFileSync(path.join(work, 'SpaghettiKart', 'config.yml'), 'v1');
   await make7z(work, 'sk.zip', ['SpaghettiKart']);
-  const remote = { recomps: [{ id: 'extra', name: 'Extra', game: 'Extra', platform: 'n64', repo: 'x/extra', rom: { system: 'n64', place: 'select', label: 'x' } }] };
+  const remote = { origins: [{ id: 'n64', name: 'Nintendo 64' }], apps: [
+    { id: 'extra', name: 'Extra', game: 'Extra', origin: 'n64', repo: 'x/extra', systems: ['windows'] },
+    { id: 'spaghettikart', name: 'SpaghettiKart', game: 'Mario Kart 64', origin: 'n64', repo: 'HarbourMasters/SpaghettiKart', systems: ['windows'] },
+  ] };
   let tag = 'v1.0.0';
   let srv;
   const asset = () => ({ name: 'SpaghettiKart-Windows-x64.zip', size: fs.statSync(path.join(work, 'sk.zip')).size, browser_download_url: `http://127.0.0.1:${srv.address().port}/dl/sk.zip` });
@@ -134,6 +163,7 @@ test('installation : catalogue distant, ROM copiée, jeu ajouté, mise à jour, 
   process.env.RR_RECOMP_CATALOG = `${base}/catalog.json`;
   process.env.RR_RECOMP_ROOT = path.join(work, 'recomps');
   process.env.RR_RECOMP_NO_COVERS = '1';
+  delete process.env.RR_RECOMP_OFFLINE;
   for (const k of Object.keys(require.cache)) if (/features[\\/](recomp|emu)/.test(k)) delete require.cache[k];
   const feature = require('../src/features/recomp');
 

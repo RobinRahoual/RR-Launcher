@@ -6,6 +6,7 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const R = require('./recomp/core');
 const { download, json } = require('./emu/download');
 const { extract } = require('./emu/extract');
@@ -21,28 +22,46 @@ function init(ctx) {
   const rm = (p) => { try { fs.rmSync(p, { recursive: true, force: true }); } catch {} };
 
   // ---------------------------------------------------------------- Catalogue
-  let remoteAt = 0;
+  // Catalogue complet de RecompLauncher (pc-catalog.json, ~1,7 Mo) gardé dans son propre fichier (pas dans
+  // library.json), relu toutes les 6 h ou sur « Actualiser ». Hors ligne : la dernière copie, sinon les entrées embarquées.
+  delete D.catalog; // ancien format (1.11–1.12)
+  const catFile = path.join(ctx.DATA, 'recomp-catalog.json');
+  let cat = null, catAt = 0, items = null, fetching = null;
+  try { const c = JSON.parse(fs.readFileSync(catFile, 'utf8')); if (Array.isArray(c?.apps)) { cat = c; catAt = fs.statSync(catFile).mtimeMs; } } catch {}
   async function catalog(force = false) {
-    if (force || Date.now() - remoteAt > 6 * 3600e3) {
-      remoteAt = Date.now();
-      try {
-        const r = await json(R.REMOTE_URL);
-        if (Array.isArray(r?.recomps)) { D.catalog = { recomps: r.recomps, at: Date.now() }; commit(); }
-      } catch (e) { log(`recomp : catalogue distant indisponible (${e.message}), copie locale utilisée`); }
+    if ((force || !cat || Date.now() - catAt > 6 * 3600e3) && !process.env.RR_RECOMP_OFFLINE) {
+      fetching ||= (async () => {
+        try {
+          const r = await json(R.REMOTE_URL);
+          if (Array.isArray(r?.apps) && r.apps.length) {
+            cat = { origins: Array.isArray(r.origins) ? r.origins : [], apps: r.apps };
+            catAt = Date.now(); items = null;
+            fs.mkdirSync(path.dirname(catFile), { recursive: true });
+            fs.writeFileSync(catFile + '.tmp', JSON.stringify(cat)); fs.renameSync(catFile + '.tmp', catFile);
+            log(`recomp : catalogue RecompLauncher, ${r.apps.length} entrées`);
+          }
+        } catch (e) { catAt = Date.now() - 5.5 * 3600e3; log(`recomp : catalogue distant indisponible (${e.message}), copie locale utilisée`); }
+        finally { fetching = null; }
+      })();
+      await fetching;
     }
-    return R.merge(D.catalog);
+    return (items ||= R.merge(cat));
   }
   const entryById = async (id) => (await catalog()).find((e) => e.id === id);
   const latest = new Map(); // id → { tag, at }
 
-  function state(e) {
+  function state(e, light = false) {
     const ins = D.installs[e.id];
     const exists = !!(ins?.exe && fs.existsSync(ins.exe));
     const rom = D.roms[e.id];
     const lt = latest.get(e.id);
+    const { boot, ...rest } = e; // le manifeste reste côté main
     return {
-      ...e,
-      cover: coverUrl(e.id),
+      ...rest,
+      ...(light ? { desc: undefined } : {}),
+      hasBoot: !!boot,
+      installable: !!(e.repo && e.windows && !e.soon),
+      cover: e.cover || coverUrl(e.id),
       installed: exists ? { version: ins.version, exe: ins.exe, dir: ins.dir, gameId: ins.gameId, date: ins.date } : null,
       mine: rom?.path && fs.existsSync(rom.path) ? rom : null, // copie du jeu choisie par le joueur
       latest: lt?.tag || null,
@@ -50,10 +69,12 @@ function init(ctx) {
     };
   }
   ipcMain.handle('x:recomp:list', async (_e, o = {}) => {
-    const items = (await catalog(!!o.refresh)).map(state);
-    if (!process.env.RR_RECOMP_NO_COVERS) setTimeout(() => fetchCovers(items).catch((e) => log(`recomp : jaquettes ${e.message}`)), 50);
-    return { root, items };
+    const all = await catalog(!!o.refresh);
+    const list = all.map((e) => state(e, true));
+    if (!process.env.RR_RECOMP_NO_COVERS) setTimeout(() => fetchCovers(all.filter((e) => !e.cover)).catch((e) => log(`recomp : jaquettes ${e.message}`)), 50);
+    return { root, items: list, at: catAt || null, source: cat ? 'recomplauncher' : 'embarqué' };
   });
+  ipcMain.handle('x:recomp:get', async (_e, id) => { const e = await entryById(id); return e ? state(e) : null; });
 
   // ---------------------------------------------------------------- Jaquettes (rayons du catalogue)
   // Ordre : e.cover (URL du catalogue) → libretro-thumbnails (nom No-Intro / Redump le plus proche) → Wikipédia EN
@@ -120,16 +141,20 @@ function init(ctx) {
   });
 
   // ---------------------------------------------------------------- Copie du jeu (ROM / dump)
-  ipcMain.handle('x:recomp:pickRom', async (_e, id) => {
+  ipcMain.handle('x:recomp:pickRom', async (_e, id, o = {}) => {
     const e = await entryById(id);
     if (!e) return { ok: false, error: 'Recomp inconnue' };
     const { dialog } = require('electron');
-    const folder = e.rom.system === 'folder';
-    const exts = e.rom.system === 'n64' ? ['z64', 'n64', 'v64'] : e.rom.system === 'gc' ? ['iso', 'gcm', 'rvz', 'ciso', 'gcz'] : ['*'];
+    const sys = e.rom.system;
+    const folder = sys === 'folder';
+    const both = sys === 'iso_or_folder' || sys === 'any';
+    const exts = sys === 'n64' ? ['z64', 'n64', 'v64'] : sys === 'gc' ? ['iso', 'gcm', 'rvz', 'ciso', 'gcz'] : sys === 'iso' || sys === 'iso_or_folder' ? ['iso', 'xex', 'chd', 'rvz', 'nup', 'xci', 'nsp', 'cue', 'bin', 'pkg'] : ['*'];
+    // Windows ne sait pas choisir fichier OU dossier dans la même fenêtre : on demande lequel au renderer (o.folder)
+    const asFolder = folder || (both && !!o?.folder);
     const r = await dialog.showOpenDialog(ctx.getWin(), {
-      title: `Ta copie : ${e.rom.label}`,
-      properties: folder ? ['openDirectory', 'openFile'] : ['openFile'],
-      filters: folder ? [] : [{ name: e.rom.system === 'n64' ? 'ROM Nintendo 64' : e.rom.system === 'gc' ? 'Image GameCube' : 'Fichier du jeu', extensions: exts }, { name: 'Tous', extensions: ['*'] }],
+      title: `Ta copie : ${e.rom.label}`.slice(0, 120),
+      properties: asFolder ? ['openDirectory'] : ['openFile'],
+      filters: asFolder ? [] : [{ name: sys === 'n64' ? 'ROM Nintendo 64' : sys === 'gc' ? 'Image GameCube' : 'Copie du jeu', extensions: exts }, { name: 'Tous', extensions: ['*'] }],
     });
     if (r.canceled || !r.filePaths[0]) return { ok: false, cancelled: true };
     const file = r.filePaths[0];
@@ -146,7 +171,10 @@ function init(ctx) {
     if (!e) return { ok: false, error: 'Recomp inconnue' };
     if (job) return { ok: false, error: 'Une installation est déjà en cours' };
     const rom = D.roms[id];
-    if (e.rom.place === 'copy' && !rom?.path) return { ok: false, error: 'Choisis d’abord ta copie du jeu' };
+    if (!e.repo) return { ok: false, error: 'Ce projet ne publie pas de version GitHub que le launcher sait installer : ouvre sa page.', site: e.url };
+    if (!e.windows) return { ok: false, error: 'Ce projet ne propose pas de version Windows.', site: e.url };
+    if (e.soon) return { ok: false, error: 'Ce projet n’est pas encore sorti.', site: e.url };
+    if ((e.rom.place === 'copy' || e.rom.place === 'arg') && !rom?.path) return { ok: false, error: 'Choisis d’abord ta copie du jeu' };
     const ctrl = new AbortController();
     job = { id, ctrl };
     const step = (phase, extra = {}) => send('x:recomp:progress', { id, phase, ...extra });
@@ -165,11 +193,21 @@ function init(ctx) {
       rm(staging);
       await extract(archive, staging, { signal: ctrl.signal });
       const top = R.contentRoot(staging);
-      if (!R.findExe(top, e.exe)) throw new Error(`Archive de ${e.name} inattendue : aucun exécutable Windows`);
+      if (!R.findExe(top, e.exe, 4)) throw new Error(`Archive de ${e.name} inattendue : aucun exécutable Windows (peut-être un installateur : ouvre la page du projet)`);
       fs.mkdirSync(dir, { recursive: true });
       fs.cpSync(top, dir, { recursive: true, force: true }); // une mise à jour garde sauvegardes, réglages et ROM
       rm(staging); rm(archive);
-      const exe = R.findExe(dir, e.exe);
+      // Manifeste « recomplauncher.json » de la release (sinon celui du catalogue) : programme, arguments, variables
+      let boot = e.boot;
+      try { const m = JSON.parse(fs.readFileSync(path.join(dir, 'recomplauncher.json'), 'utf8')); if (m?.format === 1 || m?.start) boot = m; } catch {}
+      const { app } = require('electron');
+      const vars = {
+        game: rom?.path || '', documents: app?.getPath ? app.getPath('documents') : path.join(os.homedir(), 'Documents'),
+        local: process.env.LOCALAPPDATA || path.join(os.homedir(), '.local', 'share'), config: process.env.APPDATA || path.join(os.homedir(), '.config'), home: os.homedir(), pad: 'xbox',
+      };
+      const start = R.startFrom(boot, dir, vars);
+      const exe = start?.exe || R.findExe(dir, e.exe);
+      if (!exe) throw new Error(`Archive de ${e.name} inattendue : aucun exécutable Windows`);
 
       // ROM : copiée là où la recomp la cherche (portages HarbourMasters, Perfect Dark…)
       let romNote = null;
@@ -187,8 +225,14 @@ function init(ctx) {
       let gameId = D.installs[id]?.gameId;
       let g = gameId && ctx.findGame(gameId);
       if (g) { g.exePath = exe; g.installDir = dir; }
-      else { g = ctx.addGame({ kind: 'exe', exePath: exe, installDir: dir, name: e.game || e.name, platform: e.platform, source: 'recomp' }); gameId = g?.id; }
-      if (g) g.recomp = { id, place: e.rom.place, rom: rom?.path || null };
+      else { g = ctx.addGame({ kind: 'exe', exePath: exe, installDir: dir, name: e.game || e.name, platform: e.platform || 'pc', source: 'recomp' }); gameId = g?.id; }
+      if (g) {
+        g.recomp = { id, place: e.rom.place, rom: rom?.path || null };
+        if (start) {
+          g.args = R.joinArgs(start.args);
+          if (start.env.length) { g.launch ||= {}; g.launch.env = start.env.join('\n'); }
+        }
+      }
       D.installs[id] = { exe, dir, version: src.version, gameId, date: Date.now() };
       commit();
       log(`recomp : ${e.name} ${src.version} installé (${exe})`);

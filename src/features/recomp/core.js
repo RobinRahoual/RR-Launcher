@@ -5,21 +5,94 @@ const fs = require('fs');
 const path = require('path');
 
 const BUNDLED = require('./recomps.json');
-const REMOTE_URL = process.env.RR_RECOMP_CATALOG || 'https://raw.githubusercontent.com/RobinRahoual/RR-Launcher/main/src/features/recomp/recomps.json';
-const PLACES = ['copy', 'select', 'installer'];
+// Catalogue complet de RecompLauncher (plus de 600 recomp / portages) : { origins: [{id,name}], apps: [...] }
+const SITE = 'https://recomplauncher.com';
+const REMOTE_URL = process.env.RR_RECOMP_CATALOG || `${SITE}/pc-catalog.json`;
+const PLACES = ['copy', 'select', 'installer', 'arg'];
 
-// Entrée valide : id simple, dépôt « owner/repo », règle ROM connue
+// Console d'origine du catalogue → console du launcher (null : étagère « autre » sous le nom du catalogue)
+const ORIGIN = {
+  n64: 'n64', snes: 'snes', sfc: 'snes', nes: 'nes', fc: 'nes', famicom: 'nes', gb: 'gb', gbc: 'gb', gba: 'gba', nds: 'nds', ds: 'nds', '3ds': '3ds',
+  gc: 'gc', gamecube: 'gc', ngc: 'gc', wii: 'wii', wiiu: 'wiiu', switch: 'switch', ns: 'switch', switch2: 'switch2', ns2: 'switch2',
+  ps1: 'ps1', psx: 'ps1', ps: 'ps1', playstation: 'ps1', ps2: 'ps2', ps3: 'ps3', psp: 'psp', vita: 'vita', psvita: 'vita',
+  xbox: 'xbox', x360: 'x360', xbox360: 'x360', dc: 'dc', dreamcast: 'dc', genesis: 'md', md: 'md', megadrive: 'md', pc: 'pc',
+};
+const platformOf = (origin) => ORIGIN[String(origin || '').toLowerCase().replace(/[^a-z0-9]/g, '')] || null;
+const absUrl = (u) => (!u ? null : /^https:\/\//.test(u) ? u : /^\//.test(u) || /^[\w.-]+\//.test(u) ? `${SITE}/${String(u).replace(/^\//, '')}` : null);
+const ghRepo = (r) => { const m = /^(?:https:\/\/github\.com\/)?([\w.-]+\/[\w.-]+?)(?:\.git)?\/?$/i.exec(String(r || '').trim()); return m ? m[1] : null; };
+
+// Copie du jeu attendue, d'après le manifeste « recomplauncher.json » (boot) d'une entrée
+function romRule(boot) {
+  const g = boot?.game;
+  if (!g) return { system: 'any', place: 'select', label: 'Ta propre copie du jeu : la recomp la demande ou la trouve au premier lancement.' };
+  const usesArg = (boot.start?.args || []).some((a) => String(a).includes('{game}'));
+  return {
+    system: g.kind === 'folder' ? 'folder' : g.kind === 'iso_or_folder' ? 'iso_or_folder' : 'iso',
+    place: usesArg ? 'arg' : 'select',
+    label: String(g.label || 'Ta propre copie du jeu'),
+    check: g.check && typeof g.check === 'object' ? g.check : null,
+  };
+}
+// Entrée du catalogue RecompLauncher → entrée du launcher
+function fromApp(a, origins = []) {
+  if (!a || typeof a.id !== 'string' || !/^[a-z0-9][a-z0-9._-]{0,80}$/i.test(a.id) || typeof a.name !== 'string') return null;
+  const systems = Array.isArray(a.systems) ? a.systems.map(String) : [];
+  const repo = ghRepo(a.repo);
+  const originName = origins.find((o) => o.id === a.origin)?.name || a.origin || 'Autres';
+  const boot = a.boot && typeof a.boot === 'object' ? a.boot : null;
+  return {
+    id: a.id.toLowerCase().replace(/[^a-z0-9-]/g, '-'), src: 'rl', name: a.name, game: a.game || a.name,
+    origin: String(a.origin || 'other'), originName, platform: platformOf(a.origin),
+    kind: /decomp/i.test(a.name) ? 'Décompilation' : /port\b/i.test(a.name) ? 'Portage' : 'Recomp',
+    repo, url: `${SITE}/game/${encodeURIComponent(a.id)}`, cover: absUrl(a.cover), hero: absUrl(a.hero), logo: absUrl(a.logo),
+    desc: String(a.about || a.blurb || '').slice(0, 600), genre: Array.isArray(a.genre) ? a.genre.join(', ') : a.genre || '',
+    author: a.author || a.dev || '', systems, windows: systems.includes('windows') || !!a.assets?.windows || !systems.length,
+    soon: !!a.soon, archived: !!a.archived || a.status === 'ended' || a.status === 'abandoned',
+    boot, rom: romRule(boot), prerelease: false,
+  };
+}
+
+// Entrée valide pour l'installation : dépôt GitHub « owner/repo », règle ROM connue
 function valid(e) {
-  return !!(e && /^[a-z0-9][a-z0-9-]{1,40}$/.test(e.id) && typeof e.name === 'string' && /^[\w.-]+\/[\w.-]+$/.test(e.repo || '')
+  return !!(e && /^[a-z0-9][a-z0-9._-]{1,80}$/.test(e.id) && typeof e.name === 'string'
     && e.rom && PLACES.includes(e.rom.place) && (e.rom.place !== 'copy' || ['n64', 'gc', 'file'].includes(e.rom.system))
+    && (!e.repo || /^[\w.-]+\/[\w.-]+$/.test(e.repo))
     && (!e.rom.target || (!path.isAbsolute(e.rom.target) && !e.rom.target.split(/[\\/]/).includes('..'))));
 }
-// Catalogue embarqué + catalogue distant (le distant gagne, entrée par entrée)
+// Catalogue RecompLauncher + entrées embarquées (vérification de ROM N64/GC, descriptions FR) qui le complètent
+// par dépôt ; une entrée embarquée absente du catalogue distant reste affichée.
 function merge(remote) {
-  const out = new Map(BUNDLED.recomps.filter(valid).map((e) => [e.id, e]));
-  for (const e of remote?.recomps || []) if (valid(e)) out.set(e.id, e);
+  const out = new Map();
+  for (const a of remote?.apps || []) { const e = fromApp(a, remote.origins || []); if (e && valid(e) && !out.has(e.id)) out.set(e.id, e); }
+  const byRepo = new Map([...out.values()].filter((e) => e.repo).map((e) => [e.repo.toLowerCase(), e]));
+  for (const b of BUNDLED.recomps) {
+    if (!valid(b)) continue;
+    const hit = byRepo.get(b.repo.toLowerCase()) || out.get(b.id);
+    const P = require('../../platforms').BY_ID[b.platform];
+    if (hit) Object.assign(hit, { rom: b.rom, desc: b.desc || hit.desc, platform: hit.platform || b.platform, prerelease: !!b.prerelease, ...(b.exe ? { exe: b.exe } : {}) });
+    else out.set(b.id, { ...b, src: 'rr', origin: b.platform, originName: P?.name || b.platform, windows: true, systems: ['windows'], url: `https://github.com/${b.repo}` });
+  }
   return [...out.values()];
 }
+
+// Chemins du manifeste ({install}, {game}, {documents}…) → chemin réel
+function fillPath(s, vars) {
+  return String(s).replace(/\{(install|game|documents|local|config|home|pad)\}/g, (_, k) => vars[k] ?? '');
+}
+// Lancement d'après le manifeste : premier programme présent, arguments, variables d'environnement
+function startFrom(boot, dir, vars) {
+  const st = boot?.start;
+  if (!st) return null;
+  const progs = (Array.isArray(st.program) ? st.program : [st.program]).filter((p) => typeof p === 'string' && /\.(exe|bat|cmd)$/i.test(p) && !p.split(/[\\/]/).includes('..'));
+  const prog = progs.map((p) => path.join(dir, p)).find((p) => fs.existsSync(p));
+  if (!prog) return null;
+  const args = (st.args || []).map((a) => fillPath(a, { ...vars, install: dir }));
+  const env = Object.entries(st.env && typeof st.env === 'object' ? st.env : {}).filter(([k]) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(k) && !/^(PATH|PATHEXT|SYSTEMROOT|COMSPEC)$/i.test(k))
+    .map(([k, v]) => `${k}=${fillPath(v, { ...vars, install: dir })}`);
+  return { exe: prog, args, env };
+}
+// Arguments → chaîne pour g.args (guillemets si espaces)
+const joinArgs = (args) => args.map((a) => (/[\s"]/.test(a) ? `"${a.replace(/"/g, '\\"')}"` : a)).join(' ');
 
 // Archive Windows d'une release : on écarte sources, symboles, autres OS ; on préfère zip/7z « windows / win64 / x64 »
 function scoreAsset(name) {
@@ -64,7 +137,19 @@ function gcHeader(buf) {
 
 // → { ok, warn?, error?, info? } ; ok = utilisable ; warn = reconnu mais pas la version conseillée
 async function checkRom(file, rule, fsp = fs.promises) {
-  if (!rule || rule.system === 'folder') return { ok: true };
+  if (!rule || rule.system === 'any') return { ok: true, info: path.basename(file) };
+  if (['folder', 'iso', 'iso_or_folder'].includes(rule.system)) {
+    let st;
+    try { st = await fsp.stat(file); } catch (e) { return { ok: false, error: `Lecture impossible : ${e.message}` }; }
+    if (st.isDirectory()) {
+      if (rule.system === 'iso') return { ok: false, error: `Il faut un fichier (image disque) : ${rule.label}` };
+      const want = rule.check?.file;
+      if (want && !fs.existsSync(path.join(file, want))) return { ok: false, error: `Ce dossier ne contient pas ${want}. Attendu : ${rule.label}` };
+      return { ok: true, info: path.basename(file) };
+    }
+    if (rule.system === 'folder') return { ok: false, error: `Il faut le dossier du jeu : ${rule.label}` };
+    return { ok: st.size > 0, info: path.basename(file), error: st.size > 0 ? undefined : 'Fichier vide' };
+  }
   let fd;
   try {
     fd = await fsp.open(file, 'r');
@@ -126,4 +211,4 @@ function contentRoot(dir) {
   return d;
 }
 
-module.exports = { BUNDLED, REMOTE_URL, valid, merge, scoreAsset, pickAsset, n64Header, gcHeader, checkRom, findExe, contentRoot };
+module.exports = { BUNDLED, SITE, REMOTE_URL, ORIGIN, platformOf, ghRepo, romRule, fromApp, fillPath, startFrom, joinArgs, valid, merge, scoreAsset, pickAsset, n64Header, gcHeader, checkRom, findExe, contentRoot };
