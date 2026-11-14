@@ -54,7 +54,7 @@ const PLATFORMS = [
     exts: ['gcm', 'gcz', 'ciso'], hints: [/gamecube|\bngc\b|\bgcn?\b/i],
     emulators: [{ name: 'Dolphin', match: /dolphin/i, args: '-b -e "{rom}"' }] }),
 
-  P({ id: 'n64', tgdb: 3, name: 'Nintendo 64', short: 'N64', maker: 'Nintendo', year: '1996', color: '#2a9d4a', wiki: 'Nintendo 64', libretro: 'Nintendo_-_Nintendo_64',
+  P({ id: 'n64', tgdb: 3, name: 'Nintendo 64', short: 'N64', maker: 'Nintendo', year: '1996', color: '#2a9d4a', wiki: 'Nintendo 64', image: 'Nintendo-64-wController-L.jpg', libretro: 'Nintendo_-_Nintendo_64',
     logos: ['Nintendo_64_wordmark.svg', 'Nintendo_64_logo.png'],
     case: { style: 'card', ratio: 1.38, body: '#1b1b1d', fg: '#ffffff', label: 'NINTENDO 64' },
     exts: ['n64', 'z64', 'v64'], hints: [/n64|nintendo ?64/i],

@@ -397,7 +397,22 @@ function removeWhiteBackground(file, outFile) {
   return true;
 }
 
-async function platformImage(wikiTitle, dir, id, opts = { minWidth: 1280 }) {
+async function platformImage(wikiTitle, dir, id, opts = { minWidth: 1280, image: null }) {
+  // 1) image imposée (fichier Commons), 2) image de l'infobox de l'article (la console elle-même), 3) liste des médias
+  const first = [];
+  if (opts.image) first.push(`https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(opts.image)}?width=${opts.minWidth || 1280}`);
+  const sum = await getJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(wikiTitle.replace(/ /g, '_'))}`).catch(() => null);
+  const inf = sum?.originalimage?.source || sum?.thumbnail?.source;
+  if (inf && !/\.svg/i.test(inf)) first.push(inf);
+  for (const url of first) {
+    const raw = await downloadFirst([url], dir, `${id}-raw`).catch(() => null);
+    if (!raw) continue;
+    const out = `${id}.png`;
+    try {
+      if (removeWhiteBackground(path.join(dir, raw), path.join(dir, out))) { fs.rmSync(path.join(dir, raw), { force: true }); return out; }
+    } catch (e) { log(`platformImage ${id}: ${e.message}`); }
+    return raw;
+  }
   const media = await getJson(`https://en.wikipedia.org/api/rest_v1/page/media-list/${encodeURIComponent(wikiTitle)}`);
   const items = (media?.items || []).filter((it) => it.type === 'image' && it.srcset?.length && !/\.svg/i.test(it.title || '')
     && !/logo|wordmark|icon|map|chart|sales|controller|manette|comparison|motherboard|screenshot|diagram|box art/i.test(it.title || ''));

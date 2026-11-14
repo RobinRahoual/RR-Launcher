@@ -572,14 +572,20 @@ ipcMain.handle('game:openFolder', (_e, id) => {
 
 // ---------------------------------------------------------------- Images de consoles
 const platformFetching = new Map();
+// Images à retélécharger après une correction de la source (v2 : la N64 affichait une station SGI Onyx)
+const PLATFORM_IMG_V = 2, PLATFORM_IMG_RESET = ['n64'];
 ipcMain.handle('platform:image', async (_e, id) => {
   const s = store.data.settings;
+  if ((s.platformImagesV || 1) < PLATFORM_IMG_V) {
+    for (const k of PLATFORM_IMG_RESET) if (s.platformImages[k] && !/-custom-/.test(s.platformImages[k])) delete s.platformImages[k];
+    s.platformImagesV = PLATFORM_IMG_V; store.save();
+  }
   const known = s.platformImages[id];
   if (known && fs.existsSync(path.join(PLATFORM_MEDIA, known))) return known;
   const p = BY_ID[id];
   if (!p || !p.wiki) return null;
   if (!platformFetching.has(id)) {
-    platformFetching.set(id, meta.platformImage(p.wiki, PLATFORM_MEDIA, id).catch((e) => { meta.log(`console ${id}: ${e.message}`); return null; }));
+    platformFetching.set(id, meta.platformImage(p.wiki, PLATFORM_MEDIA, id, { minWidth: 1280, image: p.image || null }).catch((e) => { meta.log(`console ${id}: ${e.message}`); return null; }));
   }
   const file = await platformFetching.get(id);
   platformFetching.delete(id);
