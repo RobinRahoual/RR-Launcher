@@ -306,3 +306,6 @@ body.in-ingame .foot-info { visibility: hidden; }
 button.brand-mark { background: none; border: 0; padding: 2px 6px; margin: -2px -6px; border-radius: 8px; cursor: pointer; font: inherit; font-family: var(--font-display); font-size: calc(var(--sys) * .6); letter-spacing: .02em; color: var(--color-accent); -webkit-app-region: no-drag; transition: background .15s, transform .15s; }
 button.brand-mark:hover, button.brand-mark.is-focus { background: rgba(255, 255, 255, .12); transform: scale(1.05); }
 body[data-view="home"] .topbar button.brand-mark { font-size: calc(var(--sys) * .55); }
+
+/* Manette : curseur masqué ; il revient dès que la souris bouge ou qu'une touche est pressée */
+body.pad-mode, body.pad-mode * { cursor: none !important; }
