@@ -928,7 +928,10 @@ async function launchGameInner(id) {
     if (!emu?.path) return { ok: false, error: 'NO_EMULATOR', platform: g.platform };
     if (!fs.existsSync(emu.path)) return { ok: false, error: 'Émulateur introuvable : ' + emu.path };
     if (!fs.existsSync(g.romPath)) return { ok: false, error: 'ROM introuvable : ' + g.romPath };
-    const c = emuLaunch.command(g, emu, { splitArgs }); // EMU : plein écran, résolution, arguments, env, admin
+    // MODS : copie patchée de la ROM quand des patchs sont activés (l'original n'est jamais modifié)
+    const rp = hub.prepareRom ? hub.prepareRom(g) : { romPath: g.romPath };
+    if (rp.error) return { ok: false, error: rp.error };
+    const c = emuLaunch.command(rp.romPath === g.romPath ? g : { ...g, romPath: rp.romPath }, emu, { splitArgs }); // EMU : plein écran, résolution, arguments, env, admin
     hub.emit('launch:cmd', id, { via: 'émulateur', file: c.admin ? c.target : c.file, args: c.args, cwd: c.cwd, admin: c.admin, env: Object.keys(emuLaunch.parseEnv(g.launch?.env)) }); // LAUNCHLOG
     return spawnTracked(id, c.file, c.args, c.cwd, begin, c.admin ? c.followDir : undefined, c.spawn);
   }

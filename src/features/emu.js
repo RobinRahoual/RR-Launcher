@@ -134,7 +134,7 @@ function init(ctx) {
     if (g.kind !== 'rom' && !g.exePath) return { error: 'Ce jeu passe par un autre launcher : pas d’options de lancement' };
     const split = (s = '') => (s.match(/"[^"]*"|\S+/g) || []).map((a) => a.replace(/^"|"$/g, ''));
     const c = L.command(gg, emu, { splitArgs: split, env: {} });
-    return { file: c.admin ? c.target : c.file, args: c.args, admin: c.admin, caps: emu ? L.capabilities(emu.path) : {} };
+    return { file: c.admin ? c.target : c.file, args: c.args, admin: c.admin, caps: emu ? { ...L.capabilities(emu.path), states: !!ST.HOTKEYS[L.emuKind(emu.path)] } : {} };
   });
   function sanitize(o) {
     const s = (v, n = 2000) => String(v ?? '').slice(0, n);
