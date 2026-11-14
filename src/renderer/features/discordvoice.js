@@ -29,9 +29,39 @@
     if (m) m.textContent = pad ? `${ps ? 'PS' : 'Guide'} + ${ps ? '□' : 'X'}` : chan;
     if (m2) m2.textContent = pad ? `${ps ? 'PS' : 'Guide'} + ${ps ? '✕' : 'A'}` : '';
   }
+  // ---- Menu principal : « Rejoindre / Quitter le vocal » (+ micro une fois dedans)
+  function menuMount() {
+    const panel = $('#menu .panel'), before = panel?.querySelector('[data-action="settings"]');
+    if (!panel || panel.querySelector('[data-action="dcVoice"]')) return;
+    const mk = (action, ico, label, meta) => { const b = document.createElement('button'); b.className = 'menu-item dc-menu'; b.dataset.action = action; b.dataset.nav = ''; b.innerHTML = `${ico}<span class="mi-label">${label}</span><span class="mi-meta" id="${meta}"></span>`; return b; };
+    const a = mk('dcVoice', ICO_VOC, 'Rejoindre le vocal', 'dvMenuMeta'), m = mk('dcMute', ICO_MIC, 'Couper le micro', 'dvMenuMute');
+    if (before) { before.before(a); before.before(m); } else panel.append(a, m);
+  }
+  function menuUpdate() {
+    const s = S.lib?.settings || {};
+    const ready = !!s.discordClientId && !!s.discordClientSecret;
+    const a = $('[data-action="dcVoice"]'), m = $('[data-action="dcMute"]');
+    if (!a) return;
+    a.hidden = !ready; m.hidden = !ready || !vs.inVoice; // le micro n'a de sens qu'une fois dans un salon
+    $('.mi-label', a).textContent = vs.inVoice ? 'Quitter le vocal' : 'Rejoindre le vocal';
+    $('.mi-label', m).textContent = vs.muted ? 'Réactiver le micro' : 'Couper le micro';
+    $('#dvMenuMeta').textContent = vs.inVoice ? vs.name : (s.discordVoiceChannel?.name || '');
+  }
+  async function menuRun(mute) {
+    closeAll(true);
+    toast(mute ? 'Micro Discord…' : (vs.inVoice ? 'Sortie du vocal…' : 'Connexion au vocal…'), 'progress');
+    const r = await rr.x(mute ? 'x:discordvoice:mute' : 'x:discordvoice:toggle', mute ? undefined : { notify: false });
+    if (r && r.ok === false) return toast(`Vocal Discord : ${r.error}`, true);
+    if (mute) { vs.muted = r.muted; toast(r.muted ? 'Micro coupé' : 'Micro activé', 'success'); }
+    else { vs.inVoice = r.joined; vs.name = r.name || ''; vs.muted = false; toast(r.joined ? `Vocal rejoint : ${r.name}` : 'Vocal quitté', 'success'); }
+    igUpdate(); menuUpdate();
+  }
+  RR.actions.dcVoice = () => menuRun(false);
+  RR.actions.dcMute = () => menuRun(true);
+
   async function igRefresh() {
     const r = await rr.x('x:discordvoice:state').catch(() => null);
-    if (r && r.ok !== false) { vs = { inVoice: !!r.inVoice, name: r.name || '', muted: !!r.muted }; igUpdate(); }
+    if (r && r.ok !== false) { vs = { inVoice: !!r.inVoice, name: r.name || '', muted: !!r.muted }; igUpdate(); menuUpdate(); }
   }
   $('#ingame').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-ig="dc-voice"], [data-ig="dc-mute"]');
@@ -113,10 +143,10 @@
     const s = st.settings || {};
     if (s.discordVoicePad === undefined) rr.setSettings({ discordVoicePad: true });
     if (document.activeElement !== $('#dvSecret')) $('#dvSecret').value = s.discordClientSecret || '';
-    igUpdate();
+    igUpdate(); menuUpdate();
   }
-  igInsert();
+  igInsert(); menuMount();
   RR.on('library', applyState);
-  RR.on('mode', (m) => { if (m === 'ingame') { igUpdate(); igRefresh(); } if (m === 'settings') status(); });
+  RR.on('mode', (m) => { if (m === 'menu') { menuUpdate(); igRefresh(); } if (m === 'ingame') { igUpdate(); igRefresh(); } if (m === 'settings') status(); });
   rr.getLibrary().then((st) => { applyState(st); status(); });
 })();
