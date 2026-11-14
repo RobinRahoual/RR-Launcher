@@ -265,6 +265,24 @@ function init(ctx) {
     });
     return { items, dir, folder };
   });
+  // Galerie globale : tous les dossiers de jeux du dossier de captures
+  ipcMain.handle('x:capture:listAll', () => {
+    const base = root();
+    const byFolder = new Map(Object.entries(store.data.capture.folders).map(([id, f]) => [f, id]));
+    let dirs = [];
+    try { dirs = fs.readdirSync(base, { withFileTypes: true }).filter((d) => d.isDirectory() && d.name !== 'thumbs').map((d) => d.name); } catch { /* dossier absent */ }
+    const items = [];
+    for (const folder of dirs) {
+      const id = byFolder.get(folder) || null;
+      const g = id ? findGame(id) : null;
+      for (const x of U.listMedia(path.join(base, folder))) {
+        const rel = `${folder}/${x.file}`;
+        items.push({ ...x, rel, folder, gameId: g ? g.id : null, game: g?.name || folder, url: urlOf(rel, x.mtime), thumb: `${urlOf(rel, x.mtime)}${x.mtime ? '&' : '?'}thumb=1` });
+      }
+    }
+    items.sort((a, b) => b.mtime - a.mtime);
+    return { items: items.slice(0, 1500), total: items.length, dir: base };
+  });
   ipcMain.handle('x:capture:delete', async (_e, rel) => {
     const full = U.resolveRel(root(), rel);
     if (!full || !fs.existsSync(full)) return { ok: false, error: 'Fichier introuvable' };

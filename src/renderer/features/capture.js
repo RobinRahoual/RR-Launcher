@@ -239,13 +239,14 @@
   }
   function renderViewer() {
     const x = CAP.list[CAP.idx];
-    const g = S.lib.games.find((y) => y.id === CAP.gameId);
+    const g = S.lib.games.find((y) => y.id === (x?.gameId || CAP.gameId));
     if (!x) return;
+    if (x.gameId) CAP.gameId = x.gameId;
     const st = $('#capVStage');
     st.innerHTML = x.kind === 'video'
       ? `<video src="${esc(x.url)}" controls autoplay playsinline preload="metadata"></video>`
       : `<img src="${esc(x.url)}" alt="Capture de ${esc(g?.name || '')}" />`;
-    $('#capVTitle').textContent = g?.name || 'Captures';
+    $('#capVTitle').textContent = g?.name || x.game || 'Captures';
     $('#capVMeta').textContent = `${x.kind === 'video' ? 'Clip' : 'Capture'} · ${fmtDate(x.mtime)} · ${CAP.idx + 1} / ${CAP.list.length}`;
     $$('.cap-v-nav', view).forEach((b) => { b.disabled = CAP.list.length < 2; });
     renderHints();
@@ -271,7 +272,7 @@
           const r = await rr.x('x:capture:delete', x.rel).catch((e) => ({ ok: false, error: e.message }));
           if (!r?.ok) return toast(r?.error || 'Suppression impossible', true);
           toast('Supprimé', 'success');
-          await refreshGallery();
+          if (CAP.fromGallery) { await gLoad(); CAP.list = gFiltered(); } else await refreshGallery();
           if (!CAP.list.length) { if (S.mode === 'capview') closeOverlay(true); return; }
           CAP.idx = Math.min(CAP.idx, CAP.list.length - 1);
           renderViewer();
@@ -323,6 +324,76 @@
     $('#hintList').innerHTML = H.map((x, i) => `<button class="hint" data-caph="${i}" ${x[2] ? '' : 'tabindex="-1"'}>${x[0]}<span class="hint-label">${esc(x[1])}</span></button>`).join('');
     $$('#hintList [data-caph]').forEach((b) => b.addEventListener('click', () => H[+b.dataset.caph][2]?.()));
   };
+
+  // ---------------------------------------------------------------- Galerie globale (toutes les captures et clips)
+  const GAL = { all: [], kind: 'all', game: '', dir: '' };
+  const gEl = document.createElement('div');
+  gEl.id = 'capGallery'; gEl.className = 'overlay cap-gal'; gEl.hidden = true;
+  gEl.setAttribute('role', 'dialog'); gEl.setAttribute('aria-modal', 'true'); gEl.setAttribute('aria-labelledby', 'capGTitle');
+  gEl.innerHTML = `
+    <div class="cap-g-panel">
+      <header class="cap-g-head">
+        <h2 id="capGTitle">Galerie</h2><span class="cap-count" id="capGCount"></span>
+        <div class="cap-g-filters" role="group" aria-label="Filtres">
+          <button class="tool" data-capg-kind="all" data-nav>Tout</button>
+          <button class="tool" data-capg-kind="image" data-nav>Captures</button>
+          <button class="tool" data-capg-kind="video" data-nav>Clips</button>
+          <select id="capGGame" data-nav aria-label="Jeu"><option value="">Tous les jeux</option></select>
+        </div>
+        <div class="cap-g-tools">
+          <button class="tool" data-capg="open" data-nav>${ICO.folder}<span>Ouvrir le dossier</span></button>
+          <button class="tool" data-capg="pick" data-nav>${ICO.folder}<span>Changer le dossier…</span></button>
+          <button class="tool" data-capg="close" data-nav data-default aria-label="Fermer">${ICO.close}<span>Fermer</span></button>
+        </div>
+      </header>
+      <div class="cap-g-dir dim" id="capGDir"></div>
+      <div class="cap-g-scroll"><div class="cap-g-grid" id="capGGrid"></div></div>
+    </div>`;
+  ($('#prompt') ? $('#prompt').before(gEl) : document.body.append(gEl));
+  OVERLAYS.capgallery = '#capGallery';
+  const gFiltered = () => GAL.all.filter((x) => (GAL.kind === 'all' || x.kind === GAL.kind) && (!GAL.game || x.game === GAL.game));
+  function gRender() {
+    const list = gFiltered();
+    $$('[data-capg-kind]', gEl).forEach((b) => b.classList.toggle('primary', b.dataset.capgKind === GAL.kind));
+    const sel = $('#capGGame');
+    const games = [...new Set(GAL.all.map((x) => x.game))].sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' }));
+    sel.innerHTML = '<option value="">Tous les jeux</option>' + games.map((n) => `<option value="${esc(n)}"${n === GAL.game ? ' selected' : ''}>${esc(n)}</option>`).join('');
+    $('#capGCount').textContent = String(list.length);
+    $('#capGDir').textContent = GAL.dir;
+    const grid = $('#capGGrid');
+    if (!list.length) { grid.innerHTML = `<p class="dim cap-g-empty">${GAL.all.length ? 'Aucun résultat.' : 'Aucune capture pour l’instant. Ctrl+Alt+S prend une capture, Ctrl+Alt+R lance ou arrête un clip.'}</p>`; return; }
+    grid.innerHTML = list.map((x, i) => `
+      <button class="cap-thumb${x.kind === 'video' ? ' is-video' : ''}" data-capg-i="${i}" data-nav aria-label="${esc(x.game)}, ${x.kind === 'video' ? 'clip' : 'capture'} du ${esc(fmtDate(x.mtime))}">
+        <img src="${esc(x.thumb)}" alt="" loading="lazy" decoding="async" />
+        ${x.kind === 'video' ? `<span class="cap-badge">${ICO.play}Clip</span>` : ''}
+        <span class="cap-g-cap">${esc(x.game)}</span>
+      </button>`).join('');
+    $$('img', grid).forEach((im) => im.addEventListener('error', () => im.closest('.cap-thumb')?.classList.add('no-thumb'), { once: true }));
+  }
+  async function gLoad() {
+    const r = await rr.x('x:capture:listAll').catch(() => null);
+    GAL.all = r?.items || []; GAL.dir = r?.dir || '';
+    if (GAL.game && !GAL.all.some((x) => x.game === GAL.game)) GAL.game = '';
+    gRender();
+  }
+  gEl.addEventListener('click', async (e) => {
+    const t = e.target.closest('[data-capg-i]');
+    if (t) { CAP.fromGallery = true; CAP.list = gFiltered(); CAP.idx = +t.dataset.capgI; CAP.gameId = CAP.list[CAP.idx]?.gameId || null; renderViewer(); return openOverlay('capview'); }
+    const k = e.target.closest('[data-capg-kind]');
+    if (k) { GAL.kind = k.dataset.capgKind; gRender(); return sfx('move'); }
+    const a = e.target.closest('[data-capg]')?.dataset.capg;
+    if (a === 'close') closeOverlay();
+    else if (a === 'open') rr.x('x:capture:openFolder');
+    else if (a === 'pick') { const r = await rr.x('x:capture:pickDir'); if (r?.ok) { toast('Dossier des captures mis à jour', 'success'); gLoad(); } }
+  });
+  $('#capGGame').addEventListener('change', (e) => { GAL.game = e.target.value; gRender(); });
+  RR.actions.gallery = async () => { closeAll(); GAL.kind = 'all'; GAL.game = ''; await gLoad(); openOverlay('capgallery'); };
+  // fermeture de la visionneuse ouverte depuis la galerie : on retombe sur la galerie à jour
+  RR.on('mode', (m) => { if (m === 'capgallery') { CAP.fromGallery = false; gLoad(); } });
+  const mi = $('#menu .panel [data-action="settings"]');
+  if (mi && !$('#menu [data-action="gallery"]')) mi.insertAdjacentHTML('beforebegin', `<button class="menu-item" data-action="gallery" data-nav>${ICO.shot}<span class="mi-label">Galerie</span></button>`);
+  const sb = $('#sysbar [data-action="addHub"]');
+  if (sb && !$('#sysbar [data-action="gallery"]')) sb.insertAdjacentHTML('afterend', `<button class="sys-btn" data-action="gallery" data-tip="Galerie" aria-label="Galerie">${ICO.shot}</button>`);
 
   // ---------------------------------------------------------------- Réglages (#set-capture)
   async function renderSettingsBlock(full = true) {
