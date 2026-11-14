@@ -211,6 +211,41 @@ app.on('second-instance', showWindow);
 app.on('before-quit', () => { quitting = true; guideWatch.stop(); guideWatch.setConnect(false); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 
+// Icône de Windows après une mise à jour : les raccourcis (menu Démarrer, Bureau, barre des tâches) gardent l'icône
+// en cache de l'ancienne version. Une fois par version : on réécrit l'icône des raccourcis qui pointent vers le
+// launcher (ce qui invalide leur cache) puis on demande à l'Explorateur de recharger son cache d'icônes.
+function refreshShellIcons() {
+  if (process.platform !== 'win32' || !app.isPackaged) return;
+  const v = app.getVersion();
+  if (store.data.shellIconVersion === v) return;
+  setTimeout(() => {
+    try {
+      const exe = process.execPath;
+      const roaming = process.env.APPDATA || '';
+      const links = [
+        path.join(roaming, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'RR Launcher.lnk'),
+        path.join(process.env.ProgramData || 'C:\\ProgramData', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'RR Launcher.lnk'),
+        path.join(app.getPath('desktop'), 'RR Launcher.lnk'),
+        path.join(roaming, 'Microsoft', 'Internet Explorer', 'Quick Launch', 'User Pinned', 'TaskBar', 'RR Launcher.lnk'),
+      ];
+      for (const l of links) {
+        if (!fs.existsSync(l)) continue;
+        try {
+          const cur = shell.readShortcutLink(l);
+          if (path.resolve(cur.target || '').toLowerCase() !== path.resolve(exe).toLowerCase()) continue;
+          shell.writeShortcutLink(l, 'update', { icon: exe, iconIndex: 0 });
+        } catch (e) { meta.log(`icône : raccourci ${l} : ${e.message}`); }
+      }
+      const { spawn } = require('child_process');
+      const sys = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'ie4uinit.exe');
+      if (fs.existsSync(sys)) spawn(sys, ['-show'], { detached: true, stdio: 'ignore', windowsHide: true }).on('error', () => {}).unref();
+      store.data.shellIconVersion = v;
+      commit();
+      meta.log(`icône : raccourcis rafraîchis pour ${v}`);
+    } catch (e) { meta.log(`icône : ${e.message}`); }
+  }, 4000);
+}
+
 app.whenReady().then(() => {
   protocol.handle('rr', (req) => {
     // rr://media/<gameId|_platforms>/<fichier>
@@ -236,6 +271,7 @@ app.whenReady().then(() => {
   scheduleHeroUpgrade(25000);
   createTray();
   setupUpdater();
+  refreshShellIcons();
   // Raccourci global pour faire revenir le launcher depuis n'importe où
   // (pendant un jeu, il ouvre aussi le menu en jeu, comme le bouton Guide)
   try { globalShortcut.register('CommandOrControl+Alt+L', () => summon('shortcut')); } catch { /* déjà pris */ }
