@@ -1,0 +1,4 @@
+
+/* Éléments « rouges » (quitter le vocal, micro coupé, arrêter le stream) : restent rouges même sélectionnés */
+.ig-item.danger.is-focus, .ig-item.danger:focus-visible, .ig-item.danger.is-focus .ico, .ig-item.danger:focus-visible .ico,
+.menu-item.danger.is-focus, .menu-item.danger:focus-visible, .menu-item.danger.is-focus .ico, .menu-item.danger:focus-visible .ico { color: var(--err-fg); }

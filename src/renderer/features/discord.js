@@ -18,6 +18,7 @@
     b.hidden = s.discordStream === false;
     const pad = S.device === 'pad', ps = S.padType === 'ps';
     $('.ig-label', b).textContent = streaming ? 'Arrêter le stream' : 'Lancer le stream';
+    b.classList.toggle('danger', streaming);
     $('#dcMeta').textContent = pad && s.discordStreamPad !== false ? `${ps ? 'PS' : 'Guide'} + ${ps ? '△' : 'Y'}` : (s.discordStreamKeys || '');
   }
   $('#ingame').addEventListener('click', async (e) => {

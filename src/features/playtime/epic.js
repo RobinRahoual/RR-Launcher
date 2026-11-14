@@ -53,8 +53,13 @@ function createEpic({ store, fetchImpl, safe, log = () => {} }) {
     const t = await bearer();
     const acc = unpack()?.account;
     const r = await fetchImpl(PLAYTIME_URL(acc), { headers: { Authorization: `Bearer ${t}` } });
-    if (!r.ok) throw new Error(`Epic : HTTP ${r.status}`);
-    return core.epicTimes(await r.json());
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(`Epic : HTTP ${r.status}${body.errorMessage ? ` — ${String(body.errorMessage).slice(0, 120)}` : ''}`);
+    }
+    const list = await r.json();
+    log(`epic : ${Array.isArray(list) ? list.length : 0} entrée(s) de temps de jeu reçues`);
+    return core.epicTimes(list);
   }
   return {
     connected: () => !!(D().enc || D().plain),

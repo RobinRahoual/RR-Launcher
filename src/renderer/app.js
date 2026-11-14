@@ -2014,7 +2014,7 @@ async function ptEpicRender() {
   const on = st.epic?.connected;
   b.textContent = on ? 'Déconnecter' : 'Connecter';
   b.dataset.on = on ? '1' : '';
-  if (on) t.textContent = `Connecté${st.epic.name ? ` : ${st.epic.name}` : ''}${st.errors?.epic ? ` · ${st.errors.epic}` : st.sources?.epic >= 0 ? ` · ${st.sources.epic} jeu(x) avec du temps de jeu` : ''}`;
+  if (on) t.textContent = `Connecté${st.epic.name ? ` : ${st.epic.name}` : ''}${st.errors?.epic ? ` · ${st.errors.epic}` : st.epicInfo ? ` · ${st.epicInfo.entries} jeu(x) avec du temps chez Epic, ${st.epicInfo.matched}/${st.epicInfo.games} de ta bibliothèque associé(s)` : ' · pas encore synchronisé'}`;
   else t.textContent = 'Epic ne garde pas le temps de jeu sur le PC : connecte ton compte pour reprendre les heures affichées dans le launcher Epic.';
 }
 setTimeout(ptEpicRender, 1500);

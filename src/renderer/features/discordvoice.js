@@ -6,6 +6,14 @@
   const ICO_VOC = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="13" width="4" height="6" rx="1.5"/><rect x="17" y="13" width="4" height="6" rx="1.5"/></svg>';
   const ICO_MIC = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>';
 
+  const ICO_MIC_OFF = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/><path d="M4 4l16 16" stroke-width="2.6"/></svg>';
+  // Rouge = action qui coupe / quitte ; micro barré quand il est coupé
+  function tone(btn, red, ico) {
+    if (!btn) return;
+    btn.classList.toggle('danger', !!red);
+    if (ico && btn.dataset.ico !== ico) { btn.dataset.ico = ico; const old = btn.querySelector('svg.ico'); if (old) old.outerHTML = ico === 'off' ? ICO_MIC_OFF : ico === 'on' ? ICO_MIC : ICO_VOC; }
+  }
+
   // ---- Menu en jeu
   function igInsert() {
     const main = $('#igMain');
@@ -23,6 +31,7 @@
     for (const k of ['dc-voice', 'dc-mute']) { const b = $(`[data-ig="${k}"]`); if (b) b.hidden = !ready; }
     const lv = $('[data-ig="dc-voice"] .ig-label'), lm = $('[data-ig="dc-mute"] .ig-label');
     if (lv) lv.textContent = vs.inVoice ? 'Quitter le vocal' : 'Rejoindre le vocal';
+    tone($('[data-ig="dc-voice"]'), vs.inVoice); tone($('[data-ig="dc-mute"]'), vs.muted, vs.muted ? 'off' : 'on');
     if (lm) lm.textContent = vs.muted ? 'Réactiver le micro' : 'Couper le micro';
     const m = $('#dvMeta'), m2 = $('#dvMuteMeta');
     const chan = vs.inVoice ? vs.name : (s.discordVoiceChannel?.name || '');
@@ -45,6 +54,7 @@
     a.hidden = !ready; m.hidden = !ready || !vs.inVoice; // le micro n'a de sens qu'une fois dans un salon
     $('.mi-label', a).textContent = vs.inVoice ? 'Quitter le vocal' : 'Rejoindre le vocal';
     $('.mi-label', m).textContent = vs.muted ? 'Réactiver le micro' : 'Couper le micro';
+    tone(a, vs.inVoice); tone(m, vs.muted, vs.muted ? 'off' : 'on');
     $('#dvMenuMeta').textContent = vs.inVoice ? vs.name : (s.discordVoiceChannel?.name || '');
   }
   async function menuRun(mute) {

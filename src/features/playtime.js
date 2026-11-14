@@ -151,6 +151,7 @@ function init(ctx) {
       const steam = await safe('steam', readSteam);
       const gog = await safe('gog', readGog);
       const itch = await safe('itch', readItch);
+      const epicInfo = { entries: 0, games: 0, matched: 0, miss: [] };
       const epicT = epic.connected() ? await safe('epic', () => epic.playtime()) : null;
       // Profil secondaire actif : son temps de jeu est le sien, on n'y verse pas les heures du compte Steam
       const P = store.data.profiles;
@@ -164,11 +165,15 @@ function init(ctx) {
           const id = (g.source === 'gog' || !g.appid) && gogIdOf(g);
           if (id && gog.has(`gog_${id}`)) c.push({ src: 'GOG Galaxy', ...gog.get(`gog_${id}`) });
         }
-        if (epicT && (g.kind === 'epic' || g.source === 'epic')) { const r = epicT.get(core.epicAppName(g)); if (r) c.push({ src: 'Epic Games', ...r }); }
+        if (epicT) { // jeux Epic : AppName, sinon identifiant du catalogue
+          const keys = core.epicKeys(g);
+          if (keys.length) { epicInfo.games++; const k = keys.find((x) => epicT.has(x)); if (k) { epicInfo.matched++; c.push({ src: 'Epic Games', ...epicT.get(k) }); } else epicInfo.miss.push(keys[0]); }
+        }
         if (itch && g.source === 'itch' && g.installDir) { const r = itch.get(core.normDir(g.installDir)); if (r) c.push({ src: 'itch.io', ...r }); }
         return best(...c);
       });
-      Object.assign(status, { at: Date.now(), sources: src, errors: errs, updated: n, error: '' });
+      if (epicT) { epicInfo.entries = epicT.size; epicInfo.ids = [...epicT.keys()].slice(0, 8); log(`epic : ${epicInfo.entries} jeu(x) avec du temps, ${epicInfo.games} jeu(x) Epic dans la bibliothèque, ${epicInfo.matched} associé(s)${epicInfo.miss.length ? ` — sans correspondance : ${epicInfo.miss.slice(0, 8).join(', ')}` : ''}`); }
+      Object.assign(status, { epicInfo: epicT ? epicInfo : null, at: Date.now(), sources: src, errors: errs, updated: n, error: '' });
       if (n) commit();
       ctx.hub?.emit('playtime:ext');
       if (manual || n) log(`temps de jeu : ${n} jeu(x) mis à jour (${JSON.stringify(src)})`);

@@ -142,3 +142,10 @@ test('Epic : connexion, renouvellement du jeton, temps de jeu', async () => {
   assert.equal(ep2.connected(), false);
   await assert.rejects(ep2.playtime(), /non connecté/);
 });
+
+test('epicKeys : AppName puis catalogItemId, ou epicApp importé', () => {
+  const g = { launchUri: 'com.epicgames.launcher://apps/ns%3Acat123%3AAppX?action=launch' };
+  assert.deepEqual(core.epicKeys(g), ['AppX', 'cat123']);
+  assert.deepEqual(core.epicKeys({ epicApp: 'Zed' }), ['Zed']);
+  assert.deepEqual(core.epicKeys({}), []);
+});

@@ -131,10 +131,19 @@ function matchProcesses(procs, list, { helper = /$^/, selfPid = 0 } = {}) {
 /** AppName Epic d'un jeu : dernier segment de com.epicgames.launcher://apps/<ns>%3A<item>%3A<AppName>?action=… */
 function epicAppName(g) {
   if (g.epicAppName) return g.epicAppName;
+  if (g.epicApp) return g.epicApp; // import direct (manifeste .item)
   const m = /^com\.epicgames\.launcher:\/\/apps\/([^?]+)/i.exec(g.launchUri || '');
   if (!m) return '';
   const parts = decodeURIComponent(m[1]).split(':');
   return parts[parts.length - 1] || '';
+}
+/** Identifiants Epic d'un jeu à essayer, du plus précis au plus large : AppName, puis catalogItemId (milieu de l'URI) */
+function epicKeys(g) {
+  const keys = [];
+  const a = epicAppName(g); if (a) keys.push(a);
+  const m = /^com\.epicgames\.launcher:\/\/apps\/([^?]+)/i.exec(g.launchUri || '');
+  if (m) { const parts = decodeURIComponent(m[1]).split(':'); if (parts.length >= 3) keys.push(parts[1]); }
+  return [...new Set(keys.filter(Boolean))];
 }
 /** Réponse de library-service …/playtime/account/<id>/all → Map AppName → { sec } */
 function epicTimes(list) {
@@ -151,4 +160,4 @@ function epicCodeFrom(text) {
   try { const j = JSON.parse(String(text || '').trim()); return typeof j.authorizationCode === 'string' && j.authorizationCode ? j.authorizationCode : ''; } catch { return ''; }
 }
 
-module.exports = { epicAppName, epicTimes, epicCodeFrom, steamLocalConfig, mergeMax, gogTimes, itchTimes, gogIdOf, applyTimes, watchList, matchProcesses, normDir };
+module.exports = { epicAppName, epicKeys, epicTimes, epicCodeFrom, steamLocalConfig, mergeMax, gogTimes, itchTimes, gogIdOf, applyTimes, watchList, matchProcesses, normDir };
