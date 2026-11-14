@@ -16,6 +16,8 @@
       <p class="set-note">Diffuse ton PC vers une TV, un Steam Deck, un téléphone ou un autre PC avec <b>Sunshine</b> (ici) et <b>Moonlight</b> (sur l'écran qui reçoit).</p>
       <div class="setting"><div><strong>Sunshine ${sun.installed ? (sun.running ? '— actif' : '— installé') : '— non installé'}</strong><span class="dim">${sun.installed ? 'Premier appairage : ouvre l’interface, crée l’identifiant, puis saisis dans Moonlight le code PIN.' : 'Serveur de streaming gratuit (LizardByte).'}</span></div>
         <span class="set-btns">${sun.installed ? `<button class="btn" data-st="start" data-nav>${sun.running ? 'Interface' : 'Démarrer'}</button>` : '<button class="btn" data-st="install" data-nav>Télécharger</button>'}</span></div>
+      ${sun.installed ? `<div class="setting col"><div><strong>Identifiants Sunshine</strong><span class="dim">${st.login ? `Enregistrés pour <b>${esc(st.login)}</b> : l’interface s’ouvre déjà connectée.` : 'Optionnel : l’interface s’ouvre alors déjà connectée, sans retaper l’identifiant.'}</span></div>
+        <div class="v119-row"><input id="stUser" class="v119-input" type="text" autocomplete="off" spellcheck="false" placeholder="Identifiant" value="${esc(st.login)}" data-nav /><input id="stPass" class="v119-input" type="password" autocomplete="off" placeholder="Mot de passe" data-nav /><button class="btn" data-st="login" data-nav>Enregistrer</button></div></div>` : ''}
       ${st.addresses.length ? `<div class="setting"><div><strong>Adresse à saisir dans Moonlight</strong><span class="dim">${st.addresses.map((a) => `<code>${esc(a.address)}</code> (${esc(a.name)})`).join(' · ')}</span></div></div>` : ''}
       ${sun.installed ? `<div class="setting"><div><strong>Applications Sunshine</strong><span class="dim">${st.registered.length ? esc(st.registered.join(', ')) : 'Aucune. Ajoute « RR Launcher » : tu choisis ensuite le jeu depuis Moonlight.'}</span></div>
         <span class="set-btns"><button class="btn" data-st="reg" data-nav>Ajouter RR Launcher</button></span></div>
@@ -36,6 +38,7 @@
     const k = b.dataset.st;
     if (k === 'install') rr.x('x:stream:install');
     else if (k === 'start') { b.disabled = true; toast('Démarrage de Sunshine…', 'progress'); const r = await rr.x('x:stream:start'); b.disabled = false; if (r.ok === false) toast(r.error, true); else { rr.x('x:stream:openUi'); st = r; draw(); } }
+    else if (k === 'login') { const r = await rr.x('x:stream:login', { user: $('#stUser').value, pass: $('#stPass').value }); toast(r.saved ? 'Identifiants Sunshine enregistrés' : 'Identifiants effacés', 'success'); refresh(); }
     else if (k === 'reg') reg(null);
     else if (k === 'regGame') reg($('#stGame').value);
     else if (k === 'moon') { const r = await rr.x('x:stream:moonlight', {}); if (r.ok === false) toast(r.error, 'error'); }

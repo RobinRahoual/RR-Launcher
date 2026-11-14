@@ -3,7 +3,7 @@
 // d'appairage, donne les adresses à saisir dans Moonlight, et déclare « RR Launcher » (ou un jeu précis) comme application
 // Sunshine. Un jeu déclaré se lance avec « RR Launcher.exe --launch=<id> » (géré par main.js, voir launchArg()).
 // Sunshine : https://github.com/LizardByte/Sunshine — Moonlight : https://moonlight-stream.org
-// Canaux : x:stream:status | start | openUi | install | register | unregister | moonlight.
+// Canaux : x:stream:status | start | openUi | login | install | register | unregister | moonlight.
 'use strict';
 const fs = require('fs');
 const os = require('os');
@@ -89,6 +89,8 @@ async function waitPort(port, { tries = 30, every = 1000, check = portOpen, slee
   return false;
 }
 // PowerShell : '…' avec ' doublé
+const LOCAL_HOSTS = ['localhost', '127.0.0.1', '::1'];
+const isLocalHost = (h) => LOCAL_HOSTS.includes(String(h || '').toLowerCase());
 const psq = (v) => `'${String(v).replace(/'/g, "''")}'`;
 // Commande exécutée en administrateur (une invite UAC) : copie du fichier, puis redémarrage éventuel du service Sunshine
 function elevatedScript(src, dest, service) {
@@ -102,7 +104,7 @@ function runPs(script, run = execFile) {
 const moonlightArgs = (host, app) => ['stream', host, app || 'Desktop'];
 
 function init(ctx) {
-  const { ipcMain, store, findGame, log } = ctx;
+  const { ipcMain, store, findGame, log, commit } = ctx;
   const { shell } = require('electron');
   const S = () => store.data.settings;
   const exists = (f) => { try { fs.accessSync(f); return true; } catch { return false; } };
@@ -123,12 +125,44 @@ function init(ctx) {
     let registered = [];
     if (sun) { try { registered = (JSON.parse(fs.readFileSync(appsFile(sun), 'utf8')).apps || []).map((a) => a.name).filter((n) => /RR Launcher/.test(n || '')); } catch {} }
     return { ok: true, platform: process.platform, sunshine: { installed: !!sun, exe: sun, running: sun ? isRunning(sun) : false, ui: SUNSHINE_UI }, moonlight: { installed: !!moon, exe: moon },
-      addresses: localAddresses(), registered, selfExe: selfExe() };
+      addresses: localAddresses(), registered, login: creds()?.user || '', selfExe: selfExe() };
   }
   ipcMain.handle('x:stream:status', () => status());
   ipcMain.handle('x:stream:install', () => { shell.openExternal(SUNSHINE_RELEASES); return true; });
   ipcMain.handle('x:stream:installMoonlight', () => { shell.openExternal(MOONLIGHT_SITE); return true; });
-  ipcMain.handle('x:stream:openUi', () => { shell.openExternal(SUNSHINE_UI); return true; });
+  // Identifiants de l'interface web de Sunshine (chiffrés avec le coffre du système quand il est disponible)
+  function creds() {
+    const c = store.data.sunshine;
+    if (!c?.user) return null;
+    try { return { user: c.user, pass: c.enc ? require('electron').safeStorage.decryptString(Buffer.from(c.pass, 'base64')) : c.pass }; } catch { return null; }
+  }
+  function saveCreds(user, pass) {
+    user = String(user || '').trim().slice(0, 100); pass = String(pass || '').slice(0, 200);
+    if (!user || !pass) { delete store.data.sunshine; commit(); return false; }
+    let enc = false, p = pass;
+    try { const { safeStorage } = require('electron'); if (safeStorage.isEncryptionAvailable()) { p = safeStorage.encryptString(pass).toString('base64'); enc = true; } } catch {}
+    store.data.sunshine = { user, pass: p, enc }; commit();
+    return true;
+  }
+  // Interface Sunshine dans une fenêtre du launcher, déjà connectée (certificat local auto-signé accepté pour localhost uniquement)
+  let uiWin = null;
+  async function openUi() {
+    const c = creds();
+    if (!c) { shell.openExternal(SUNSHINE_UI); return { ok: true, auth: false }; }
+    if (uiWin && !uiWin.isDestroyed()) { uiWin.show(); uiWin.focus(); return { ok: true, auth: true }; }
+    const { BrowserWindow, session } = require('electron');
+    const ses = session.fromPartition('persist:sunshine');
+    ses.setCertificateVerifyProc((req, cb) => cb(isLocalHost(req.hostname) ? 0 : -3));
+    try { await ses.fetch(`${SUNSHINE_UI}/api/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: c.user, password: c.pass }) }); }
+    catch (e) { log(`stream : connexion Sunshine (${e.message})`); } // ancienne version : l'authentification HTTP ci-dessous prend le relais
+    uiWin = new BrowserWindow({ width: 1180, height: 820, autoHideMenuBar: true, title: 'Sunshine', backgroundColor: '#1b1b1b', webPreferences: { session: ses } });
+    uiWin.webContents.on('login', (e, _req, info, cb) => { if (info.isProxy || !isLocalHost(info.host)) return; e.preventDefault(); cb(c.user, c.pass); });
+    uiWin.on('closed', () => { uiWin = null; });
+    uiWin.loadURL(SUNSHINE_UI);
+    return { ok: true, auth: true };
+  }
+  ipcMain.handle('x:stream:openUi', () => openUi());
+  ipcMain.handle('x:stream:login', (_e, o = {}) => ({ ok: true, saved: saveCreds(o.user, o.pass) }));
   // Démarre Sunshine si besoin puis attend que son interface web (port 47990) réponde ; ne renvoie ok qu'à ce moment-là
   ipcMain.handle('x:stream:start', async () => {
     const sun = find(sunshineCandidates());
@@ -206,4 +240,4 @@ function init(ctx) {
   });
 }
 
-module.exports = { init, elevatedScript, portOpen, waitPort, launchArg, sunshineCandidates, moonlightCandidates, localAddresses, appEntry, addApp, removeApp, moonlightArgs, SUNSHINE_UI };
+module.exports = { init, isLocalHost, elevatedScript, portOpen, waitPort, launchArg, sunshineCandidates, moonlightCandidates, localAddresses, appEntry, addApp, removeApp, moonlightArgs, SUNSHINE_UI };

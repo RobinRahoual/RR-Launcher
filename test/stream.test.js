@@ -39,3 +39,7 @@ test('elevatedScript : copie + redémarrage du service, guillemets PowerShell', 
   assert.ok(b.includes("'/c net stop SunshineService & net start SunshineService'"));
   assert.ok(!S.elevatedScript("C:\\o'brien\\x", 'd', null).includes("o'brien"));
 });
+test('isLocalHost : seulement la machine locale', () => {
+  assert.ok(S.isLocalHost('localhost') && S.isLocalHost('127.0.0.1') && S.isLocalHost('::1'));
+  assert.ok(!S.isLocalHost('evil.com') && !S.isLocalHost('192.168.1.16') && !S.isLocalHost(''));
+});
