@@ -23,6 +23,41 @@ function init(ctx) {
     if (!items.length) throw new Error('Steam : aucune donnée (profil ou « Détails des jeux » privés ?)');
     return { items };
   }
+  // ---- Bibliothèque familiale Steam : demande une session web Steam (fenêtre de connexion officielle, cookies conservés
+  // dans une partition dédiée ; ni mot de passe ni jeton enregistrés par le launcher)
+  const PART = 'persist:steam-web';
+  const web = () => require('electron').session.fromPartition(PART);
+  async function webToken() {
+    const r = await web().fetch('https://store.steampowered.com/pointssummary/ajaxgetasyncconfig', { headers: { Accept: 'application/json' } });
+    if (!r.ok) return '';
+    const j = await r.json().catch(() => ({}));
+    return String(j?.data?.webapi_token || '');
+  }
+  async function family(ownedIds) {
+    const id = S().steamId64;
+    if (!id) return { skipped: 'Renseigne ton profil Steam dans Réglages → Fonctions' };
+    const tok = await webToken().catch(() => '');
+    if (!tok) return { skipped: 'Famille Steam : connecte ton compte Steam (bouton ci-dessous)', needLogin: true };
+    const api = (m, q) => web().fetch(`https://api.steampowered.com/IFamilyGroupsService/${m}/v1/?access_token=${encodeURIComponent(tok)}&${q}`).then(async (r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); });
+    const g = await api('GetFamilyGroupForUser', `steamid=${encodeURIComponent(id)}`);
+    const gid = g?.response?.family_groupid;
+    if (!gid || gid === '0') return { skipped: 'Famille Steam : ton compte n’est dans aucun groupe famille' };
+    const j = await api('GetSharedLibraryApps', `family_groupid=${encodeURIComponent(gid)}&steamid=${encodeURIComponent(id)}&include_own=false&include_excluded=false&include_free=false&include_non_games=false`);
+    return { items: core.steamFamily(j, ownedIds) };
+  }
+  let loginWin = null;
+  function steamLogin() {
+    return new Promise((resolve) => {
+      if (loginWin && !loginWin.isDestroyed()) { loginWin.focus(); return resolve({ ok: false, error: 'Fenêtre déjà ouverte' }); }
+      const { BrowserWindow } = require('electron');
+      loginWin = new BrowserWindow({ width: 520, height: 760, title: 'Connexion Steam', autoHideMenuBar: true, parent: ctx.getWin?.() || undefined, webPreferences: { partition: PART, contextIsolation: true, sandbox: true, nodeIntegration: false } });
+      let done = false, timer = null;
+      const finish = (r) => { if (done) return; done = true; clearInterval(timer); if (loginWin && !loginWin.isDestroyed()) loginWin.destroy(); resolve(r); };
+      loginWin.on('closed', () => finish({ ok: false, cancelled: true }));
+      loginWin.loadURL('https://store.steampowered.com/login/?redir=pointssummary');
+      timer = setInterval(async () => { if (done) return; const t = await webToken().catch(() => ''); if (t) finish({ ok: true }); }, 2000);
+    });
+  }
   async function epic() {
     const e = ctx.epic;
     if (!e?.connected()) return { skipped: 'Connecte ton compte Epic dans Réglages (Temps de jeu)' };
@@ -45,7 +80,12 @@ function init(ctx) {
         try { const r = await fn(); if (r.skipped) errors[name] = r.skipped; else items.push(...r.items); }
         catch (e) { errors[name] = e.message; log(`à installer ${name} : ${e.message}`); }
       }
-      Object.assign(D(), { at: Date.now(), items, errors });
+      let needLogin = false;
+      try {
+        const r = await family(new Set(items.filter((x) => x.store === 'steam').map((x) => x.id)));
+        if (r.skipped) { errors.famille = r.skipped; needLogin = !!r.needLogin; } else items.push(...r.items);
+      } catch (e) { errors.famille = `Famille Steam : ${e.message}`; log(`à installer famille : ${e.message}`); }
+      Object.assign(D(), { at: Date.now(), items, errors, needLogin });
       store.save?.();
       return view();
     })().finally(() => { busy = null; });
@@ -55,9 +95,10 @@ function init(ctx) {
     const d = D();
     const list = core.notInstalled(d.items, store.data.games || []);
     list.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-    return { at: d.at, errors: d.errors, items: list, owned: d.items.length };
+    return { at: d.at, errors: d.errors, items: list, owned: d.items.length, needLogin: !!d.needLogin };
   }
 
+  ipcMain.handle('x:uninst:steamLogin', async () => { const r = await steamLogin(); if (r.ok) await refresh(); return r; });
   ipcMain.handle('x:uninst:list', () => view());
   ipcMain.handle('x:uninst:refresh', () => refresh());
   ipcMain.handle('x:uninst:install', async (_e, storeId, id) => {

@@ -25,3 +25,13 @@ test('GOG : OwnedGames + GamePieces', () => {
   assert.strictEqual(c.installPlan(items[0]).uri, 'goggalaxy://openGameView/123');
   assert.strictEqual(c.notInstalled(items, [{ galaxyId: 123, name: 'z' }]).length, 0);
 });
+
+test('Epic : un jeu « games + applications » est gardé, les add-ons non', () => {
+  const g = { title: 'Fortnite', categories: [{ path: 'games' }, { path: 'applications' }] };
+  assert.ok(c.epicItem({ appName: 'F', namespace: 'n', catalogItemId: 'i' }, g));
+  assert.strictEqual(c.epicItem({ appName: 'A', namespace: 'n', catalogItemId: 'j' }, { title: 'Outil', categories: [{ path: 'applications' }] }), null);
+});
+test('Steam famille : exclut ce que tu possèdes et les jeux exclus', () => {
+  const j = { response: { apps: [{ appid: 1, name: 'A', exclude_reason: 0 }, { appid: 2, name: 'B', exclude_reason: 3 }, { appid: 3, name: 'C' }] } };
+  assert.deepStrictEqual(c.steamFamily(j, new Set(['3'])).map((x) => x.id), ['1']);
+});

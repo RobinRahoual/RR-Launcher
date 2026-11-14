@@ -13,11 +13,12 @@ function steamOwned(json) {
 /** Entrée de catalogue Epic → vrai jeu (ni DLC, ni add-on, ni application). */
 function epicIsGame(cat) {
   if (!cat || !cat.title) return false;
+  if (cat.mainGameItem) return false; // DLC / add-on d'un autre jeu
   const paths = (cat.categories || []).map((c) => String(c.path || '').toLowerCase());
-  // On écarte ce qui est clairement autre chose qu'un jeu ; une fiche sans catégorie reste acceptée
-  if (paths.some((p) => p === 'addons' || p.startsWith('addons') || p === 'digitalextras' || p === 'editors' || p === 'applications' || p.startsWith('applications') || p === 'assets' || p.startsWith('plugins'))) return false;
-  if (cat.mainGameItem) return false;
-  return true;
+  // Un jeu Epic porte « games » ET « applications » : « applications » seul ne suffit pas à l'écarter
+  if (paths.some((p) => p === 'addons' || p.startsWith('addons') || p === 'digitalextras' || p === 'editors' || p === 'assets' || p.startsWith('plugins') || p === 'engine')) return false;
+  if (!paths.length) return true;
+  return paths.some((p) => p === 'games' || p.startsWith('games/'));
 }
 function epicArt(cat) {
   const imgs = cat?.keyImages || [];
@@ -74,4 +75,12 @@ function installPlan(it) {
   return null;
 }
 
-module.exports = { steamOwned, epicIsGame, epicItem, gogOwned, notInstalled, installPlan, norm };
+/** GetSharedLibraryApps (famille Steam) → éléments marqués family */
+function steamFamily(json, ownedIds = new Set()) {
+  const apps = json?.response?.apps;
+  if (!Array.isArray(apps)) return [];
+  return apps.filter((a) => a && a.appid && a.name && !a.exclude_reason && !ownedIds.has(String(a.appid)))
+    .map((a) => ({ store: 'steam', family: true, id: String(a.appid), name: String(a.name), art: steamArt(a.appid), alt: `https://cdn.cloudflare.steamstatic.com/steam/apps/${Number(a.appid)}/header.jpg`, sec: 0 }));
+}
+
+module.exports = { steamFamily, steamOwned, epicIsGame, epicItem, gogOwned, notInstalled, installPlan, norm };
