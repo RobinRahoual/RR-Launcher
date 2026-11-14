@@ -2,3 +2,6 @@
 /* Éléments « rouges » (quitter le vocal, micro coupé, arrêter le stream) : restent rouges même sélectionnés */
 .ig-item.danger.is-focus, .ig-item.danger:focus-visible, .ig-item.danger.is-focus .ico, .ig-item.danger:focus-visible .ico,
 .menu-item.danger.is-focus, .menu-item.danger:focus-visible, .menu-item.danger.is-focus .ico, .menu-item.danger:focus-visible .ico { color: var(--err-fg); }
+
+/* Navigation manette : l'élément focalisé garde de l'air autour de lui quand le panneau défile */
+#settings [data-nav], #menu [data-nav], #details [data-nav], #addDialog [data-nav], #addHub [data-nav], #scan [data-nav], #prompt [data-nav] { scroll-margin-block: 72px; }

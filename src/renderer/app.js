@@ -1303,12 +1303,48 @@ function setFocus(el) {
   el.focus({ preventScroll: false });
   if (S.device !== 'mouse') el.classList.add('is-focus');
   el.scrollIntoView({ block: 'nearest' });
+  if (S.mode !== 'main' && !el.matches('[data-rc-open]')) { // premier / dernier élément d'un panneau : on montre l'en-tête / le pied
+    const sc = scrollerOf(el);
+    if (sc) { const inSc = navables().filter((n) => sc.contains(n)); if (el === inSc[0]) sc.scrollTop = 0; else if (el === inSc.at(-1)) sc.scrollTop = sc.scrollHeight; }
+  }
   if (S.mode === 'details') renderHints(); // BOXOPEN : libellé de A selon le bouton focalisé
 }
 function focusFirst() {
   const list = navables();
   const pref = list.find((el) => el.matches('[data-default]')) || list.find((el) => el.matches('.primary, [aria-selected="true"]')) || list[0];
   setFocus(S.mode === 'add' && !$('#addStep2').hidden ? $('#addConfirm') : pref);
+}
+// ---------------------------------------------------------------- Défilement à la manette (panneaux)
+const isScrollable = (p) => { const o = getComputedStyle(p).overflowY; return (o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight + 4; };
+function scrollerOf(el) {
+  for (let p = el && el.parentElement; p && p !== document.body; p = p.parentElement) if (isScrollable(p)) return p;
+  return null;
+}
+function overlayScroller() {
+  const a = document.activeElement;
+  const s = a && a !== document.body ? scrollerOf(a) : null;
+  if (s) return s;
+  const root = $(OVERLAYS[S.mode]);
+  return root ? [root, ...$$('*', root)].find((x) => x.offsetParent !== null && isScrollable(x)) || null : null;
+}
+// Stick droit : défile le panneau (courbe progressive : doux au début, rapide à fond)
+function padScroll(ry, dtMs) {
+  const sc = overlayScroller();
+  if (!sc) return;
+  const k = (Math.abs(ry) - 0.2) / 0.8;
+  sc.scrollTop += Math.sign(ry) * k * k * dtMs * 1.6 + Math.sign(ry) * k * dtMs * 0.3;
+}
+// LT / RT : une page vers le haut / le bas, et le focus suit sur le premier élément visible
+function padPage(step) {
+  const sc = overlayScroller();
+  if (!sc) return false;
+  const before = sc.scrollTop;
+  sc.scrollTop += step * sc.clientHeight * 0.85;
+  const box = sc.getBoundingClientRect();
+  const vis = navables().filter((el) => sc.contains(el) && el.getBoundingClientRect().top >= box.top - 2 && el.getBoundingClientRect().bottom <= box.bottom + 2);
+  const target = step > 0 ? vis[0] : vis.at(-1);
+  if (target) { setFocus(target); sfx('move'); }
+  return sc.scrollTop !== before || !!target;
 }
 function spatial(dir) {
   for (const f of RR.navHooks) { try { if (f(dir)) return; } catch (err) { console.error('RR.navHook', err); } }
@@ -1326,8 +1362,13 @@ function spatial(dir) {
     const dx = x - cx, dy = y - cy;
     const ok = { left: dx < -4 && Math.abs(dy) < r0.height * 1.2 + 20, right: dx > 4 && Math.abs(dy) < r0.height * 1.2 + 20, up: dy < -4, down: dy > 4 }[dir];
     if (!ok) continue;
-    const d = dir === 'left' || dir === 'right' ? Math.abs(dx) + Math.abs(dy) * 3 : Math.abs(dy) + Math.abs(dx) * 0.6;
+    const overlap = Math.max(0, Math.min(r.right, r0.right) - Math.max(r.left, r0.left)); // colonne commune : on reste dans la colonne
+    const d = dir === 'left' || dir === 'right' ? Math.abs(dx) + Math.abs(dy) * 3 : Math.abs(dy) + Math.abs(dx) * (overlap > 0 ? 0.2 : 1.2);
     if (d < bestD) { bestD = d; best = el; }
+  }
+  if (!best && (dir === 'up' || dir === 'down') && S.mode !== 'main') { // plus rien dans cette direction : on défile d'abord pour lire la suite
+    const sc = scrollerOf(cur);
+    if (sc && (dir === 'down' ? sc.scrollTop + sc.clientHeight < sc.scrollHeight - 4 : sc.scrollTop > 4)) { sc.scrollTop += (dir === 'down' ? 1 : -1) * sc.clientHeight * 0.6; return; }
   }
   if (!best && (dir === 'down' || dir === 'right')) best = list[(list.indexOf(cur) + 1) % list.length];
   if (!best && (dir === 'up' || dir === 'left')) best = list[(list.indexOf(cur) - 1 + list.length) % list.length];
@@ -2196,7 +2237,7 @@ function glyph(btn) {
     // LOOK : boutons Menu / Vue / croix en glyphes ronds (réf. ES-DE « ⊜ MENU », Switch « ⊕ Options »)
     const roundIco = { menu: ICON.menu, view: ICON.view, lr: ICON.lr, ud: ICON.ud }[btn];
     if (roundIco) return `<span class="glyph round g-ico">${roundIco}</span>`;
-    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB' }[btn];
+    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB', rs: ps ? 'R3' : 'RS', lt: ps ? 'L2' : 'LT', rt: ps ? 'R2' : 'RT' }[btn] || btn;
     return `<span class="glyph pill">${pill}</span>`;
   }
   const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', pgud: 'PgUp/PgDn', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
@@ -2222,6 +2263,7 @@ function renderHints() {
     if (S.mode === 'settings') h(S.device === 'pad' ? ['lb', 'rb'] : ['tab'], 'Sections', 'setNext');
     const onPlay = S.mode === 'details' && document.activeElement?.matches?.('.d-play'); // BOXOPEN : A = Jouer sur la page du jeu
     if (S.mode === 'details' && !onPlay) h(['y'], 'Jouer', 'play');
+    if (S.device === 'pad' && S.mode !== 'recomp' && S.mode !== 'menu' && overlayScroller()) h(['rs'], 'Défiler', null);
     h(['ud'], 'Se déplacer', null);
     h(['a'], onPlay ? 'Jouer' : S.mode === 'scan' && !$('#scanResults').hidden ? 'Cocher / valider' : 'Valider', null);
   }
@@ -2379,7 +2421,7 @@ const NAV_BITS = [[0x1000, 0], [0x2000, 1], [0x4000, 2], [0x8000, 3], [0x0100, 4
 const padKind = (id) => (/054c|dualsense|dualshock|wireless controller|playstation/i.test(id) ? 'ps' : 'xbox');
 function padSnapshot(useApi = document.hasFocus()) {
   const b = new Array(17).fill(false);
-  let ax = 0, ay = 0, any = false, kind = null;
+  let ax = 0, ay = 0, ry = 0, any = false, kind = null;
   const pads = useApi ? [...(navigator.getGamepads?.() || [])].filter((g) => g && g.connected) : [];
   const std = pads.filter((g) => g.mapping === 'standard');
   const native = NATIVE.mask && performance.now() - NATIVE.at < 1200 ? NATIVE.mask : 0;
@@ -2391,9 +2433,10 @@ function padSnapshot(useApi = document.hasFocus()) {
     const x = gp.axes[0] || 0, y = gp.axes[1] || 0;
     if (Math.abs(x) > Math.abs(ax)) ax = x;
     if (Math.abs(y) > Math.abs(ay)) ay = y;
+    const r = gp.axes[3] || 0; if (Math.abs(r) > Math.abs(ry)) ry = r; // stick droit : défilement
   }
   if (native) { any = true; for (const [bit, i] of NAV_BITS) if (native & bit) b[i] = true; }
-  return { b, ax, ay, any, kind };
+  return { b, ax, ay, ry, any, kind };
 }
 window.padSnapshot = padSnapshot;
 function pollPad(t) {
@@ -2405,6 +2448,8 @@ function pollPad(t) {
   const ax = snap.ax, ay = snap.ay;
   const dir = b[14] || ax < -0.55 ? 'left' : b[15] || ax > 0.55 ? 'right' : b[12] || ay < -0.55 ? 'up' : b[13] || ay > 0.55 ? 'down' : null;
   const pressed = (i) => b[i] && !pad.prev[i];
+  if (Math.abs(snap.ry) > 0.2 && S.mode !== 'main' && !LD.active && BO.kind !== 'open' && BO.kind !== 'cancel') { setDevice('pad'); padScroll(snap.ry, Math.min(64, t - (pad.t || t))); }
+  pad.t = t;
   if (b.some(Boolean) || dir) setDevice('pad');
   if (dir) {
     if (pad.axisDir !== dir) { pad.axisDir = dir; pad.next = t + REPEAT_DELAY; onPadDir(dir, false); }
@@ -2473,6 +2518,7 @@ function onPadBtn(btn) {
   else if (btn === 'menu') action('menu');
   else if (btn === 'y' && S.mode === 'details') play();
   else if (S.mode === 'settings' && (btn === 'lb' || btn === 'rb')) cycleSettingsPage(btn === 'lb' ? -1 : 1);
+  else if ((btn === 'lt' || btn === 'rt') && !document.activeElement?.matches?.('[data-rc-open]')) padPage(btn === 'lt' ? -1 : 1);
 }
 addEventListener('gamepadconnected', () => { setDevice('pad'); }); // la notification est affichée par features/polish.js
 
