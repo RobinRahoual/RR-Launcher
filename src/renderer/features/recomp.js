@@ -102,12 +102,23 @@
     if (x.soon) return '<span class="rc-tag soon">À venir</span>';
     return '';
   }
-  function boxHtml(x) {
-    const cls = [x.soon && 'is-soon', !x.installable && !x.soon && !x.installed && 'is-off'].filter(Boolean).join(' ');
-    return `<button class="rc-box ${cls}" data-rc-open="${esc(x.id)}" data-nav style="--r:${ratio(x)};--pc:${pc(x)}" aria-label="${esc(`${x.name} — ${x.game}${x.installed ? ', installé' : x.soon ? ', à venir' : ''}`)}">
-      <span class="rc-front">${boxFace(x)}</span><span class="rc-side"></span>${badge(x)}
+  // Plusieurs projets pour le même jeu (ex. Ocarina of Time : Ship of Harkinian, recomp…) : une seule boîte
+  const gameKey = (x) => `${x.platform || `o:${x.origin}`}|${norm(x.game || x.name).replace(/[^a-z0-9]/g, '')}`;
+  function collapse(list) {
+    const by = new Map();
+    for (const x of list) { const k = gameKey(x); if (!by.has(k)) by.set(k, []); by.get(k).push(x); }
+    return [...by.values()];
+  }
+  const siblings = (x) => ST.items.filter((y) => gameKey(y) === gameKey(x));
+  function boxHtml(all) {
+    const x = all[0], n = all.length;
+    const cls = [all.every((y) => y.soon) && 'is-soon', all.every((y) => !y.installable && !y.soon && !y.installed) && 'is-off'].filter(Boolean).join(' ');
+    const shown = all.find((y) => ST.busy === y.id || y.update) || all.find((y) => y.installed) || x;
+    return `<button class="rc-box ${cls}" data-rc-open="${esc(x.id)}" data-rc-ids="${esc(all.map((y) => y.id).join('|'))}" data-nav style="--r:${ratio(x)};--pc:${pc(x)}" aria-label="${esc(`${x.game}${n > 1 ? `, ${n} versions` : ` — ${x.name}`}${all.some((y) => y.installed) ? ', installé' : x.soon ? ', à venir' : ''}`)}">
+      <span class="rc-front">${boxFace(x)}</span><span class="rc-side"></span>${badge(shown)}${n > 1 ? `<span class="rc-count">${n} versions</span>` : ''}
     </button>`;
   }
+  const slotOf = (id) => $$('[data-rc-ids]', panel).find((el) => el.dataset.rcIds.split('|').includes(id));
 
   // ---------------------------------------------------------------- Étagères par console
   const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -138,10 +149,11 @@
       const boxW = SHELF_H * (r >= 1 ? 0.72 : 1) * r + 7;
       const per = Math.max(1, Math.floor((roomW + GAP) / (boxW + GAP)));
       const rows = [];
-      for (let i = 0; i < g.list.length; i += per) rows.push(g.list.slice(i, i + per));
+      const boxes = collapse(g.list);
+      for (let i = 0; i < boxes.length; i += per) rows.push(boxes.slice(i, i + per));
       return `<section id="${gid(g.key)}" aria-label="${esc(g.name)}">${rows.map((row, i) => `<div class="rc-shelf" style="--pc:${g.color}">
         <div class="rc-boxes">${row.map(boxHtml).join('')}</div>
-        <div class="rc-plank">${i === 0 ? `<span class="rc-plaque">${esc(g.name)}<i>${g.list.length}</i></span>` : ''}</div>
+        <div class="rc-plank">${i === 0 ? `<span class="rc-plaque">${esc(g.name)}<i>${boxes.length}</i></span>` : ''}</div>
       </div>`).join('')}</section>`;
     }).join('');
     return `<div class="rc-room">${shelves || `<p class="dim rc-empty">${ST.q ? 'Aucun jeu ne correspond.' : ST.filter === 'mine' ? 'Aucune recomp installée pour l’instant.' : 'Rien ici pour l’instant.'}</p>`}</div>`;
@@ -156,20 +168,22 @@
       </div>
       <div class="rc-filters">
         <span role="radiogroup" aria-label="Afficher" class="rc-fgroup">${[['all', 'Tout'], ['win', 'Installables'], ['mine', 'Installés']].map(([v, l]) => `<button class="ew-opt" role="radio" aria-checked="${ST.filter === v}" data-rc-filter="${v}" data-nav>${l}</button>`).join('')}</span>
-        <span class="rc-jumps" aria-label="Aller à une console">${all.map((g) => `<button class="rc-jump" data-rc-jump="${gid(g.key)}" style="--pc:${g.color}" data-nav>${esc(g.name)}<i>${g.list.length}</i></button>`).join('')}</span>
+        <span class="rc-jumps" aria-label="Aller à une console">${all.map((g) => `<button class="rc-jump" data-rc-jump="${gid(g.key)}" style="--pc:${g.color}" data-nav>${esc(g.name)}<i>${collapse(g.list).length}</i></button>`).join('')}</span>
       </div>
       ${roomHtml()}
       <div class="rc-caption" aria-live="polite"><span id="rcCap">${ST.items.length} jeux · catalogue ${esc(ST.source || '')}${ST.at ? ` du ${new Date(ST.at).toLocaleDateString('fr-FR')}` : ''}</span></div>
       <div class="ew-foot"><button class="btn" data-rc-refresh data-nav>Actualiser le catalogue</button><button class="btn" data-rc-close data-nav>Fermer</button></div>`;
   }
-  function caption(id) {
+  function caption(id, ids) {
     const x = item(id), c = $('#rcCap', panel);
     if (!c || !x) return;
+    const all = (ids || '').split('|').map(item).filter(Boolean);
+    if (all.length > 1) { c.innerHTML = `<b>${esc(x.game)}</b> <span class="dim">· ${all.length} versions : ${all.map((y) => esc(y.name)).join(', ')}</span>`; return; }
     const st = x.installed ? `installé (${x.installed.version || '?'})` : x.soon ? 'à venir' : !x.installable ? (x.repo && !x.windows ? 'pas de version Windows' : 'page du projet') : 'installable';
     c.innerHTML = `<b>${esc(x.name)}</b> · ${esc(x.game)} <span class="dim">· ${esc(x.originName || '')} · ${esc(st)}</span>`;
   }
   ov.addEventListener('focusin', (e) => {
-    const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen);
+    const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen, b.dataset.rcIds);
     const j = e.target.closest?.('[data-rc-jump]'); if (j) j.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // manette / clavier
   });
   // Barre des consoles : la molette fait défiler horizontalement
@@ -179,7 +193,7 @@
     e.preventDefault();
     bar.scrollLeft += Math.abs(e.deltaY) > Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
   }, { passive: false });
-  ov.addEventListener('mouseover', (e) => { const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen); });
+  ov.addEventListener('mouseover', (e) => { const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen, b.dataset.rcIds); });
   let qt;
   ov.addEventListener('input', (e) => {
     if (!e.target.matches('[data-rc-q]')) return;
@@ -212,6 +226,34 @@
     const m = boMediaHTML({ id: x.id, platform: x.platform || 'pc', color: pc(x) }, ref);
     const label = x.cover ? `url('${x.cover.replace(/'/g, '%27')}') center / cover no-repeat, linear-gradient(150deg, ${pc(x)}, #0b0b16)` : `linear-gradient(150deg, ${pc(x)}, #0b0b16)`;
     return { ...m, html: m.html.replace(/--label:[^"]*"/, `--label:${label.replace(/"/g, '&quot;')}"`) };
+  }
+  // Fiche : les autres projets pour le même jeu, pour passer de l'un à l'autre sans reposer la boîte
+  function versionsHtml(x) {
+    const all = siblings(x);
+    if (all.length < 2) return '';
+    return `<div class="rc-versions" role="radiogroup" aria-label="Versions de ${esc(x.game)}">${all.map((y) => `<button class="ew-opt" role="radio" aria-checked="${y.id === x.id}" data-rc-switch="${esc(y.id)}" data-nav>${esc(y.name)}${y.installed ? ` <small>${ICO.ok}installé</small>` : y.soon ? ' <small>à venir</small>' : ''}</button>`).join('')}</div>`;
+  }
+  // Choix de la version quand une boîte regroupe plusieurs projets
+  function chooseVersion(ids, slot) {
+    const all = ids.map(item).filter(Boolean);
+    sfx('confirm');
+    const st = (y) => y.installed ? `Installé · ${y.installed.version || ''}` : y.soon ? 'À venir' : !y.installable ? 'Page du projet' : 'Installable';
+    openPrompt({
+      title: all[0].game,
+      body: `<p class="dim">${all.length} projets font tourner ce jeu sur PC. Lequel veux-tu ?</p>
+        <div class="rc-pick">${all.map((y, k) => `<button class="rc-pick-it" data-rc-pick="${esc(y.id)}" data-nav ${k === 0 ? 'data-default' : ''}>
+          <b>${esc(y.name)}</b><span class="dim">${esc(y.kind || 'Recomp')}${y.author ? ` · ${esc(y.author)}` : ''}</span>
+          <span class="rc-pick-st ${y.installed ? 'ok' : ''}">${y.installed ? ICO.ok : ''}${esc(st(y))}</span>
+          ${y.desc ? `<small class="dim">${esc(y.desc.length > 140 ? y.desc.slice(0, 137) + '…' : y.desc)}</small>` : ''}</button>`).join('')}</div>`,
+      actions: [{ label: 'Annuler', onClick: () => closeOverlay() }],
+    });
+    $('#pBody').onclick = (e) => {
+      const b = e.target.closest('[data-rc-pick]');
+      if (!b) return;
+      $('#pBody').onclick = null;
+      closeOverlay(true);
+      takeFromShelf(b.dataset.rcPick, slot);
+    };
   }
   function detailHtml(x) {
     const r = x.mine;
@@ -252,6 +294,7 @@
         <div class="rc-info">
           <div class="d-head rc-dhead"><div class="d-media" data-media="${m.type}">${m.html}</div>
             <div><h2 id="rcTitle">${esc(x.name)}</h2><p class="rc-orig">${esc(x.game)}${x.genre ? ` <span class="dim">· ${esc(x.genre)}</span>` : ''}</p></div></div>
+          ${versionsHtml(x)}
           ${x.desc ? `<p class="dim rc-about">${esc(x.desc)}</p>` : ''}
           ${x.archived ? '<p class="rc-warn">Projet arrêté par ses auteurs : plus de mises à jour.</p>' : ''}
           <ol class="rc-steps">
@@ -366,11 +409,11 @@
     const held = $('[data-rc-held]', panel);
     ST.view = 'shelves';
     sfx('back');
-    if (reduced() || !held) { render(); const c = $(`[data-rc-open="${CSS.escape(id)}"]`, panel); if (c) { c.scrollIntoView({ block: 'nearest' }); setFocus(c); } return; }
+    if (reduced() || !held) { render(); const c = slotOf(id); if (c) { c.scrollIntoView({ block: 'nearest' }); setFocus(c); } return; }
     ST.anim = true;
     const { f, r } = flyer(held);
     render();
-    const slot = $(`[data-rc-open="${CSS.escape(id)}"]`, panel);
+    const slot = slotOf(id);
     if (slot) {
       slot.scrollIntoView({ block: 'nearest' });
       slot.classList.add('is-gone');
@@ -385,7 +428,7 @@
       } catch {}
       slot.classList.remove('is-gone');
       setFocus(slot);
-      caption(id);
+      caption(slot.dataset.rcOpen, slot.dataset.rcIds);
     }
     f.remove();
     ST.anim = false;
@@ -554,7 +597,15 @@
       if (s) { s.scrollIntoView({ block: 'start', behavior: reduced() ? 'auto' : 'smooth' }); const f = $('[data-rc-open]', s); if (f) setTimeout(() => setFocus(f), reduced() ? 0 : 350); }
       return;
     }
-    if ((b = t('[data-rc-open]'))) return takeFromShelf(b.dataset.rcOpen, b);
+    if ((b = t('[data-rc-open]'))) { const ids = (b.dataset.rcIds || b.dataset.rcOpen).split('|'); return ids.length > 1 ? chooseVersion(ids, b) : takeFromShelf(ids[0], b); }
+    if ((b = t('[data-rc-switch]'))) {
+      if (b.dataset.rcSwitch === ST.cur) return;
+      sfx('toggle');
+      ST.cur = b.dataset.rcSwitch; ST.full = item(ST.cur); render();
+      const full = await rr.x('x:recomp:get', ST.cur).catch(() => null);
+      if (full && full.id === ST.cur) { ST.full = full; render(); }
+      return;
+    }
     if (t('[data-rc-back]')) return putBack();
     if ((b = t('[data-rc-con]'))) return selectConsole(b.dataset.rcCon, b);
     if ((b = t('[data-rc-eopt]'))) { const [pid, k] = b.dataset.rcEopt.split(':'); ST.emuChoice[pid] = +k; sfx('toggle'); return render(); }

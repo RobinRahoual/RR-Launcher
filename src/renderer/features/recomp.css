@@ -163,3 +163,17 @@
 @media (prefers-reduced-motion: reduce) { .rc-con-3d, .rc-con-3d.big { animation: none !important; } }
 /* Badge « Recomp PC » sous le titre d'un jeu installé depuis Recomps */
 .badge.recomp { background: var(--accent); color: #fff; border-color: transparent; }
+
+/* Un jeu, plusieurs projets : une seule boîte, choix de la version */
+.rc-count { position: absolute; top: 6px; right: 12px; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,.72); color: #fff; box-shadow: 0 2px 6px rgba(0,0,0,.35); z-index: 1; pointer-events: none; }
+.rc-pick { display: grid; gap: 8px; margin-top: 12px; max-height: 52vh; overflow: auto; padding: 2px; }
+.rc-pick-it { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line, rgba(255,255,255,.1)); background: var(--surface-1, rgba(255,255,255,.04)); color: inherit; font: inherit; cursor: pointer; }
+.rc-pick-it:hover, .rc-pick-it:focus-visible, .rc-pick-it.is-focus { border-color: var(--accent, #4f8cff); background: var(--surface-2, rgba(255,255,255,.08)); outline: none; }
+.rc-pick-it b { font-size: 15px; }
+.rc-pick-it > .dim { grid-column: 1; font-size: 12px; }
+.rc-pick-it small { grid-column: 1 / -1; margin-top: 4px; line-height: 1.35; }
+.rc-pick-st { grid-row: 1 / 3; grid-column: 2; align-self: center; display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: rgba(255,255,255,.07); white-space: nowrap; }
+.rc-pick-st.ok { color: var(--accent-text, #7fb0ff); }
+.rc-pick-st .ico { width: 12px; height: 12px; }
+.rc-versions { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.rc-versions small .ico { width: 11px; height: 11px; vertical-align: -1px; }
