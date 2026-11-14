@@ -28,14 +28,14 @@
   async function reg(id) {
     const r = await rr.x('x:stream:register', id).catch((e) => ({ ok: false, error: e.message }));
     if (r.ok) { toast(`« ${r.name} » ${r.added ? 'ajouté' : 'mis à jour'} — redémarre Sunshine pour l’afficher`, 'success'); refresh(); return; }
-    toast(r.error, 'error');
+    toast(r.error, true);
     if (r.manual) { const m = $('#stManual'); m.hidden = false; m.innerHTML = `Dans Sunshine (Applications → Ajouter) : nom <code>${esc(r.manual.name)}</code>, commande <code>${esc(r.manual.cmd)}</code>, dossier <code>${esc(r.manual.dir)}</code>.`; }
   }
   box.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-st]'); if (!b) return;
     const k = b.dataset.st;
     if (k === 'install') rr.x('x:stream:install');
-    else if (k === 'start') { const r = await rr.x('x:stream:start'); if (r.ok === false) toast(r.error, 'error'); else { rr.x('x:stream:openUi'); st = r; draw(); } }
+    else if (k === 'start') { b.disabled = true; toast('Démarrage de Sunshine…', 'progress'); const r = await rr.x('x:stream:start'); b.disabled = false; if (r.ok === false) toast(r.error, true); else { rr.x('x:stream:openUi'); st = r; draw(); } }
     else if (k === 'reg') reg(null);
     else if (k === 'regGame') reg($('#stGame').value);
     else if (k === 'moon') { const r = await rr.x('x:stream:moonlight', {}); if (r.ok === false) toast(r.error, 'error'); }

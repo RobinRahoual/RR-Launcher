@@ -8,9 +8,11 @@
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const net = require('net');
 const { spawn } = require('child_process');
 
-const SUNSHINE_UI = 'https://localhost:47990';
+const SUNSHINE_PORT = 47990;
+const SUNSHINE_UI = `https://localhost:${SUNSHINE_PORT}`;
 const SUNSHINE_RELEASES = 'https://github.com/LizardByte/Sunshine/releases/latest';
 const MOONLIGHT_SITE = 'https://moonlight-stream.org/';
 
@@ -73,6 +75,19 @@ function removeApp(json, name) {
   const apps = (json?.apps || []).filter((a) => a?.name !== name);
   return { json: { ...json, apps }, removed: apps.length !== (json?.apps || []).length };
 }
+// Port ouvert sur cette machine (IPv4 ou IPv6) ? Sunshine met plusieurs secondes à ouvrir son interface web.
+function portOpen(port, timeout = 800) {
+  const one = (host) => new Promise((res) => {
+    const s = net.connect({ port, host });
+    const done = (v) => { s.destroy(); res(v); };
+    s.setTimeout(timeout, () => done(false)); s.once('connect', () => done(true)); s.once('error', () => done(false));
+  });
+  return one('127.0.0.1').then((v) => v || one('::1'));
+}
+async function waitPort(port, { tries = 30, every = 1000, check = portOpen, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+  for (let i = 0; i < tries; i++) { if (await check(port)) return true; await sleep(every); }
+  return false;
+}
 const moonlightArgs = (host, app) => ['stream', host, app || 'Desktop'];
 
 function init(ctx) {
@@ -103,15 +118,18 @@ function init(ctx) {
   ipcMain.handle('x:stream:install', () => { shell.openExternal(SUNSHINE_RELEASES); return true; });
   ipcMain.handle('x:stream:installMoonlight', () => { shell.openExternal(MOONLIGHT_SITE); return true; });
   ipcMain.handle('x:stream:openUi', () => { shell.openExternal(SUNSHINE_UI); return true; });
+  // Démarre Sunshine si besoin puis attend que son interface web (port 47990) réponde ; ne renvoie ok qu'à ce moment-là
   ipcMain.handle('x:stream:start', async () => {
     const sun = find(sunshineCandidates());
     if (!sun) return { ok: false, error: 'Sunshine n’est pas installé' };
-    if (!isRunning(sun)) {
-      try { const c = spawn(sun, [], { cwd: path.win32.dirname(sun), detached: true, stdio: 'ignore', windowsHide: true }); c.unref(); log('stream : Sunshine démarré'); }
-      catch (e) { return { ok: false, error: `Démarrage impossible : ${e.message}` }; }
-      await new Promise((r) => setTimeout(r, 1500));
+    if (!(await portOpen(SUNSHINE_PORT))) {
+      if (!isRunning(sun)) {
+        try { const c = spawn(sun, [], { cwd: path.win32.dirname(sun), detached: true, stdio: 'ignore', windowsHide: true }); c.unref(); log('stream : Sunshine démarré'); }
+        catch (e) { return { ok: false, error: `Démarrage impossible : ${e.message}` }; }
+      }
+      if (!(await waitPort(SUNSHINE_PORT, { tries: 30 }))) return { ok: false, error: 'Sunshine ne répond pas sur le port 47990 (démarrage trop long ou bloqué par le pare-feu). Vérifie l’icône Sunshine près de l’horloge.' };
     }
-    return status();
+    return { ...status(), ready: true };
   });
   // Déclare le launcher (ou un jeu) dans Sunshine. Sans droit d'écriture (Program Files) : renvoie la commande à saisir à la main.
   ipcMain.handle('x:stream:register', (_e, gameId) => {
@@ -151,4 +169,4 @@ function init(ctx) {
   });
 }
 
-module.exports = { init, launchArg, sunshineCandidates, moonlightCandidates, localAddresses, appEntry, addApp, removeApp, moonlightArgs, SUNSHINE_UI };
+module.exports = { init, portOpen, waitPort, launchArg, sunshineCandidates, moonlightCandidates, localAddresses, appEntry, addApp, removeApp, moonlightArgs, SUNSHINE_UI };

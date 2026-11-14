@@ -21,3 +21,13 @@ test('appEntry / addApp / removeApp', () => {
   r = S.removeApp(r.json, e.name); assert.ok(r.removed); assert.strictEqual(r.json.apps.length, 0);
 });
 test('moonlightArgs', () => assert.deepStrictEqual(S.moonlightArgs('10.0.0.2'), ['stream', '10.0.0.2', 'Desktop']));
+test('waitPort attend l’ouverture du port', async () => {
+  const net = require('net');
+  const srv = net.createServer(); await new Promise((r) => srv.listen(0, '127.0.0.1', r));
+  const port = srv.address().port;
+  assert.strictEqual(await S.portOpen(port), true);
+  let n = 0;
+  assert.strictEqual(await S.waitPort(1, { tries: 5, every: 0, sleep: async () => {}, check: async () => ++n >= 3 }), true);
+  assert.strictEqual(await S.waitPort(1, { tries: 3, every: 0, sleep: async () => {}, check: async () => false }), false);
+  srv.close();
+});
