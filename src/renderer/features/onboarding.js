@@ -17,12 +17,13 @@
 
   const set = (o) => rr.setSettings(o);
   const val = (k) => S.lib?.settings?.[k] || '';
-  let step = 0, channels = [];
+  let step = 0, channels = [], list = null, recap = null;
 
   const STEPS = [
     { id: 'hello', title: 'Bienvenue dans RR Launcher',
       html: () => `<p>Quelques minutes pour tout connecter : <b>Epic Games</b>, les <b>visuels</b> (SteamGridDB, TheGamesDB), <b>Discord</b> et le <b>streaming</b> vers un autre écran.</p>
         <p class="dim">Chaque étape est facultative : passe celles qui ne t'intéressent pas. Tu pourras tout refaire plus tard dans Réglages, ou relancer cet assistant depuis le menu.</p>
+        ${recap ? `<ul class="ob-list">${recap.map((r) => `<li>${r.ok ? '✓' : '○'} ${esc(r.label)}</li>`).join('')}</ul>${recap.some((r) => !r.ok) ? '<div class="ob-row"><button class="btn primary" id="obMissing" data-nav>Configurer seulement ce qui manque</button></div>' : ''}` : ''}
         <p class="dim">Pour coller une clé ou un identifiant à la manette, utilise le clavier de Windows (Win + Ctrl + O) ou le copier-coller depuis ton navigateur.</p>` },
     { id: 'stores', title: 'Steam, Epic Games, GOG',
       html: () => `<ul class="ob-list">
@@ -68,10 +69,10 @@
   ];
 
   function render() {
-    const s = STEPS[step], last = step === STEPS.length - 1, first = step === 0;
+    const s = list[step], last = step === list.length - 1, first = step === 0;
     panel.innerHTML = `
-      <div class="ob-head"><span class="ob-ico">${ICO}</span><div><h2 id="obTitle">${esc(s.title)}</h2><span class="dim">Étape ${step + 1} sur ${STEPS.length}</span></div></div>
-      <div class="ob-dots" aria-hidden="true">${STEPS.map((_, i) => `<i class="${i === step ? 'on' : i < step ? 'done' : ''}"></i>`).join('')}</div>
+      <div class="ob-head"><span class="ob-ico">${ICO}</span><div><h2 id="obTitle">${esc(s.title)}</h2><span class="dim">Étape ${step + 1} sur ${list.length}</span></div></div>
+      <div class="ob-dots" aria-hidden="true">${list.map((_, i) => `<i class="${i === step ? 'on' : i < step ? 'done' : ''}"></i>`).join('')}</div>
       <div class="ob-body">${s.html()}</div>
       <div class="ew-foot ob-foot">
         ${first ? '<button class="btn" id="obSkipAll" data-nav>Tout passer</button>' : '<button class="btn" id="obBack" data-nav>Précédent</button>'}
@@ -82,7 +83,7 @@
     bind(s.id);
     setTimeout(() => { const d = $('#obNext', panel); if (d) setFocus(d); }, 20);
   }
-  const go = (n) => { step = Math.max(0, Math.min(STEPS.length - 1, n)); render(); const b = $('.ob-body', panel); if (b) b.scrollTop = 0; };
+  const go = (n) => { step = Math.max(0, Math.min(list.length - 1, n)); render(); const b = $('.ob-body', panel); if (b) b.scrollTop = 0; };
   const finish = (importNow) => { set({ onboardingDone: true }); closeOverlay(true); if (importNow) setTimeout(() => action('scanLaunchers'), 150); };
 
   async function bind(id) {
@@ -136,14 +137,26 @@
     } else if (id === 'import') {
       on('#obImport', 'click', () => finish(true));
     }
-    on('#obNext', 'click', () => (step === STEPS.length - 1 ? finish(false) : go(step + 1)));
+    on('#obMissing', 'click', () => { list = [STEPS[0], ...STEPS.filter((x) => recap?.find((r) => r.id === x.id && !r.ok))]; go(1); });
+    on('#obNext', 'click', () => (step === list.length - 1 ? finish(false) : go(step + 1)));
     on('#obSkip', 'click', () => go(step + 1));
     on('#obBack', 'click', () => go(step - 1));
     on('#obSkipAll', 'click', () => { finish(false); toast('Assistant ignoré : tu le retrouves dans le menu (Assistant de démarrage)', 'info'); });
   }
 
-  function open() { step = 0; render(); openOverlay('onboarding'); }
-  RR.actions.onboarding = () => { closeAll(); open(); };
+  async function status() {
+    const st = S.lib?.settings || {};
+    const [pt, sm] = await Promise.all([rr.x('x:playtime:status').catch(() => null), rr.x('x:stream:status').catch(() => null)]);
+    return [
+      { id: 'stores', label: 'Compte Epic Games', ok: !!pt?.epic?.connected },
+      { id: 'art', label: 'Clés de visuels (SteamGridDB / TheGamesDB)', ok: !!(st.sgdbKey || st.tgdbKey) },
+      { id: 'discord', label: 'Discord (application + salon vocal)', ok: !!(st.discordClientId && st.discordClientSecret && st.discordVoiceChannel?.id) },
+      { id: 'stream', label: 'Streaming (Sunshine + identifiants)', ok: !!(sm?.sunshine?.installed && sm?.login) },
+      { id: 'import', label: 'Jeux importés', ok: (S.lib?.games || []).length > 0 },
+    ];
+  }
+  function open(withRecap) { step = 0; list = STEPS; render(); openOverlay('onboarding'); if (withRecap) status().then((r) => { recap = r; if (step === 0) render(); }); else recap = null; }
+  RR.actions.onboarding = () => { closeAll(); recap = null; open(true); };
 
   // Entrée du menu principal
   const settingsItem = $('#menu .panel [data-action="settings"]');
