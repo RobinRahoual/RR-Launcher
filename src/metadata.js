@@ -752,5 +752,6 @@ async function upgradeHero(game, dir, settings, platformTgdb) {
 // Clé SteamGridDB partagée (lue dans la base Firebase des amis, jamais écrite sur disque) : sert quand l'utilisateur n'a pas la sienne
 let SHARED = {};
 const setShared = (o) => { SHARED = { ...SHARED, ...(o || {}) }; };
+const getShared = () => SHARED;
 const sgdbKeyOf = (s) => (s && s.sgdbKey) || SHARED.sgdb || '';
-module.exports = { setShared, sgdbKeyOf, libretroMatch, englishTitle, tgdbBoxart, steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };
+module.exports = { getShared, setShared, sgdbKeyOf, libretroMatch, englishTitle, tgdbBoxart, steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };

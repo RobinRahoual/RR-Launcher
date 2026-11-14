@@ -136,7 +136,7 @@ function init(ctx) {
 
   async function update() {
     clearTimeout(retry);
-    const id = String(S().discordClientId || '').trim();
+    const id = String(S().discordClientId || require('../metadata').getShared().discordId || '').trim();
     if (!S().discordRpc || !/^\d{15,22}$/.test(id)) { if (rpc.ready) rpc.setActivity(null); return; }
     const runId = [...running.keys()].pop();
     const g = runId ? findGame(runId) : null;
@@ -183,7 +183,7 @@ function init(ctx) {
   });
   ipcMain.handle('x:discord:streamState', () => ({ streaming }));
   ipcMain.handle('x:discord:test', async () => {
-    const id = String(S().discordClientId || '').trim();
+    const id = String(S().discordClientId || require('../metadata').getShared().discordId || '').trim();
     if (!/^\d{15,22}$/.test(id)) return { ok: false, error: "ID d'application invalide" };
     const ok = await rpc.connect(id);
     if (!ok) return { ok: false, error: 'Discord est-il ouvert ? (application de bureau)' };

@@ -40,7 +40,10 @@
           <ol class="ob-ol"><li>Demande une clé sur ${link('https://forums.thegamesdb.net/viewforum.php?f=10', 'le forum de TheGamesDB')} (la réponse peut prendre quelques jours : tu peux revenir plus tard).</li><li>Colle-la ici :</li></ol>
           <input id="obTgdb" type="password" placeholder="Clé API TheGamesDB" value="${esc(val('tgdbKey'))}" autocomplete="off" spellcheck="false" data-nav /></div>` },
     { id: 'discord', title: 'Discord : présence, vocal à la manette',
-      html: () => `<p class="dim">Facultatif. Affiche ton jeu sur ton profil et permet de rejoindre un salon vocal, couper le micro ou lancer un stream sans quitter le jeu. Il faut ta propre application Discord (gratuite, 2 minutes). Garde l'application Discord de bureau ouverte.</p>
+      html: () => window.RRShared?.discord ? `<p>L'application Discord de RR Launcher est déjà fournie : rien à créer. Garde Discord ouvert, clique ci-dessous puis <b>Autoriser</b>.</p>
+        <p class="dim">Si Discord refuse l'autorisation, demande à Robin de t'ajouter comme testeur de l'application.</p>
+        <div class="ob-row"><button class="btn primary" id="obDcConnect" data-nav>Connecter le vocal</button><span class="dim" id="obDcState"></span></div>
+        <div class="ob-row"><select id="obDcSel" data-nav><option value="">— charge tes salons —</option></select><button class="btn" id="obDcLoad" data-nav>Charger mes salons</button></div>` : `<p class="dim">Facultatif. Affiche ton jeu sur ton profil et permet de rejoindre un salon vocal, couper le micro ou lancer un stream sans quitter le jeu. Il faut ta propre application Discord (gratuite, 2 minutes). Garde l'application Discord de bureau ouverte.</p>
         <ol class="ob-ol">
           <li>Ouvre ${link('https://discord.com/developers/applications', 'discord.com/developers/applications')} → <b>New Application</b> → nomme-la « RR Launcher ».</li>
           <li>Sur la page <b>General Information</b>, copie l'<b>Application ID</b> et colle-le ici :
@@ -105,7 +108,7 @@
     } else if (id === 'discord') {
       on('#obDcId', 'change', () => set({ discordClientId: $('#obDcId', panel).value.trim() }));
       on('#obDcSecret', 'change', () => set({ discordClientSecret: $('#obDcSecret', panel).value.trim() }));
-      const flush = async () => { await set({ discordClientId: $('#obDcId', panel).value.trim(), discordClientSecret: $('#obDcSecret', panel).value.trim() }); };
+      const flush = async () => { if ($('#obDcId', panel)) await set({ discordClientId: $('#obDcId', panel).value.trim(), discordClientSecret: $('#obDcSecret', panel).value.trim() }); };
       const info = (m, ok) => { const t = $('#obDcState', panel); if (t) { t.textContent = m; t.classList.toggle('ob-ok', !!ok); } };
       on('#obDcConnect', 'click', async (e) => {
         await flush(); e.target.disabled = true; info('Autorise l’application dans la fenêtre Discord…');

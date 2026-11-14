@@ -184,7 +184,7 @@ function init(ctx) {
   const { ipcMain, store, hub, commit, log } = ctx;
   const S = () => store.data.settings;
   if (S().discordVoicePad === undefined) S().discordVoicePad = true;
-  const cfg = () => ({ clientId: String(S().discordClientId || '').trim(), clientSecret: String(S().discordClientSecret || '').trim() });
+  const cfg = () => { const sh = require('../metadata').getShared(); return { clientId: String(S().discordClientId || sh.discordId || '').trim(), clientSecret: String(S().discordClientSecret || sh.discordSecret || '').trim() }; };
   const tokens = { get: () => store.data.discordVoice || null, set: (t) => { if (t) store.data.discordVoice = t; else delete store.data.discordVoice; commit(); } };
   // Lance Discord (application de bureau) s'il est fermé
   function launchDiscord() {

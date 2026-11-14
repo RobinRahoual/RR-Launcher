@@ -26,7 +26,7 @@
   let vs = { inVoice: null, muted: null }; // état réel lu dans Discord à l'ouverture du menu
   function igUpdate() {
     const s = S.lib?.settings || {};
-    const ready = !!s.discordClientId && !!s.discordClientSecret;
+    const ready = !!((s.discordClientId && s.discordClientSecret) || RRShared.discord);
     const pad = S.device === 'pad' && s.discordVoicePad !== false, ps = S.padType === 'ps';
     for (const k of ['dc-voice', 'dc-mute']) { const b = $(`[data-ig="${k}"]`); if (b) b.hidden = !ready; }
     const lv = $('[data-ig="dc-voice"] .ig-label'), lm = $('[data-ig="dc-mute"] .ig-label');
@@ -48,7 +48,7 @@
   }
   function menuUpdate() {
     const s = S.lib?.settings || {};
-    const ready = !!s.discordClientId && !!s.discordClientSecret;
+    const ready = !!((s.discordClientId && s.discordClientSecret) || RRShared.discord);
     const a = $('[data-action="dcVoice"]'), m = $('[data-action="dcMute"]');
     if (!a) return;
     a.hidden = !ready; m.hidden = !ready || !vs.inVoice; // le micro n'a de sens qu'une fois dans un salon

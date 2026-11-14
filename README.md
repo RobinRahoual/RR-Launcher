@@ -188,3 +188,5 @@ Stack : Electron, HTML/CSS 3D (sans framework), Gamepad API + lecture native des
 ## Clé SteamGridDB partagée (optionnel)
 
 Ajoute dans la base Firebase des amis un nœud `config/sgdbKey` (chaîne) et colle les règles de `firebase/database.rules.json` : les launchers sans clé personnelle l'utilisent automatiquement (lecture seule, jamais écrite sur disque ni dans le dépôt). La clé perso des Réglages reste prioritaire.
+
+Même principe pour Discord : `config/discordClientId` et `config/discordClientSecret` (Firebase) évitent à chacun de créer son application. La Rich Presence marche pour tout le monde ; pour le vocal, Discord n'autorise que les testeurs de l'application (Developer Portal → App Testers, 50 max).

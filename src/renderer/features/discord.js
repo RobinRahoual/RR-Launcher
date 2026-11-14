@@ -1,6 +1,11 @@
 // Module DISCORD — Rich Presence + stream Discord (Go Live) depuis le menu en jeu / Guide + Y.
 // Côté main : src/features/discord.js (canaux x:discord:*).
 (() => {
+  // Configuration Discord partagée (lue dans la base Firebase) : pas besoin de créer sa propre application
+  window.RRShared ||= { discord: false };
+  const sharedUpd = (r) => { window.RRShared.discord = !!r?.discord; if (typeof menuUpdate === 'function') menuUpdate(); };
+  rr.onX('x:shared:update', sharedUpd);
+  rr.x('x:shared:get').then(sharedUpd).catch(() => {});
   const ICO_LIVE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="11" r="2.2"/><path d="M8.2 7.8a5 5 0 0 0 0 6.4M15.8 7.8a5 5 0 0 1 0 6.4"/></svg>';
 
   // ---- Menu en jeu : « Streamer sur Discord »
@@ -24,7 +29,7 @@
     const b = $('[data-action="dcStream"]');
     if (!b) return;
     const s = S.lib?.settings || {};
-    b.hidden = s.discordStream === false || !s.discordClientId;
+    b.hidden = s.discordStream === false || !(s.discordClientId || RRShared.discord);
     $('.mi-label', b).textContent = streaming ? 'Arrêter le stream' : 'Lancer le stream';
     b.classList.toggle('danger', streaming);
   }

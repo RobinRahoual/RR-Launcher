@@ -315,12 +315,17 @@ function init(ctx) {
   ipcMain.handle('x:friends:rrRemove', rrCall((_e, uid) => rr.remove(String(uid))));
   ipcMain.handle('x:friends:rrStats', async (_e, uid) => { try { return { ok: true, stats: await rr.stats(String(uid)) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('x:friends:rrRestart', async () => { await rr.start(); await pollRR(); return rr.info(); });
-  // Clé SteamGridDB partagée (base Firebase : config/sgdbKey, lecture réservée aux comptes connectés)
+  // Clés partagées (base Firebase : config/sgdbKey, config/discordClientId, config/discordClientSecret ; lecture réservée aux comptes connectés)
+  const sharedView = () => { const sh = metadata.getShared(); return { discord: !!(sh.discordId && sh.discordSecret), sgdb: !!sh.sgdb }; };
   setTimeout(async () => {
-    if (demo || S().sgdbKey) return;
-    const k = await rr.readPublic('config/sgdbKey');
-    if (typeof k === 'string' && /^[\w-]{16,64}$/.test(k)) { metadata.setShared({ sgdb: k }); say('clé SteamGridDB partagée chargée'); }
+    if (demo) return;
+    const [k, did, dsec] = await Promise.all(['sgdbKey', 'discordClientId', 'discordClientSecret'].map((n) => rr.readPublic(`config/${n}`)));
+    const o = {};
+    if (!S().sgdbKey && typeof k === 'string' && /^[\w-]{16,64}$/.test(k)) o.sgdb = k;
+    if (typeof did === 'string' && /^\d{15,22}$/.test(did) && typeof dsec === 'string' && /^[\w-]{20,64}$/.test(dsec)) { o.discordId = did; o.discordSecret = dsec; }
+    if (Object.keys(o).length) { metadata.setShared(o); say(`configuration partagée chargée (${Object.keys(o).join(', ')})`); send('x:shared:update', sharedView()); }
   }, 6000);
+  ipcMain.handle('x:shared:get', () => sharedView());
   // Fusion manuelle de deux profils (même personne) / séparation
   ipcMain.handle('x:friends:link', (_e, a, b) => {
     a = String(a); b = String(b);
