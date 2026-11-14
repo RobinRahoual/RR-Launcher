@@ -132,3 +132,21 @@ ul.fr-st-list { list-style: none; padding-left: 0; }
 .fr-st-list small { opacity: .6; font-size: .75rem; }
 .fr-av.has-glyph .fr-av-in { background: none; }
 .fr-av.has-glyph .fr-av-in svg { width: 100%; height: 100%; display: block; }
+
+/* Notification « X lance Y » */
+.toast.fr-toast { display: flex; align-items: center; gap: 14px; padding: 10px 10px 10px 12px; min-width: 300px; max-width: min(460px, 80vw); }
+.fr-toast .fr-av { width: 48px; height: 48px; flex: 0 0 auto; }
+.fr-toast .fr-dot { display: none; }
+.frt-txt { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.frt-who { font-size: 12px; font-weight: 500; opacity: .75; }
+.frt-who b { font-weight: 700; opacity: 1; }
+.frt-game { font-size: 16px; font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.frt-plat { display: inline-flex; align-items: center; gap: 5px; justify-self: start; margin-top: 3px; height: 18px; }
+.frt-plat img { height: 16px; max-width: 110px; object-fit: contain; filter: brightness(0) invert(1); opacity: .9; }
+:root[data-theme="light"] .frt-plat img { filter: brightness(0); }
+.frt-plat.chip { padding: 0 8px; border-radius: 99px; font-size: 10px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; background: var(--pc, rgba(255,255,255,.12)); color: #fff; }
+.frt-plat.chip.pc { background: rgba(var(--fg-rgb,255,255,255),.12); color: inherit; }
+.frt-plat.chip svg { width: 12px; height: 12px; }
+.frt-art { flex: 0 0 auto; width: 46px; height: 62px; border-radius: 6px; overflow: hidden; background: rgba(0,0,0,.3); box-shadow: 0 2px 8px rgba(0,0,0,.35); }
+.frt-art.wide { width: 92px; height: 43px; }
+.frt-art img { width: 100%; height: 100%; object-fit: cover; display: block; }

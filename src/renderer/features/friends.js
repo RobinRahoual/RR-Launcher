@@ -369,9 +369,53 @@
   });
 
   // ------------------------------------------------------------ Notifications « X lance Y »
+  // Carte : photo de l'ami, « lance » + jeu, logo de la console ; à droite la jaquette du jeu
+  // (ta bibliothèque, sinon la jaquette Steam par l'appid).
+  function gameArt(it) {
+    const g = it.gameId && gameById(it.gameId);
+    const f = g?.media?.cover || g?.media?.header || g?.media?.hero;
+    if (g && f) return `<img src="${esc(mediaUrl(g, f))}" alt="" />`;
+    if (it.appid) {
+      const base = `https://cdn.cloudflare.steamstatic.com/steam/apps/${Number(it.appid)}`;
+      return `<img src="${base}/library_600x900.jpg" data-alt="${base}/header.jpg" alt="" referrerpolicy="no-referrer" />`;
+    }
+    return '';
+  }
+  function platTag(it) {
+    const id = it.platform;
+    if (!id && it.source !== 'steam') return '';
+    if (id && id !== 'pc') {
+      loadPlatLogo?.(id);
+      const logo = S.platLogo?.[id];
+      if (logo) return `<span class="frt-plat"><img src="rr://media/_platforms/${encodeURIComponent(logo)}" alt="${esc(plat(id).name)}" /></span>`;
+      return `<span class="frt-plat chip" style="--pc:${esc(plat(id).color || '#666')}">${esc(plat(id).short || plat(id).name)}</span>`;
+    }
+    return `<span class="frt-plat chip pc">${it.source === 'steam' ? `${SV(I.steam)}Steam` : it.recomp ? 'Recomp PC' : 'PC'}</span>`;
+  }
+  function friendToast(it) {
+    const box = $('#toast');
+    if (!box) return toast(`${it.name} ${it.streaming ? 'streame' : 'lance'} ${it.game}`, 'info');
+    const t = document.createElement('div');
+    t.className = 'toast fr-toast';
+    t.setAttribute('role', 'status');
+    const art = gameArt(it);
+    t.innerHTML = `${avatar({ name: it.name, avatar: it.avatar, av: it.av, status: 'online' })}
+      <span class="frt-txt"><span class="frt-who"><b>${esc(it.name)}</b> ${it.streaming ? 'streame' : 'lance'}</span><strong class="frt-game">${esc(it.game)}</strong>${platTag(it)}</span>
+      ${art ? `<span class="frt-art">${art}</span>` : ''}`;
+    // jaquette Steam absente → bannière ; rien du tout → on retire la vignette (pas de gestionnaire inline : CSP)
+    $$('img', t).forEach((im) => im.addEventListener('error', () => {
+      if (im.dataset.alt) { im.src = im.dataset.alt; delete im.dataset.alt; im.parentNode.classList.add('wide'); }
+      else if (im.closest('.frt-art, .frt-plat')) im.closest('.frt-art, .frt-plat').remove(); else im.remove();
+    }));
+    box.appendChild(t);
+    requestAnimationFrame(() => t.classList.add('show'));
+    const live = $$('.toast:not(.out)', box);
+    if (live.length > 3) dismissToast(live[0]);
+    t._timer = setTimeout(() => dismissToast(t), 6500);
+  }
   rr.onX('x:friends:started', (p) => {
     if (S.lib.settings?.friendsNotify === false || document.visibilityState !== 'visible' || S.mode === 'ingame') return;
-    for (const it of p.items.slice(0, 3)) toast(`${it.name} ${it.streaming ? 'streame' : 'lance'} ${it.game}`, 'info');
+    for (const it of p.items.slice(0, 3)) friendToast(it);
     if (p.items.length > 3 || p.more) toast(`… et ${p.items.length - 3 + (p.more || 0)} autres amis en jeu`, 'info');
   });
   rr.onX('x:friends:update', apply);

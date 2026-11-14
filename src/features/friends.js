@@ -196,12 +196,19 @@ function init(ctx) {
   function notify(list) {
     const now = Date.now();
     const items = [];
+    let idx = null;
     for (const f of model.started(prevPlaying, list)) {
       if (!primed[f.source]) continue;
       const k = `${f.key}|${f.activity.name}`;
       if (now - (notified.get(k) || 0) < NOTIFY_AGAIN_MS) continue;
       notified.set(k, now);
-      items.push({ key: f.key, name: f.name, game: f.activity.name, source: f.source, avatar: f.avatar, streaming: f.activity.kind === 'streaming' });
+      idx ||= model.libraryIndex(store.data.games || []);
+      const own = model.matchGame(f.activity, idx);
+      items.push({
+        key: f.key, name: f.name, game: f.activity.name, source: f.source, avatar: f.avatar, av: f.av || null, streaming: f.activity.kind === 'streaming',
+        gameId: own?.id || null, appid: f.activity.appid || own?.appid || 0, recomp: /Recomp PC/.test(f.activity.details || ''),
+        platform: f.activity.platform || own?.platform || (f.source === 'steam' || f.activity.appid ? 'pc' : ''),
+      });
     }
     prevPlaying = model.playingMap(list);
     if (items.length && on('friendsNotify')) send('x:friends:started', { items: items.slice(0, 5), more: Math.max(0, items.length - 5) });

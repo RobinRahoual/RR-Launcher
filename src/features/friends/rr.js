@@ -36,7 +36,7 @@ function toItem(uid, user, pres, { now = Date.now(), pending = false } = {}) {
     avatar: typeof user?.img === 'string' && user.img.startsWith('data:image/') ? user.img : null,
     av: user?.av && typeof user.av.g === 'string' ? { g: user.av.g, c: /^#[0-9a-f]{3,8}$/i.test(user.av.c) ? user.av.c : '#3C91E6' } : null, code: user?.code || '',
     status: pending ? 'offline' : fresh ? 'online' : 'offline', pending,
-    activity: playing ? { kind: 'playing', name: pres.game.name, details: [pres.game.pname, pres.game.recomp ? 'Recomp PC' : ''].filter(Boolean).join(' · '), state: '', since: pres.since || null, url: '', appid: 0 } : null,
+    activity: playing ? { kind: 'playing', name: pres.game.name, details: [pres.game.pname, pres.game.recomp ? 'Recomp PC' : ''].filter(Boolean).join(' · '), state: '', since: pres.since || null, url: '', appid: 0, platform: typeof pres.game.platform === 'string' ? pres.game.platform.slice(0, 20) : '' } : null,
     lastSeen: pres?.at || null, mobile: false, custom: pending ? 'Demande envoyée, en attente' : '', handle: user?.code || '',
   };
 }
