@@ -154,6 +154,7 @@
   RR.actions.emuWizard = () => openWizard();
   RR.actions.emuWizardAll = () => { closeAll(); openWizard(null, { all: true }); }; // RECOMP : onglet « Émulateurs » de la boutique
   window.openEmuWizard = openWizard;
+  window.emuOptLabel = optLabel; // RECOMP : onglet Émulateurs (consoles en 3D)
 
   // Prompt « Aucun émulateur » (A sur un jeu sans émulateur) : installation automatique en premier choix
   wrap('askEmulator', (orig, pid, gameId) => {

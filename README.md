@@ -28,7 +28,9 @@ Les portages recompilés (.exe) peuvent être rangés sous leur console d'origin
 
 **Menu → Recomps** (touche `R`, ou la carte « Recomps » dans Ajouter des jeux) : **tout le catalogue de [RecompLauncher](https://recomplauncher.com)** (plus de 600 recomp, décompilations et portages PC : Zelda 64: Recompiled, Ship of Harkinian, Unleashed Recompiled, Skate 3 Recomp, OpenGOAL…), lu depuis son fichier public `pc-catalog.json`, gardé dans `%APPDATA%\RR Launcher\recomp-catalog.json` et relu toutes les 6 h (ou « Actualiser le catalogue »). Hors ligne : la dernière copie.
 
-**Ludothèque** : un meuble en bois, une section par console (plaque au nom de la console, raccourcis en haut), les boîtes debout **tranche vers soi** (boîtes en 3D au format de chaque console, titre sur la tranche, jaquette sur la face). Survoler / sélectionner une boîte la tire à moitié du rayon et la tourne pour montrer sa jaquette ; la choisir la **sort du rayon** : elle avance, pivote face à toi et glisse jusqu'à sa fiche où tu la tiens en main, pendant que le rayon s'efface. « Remettre sur le rayon » (B / Échap) fait le chemin inverse. Recherche, filtres Tout / Installables / Installés ; les projets à venir sont grisés, ceux sans version Windows ou sans release GitHub atténués (leur fiche renvoie à la page du projet).
+**Étagères** : une étagère par console (plaque au nom de la console, raccourcis en haut), jaquettes de face ; recherche, filtres Tout / Installables / Installés ; les projets à venir ou sans version Windows / release GitHub sont atténués (leur fiche renvoie à la page du projet). Choisir une boîte joue la même ouverture que la liste des jeux : la boîte s'ouvre, le disque ou la cartouche de la console d'origine sort en tournant, puis la fiche s'affiche (A saute l'animation, B l'annule). « Remettre sur le rayon » (B / Échap) y repose la jaquette.
+
+**Émulateurs** (onglet) : les consoles en 3D sur leur socle (photo de la console, inclinaison qui suit la souris) ; un clic pose la console en grand et propose d'installer l'émulateur conseillé (choix de l'émulateur, progression, BIOS à fournir), de choisir un exe existant ou de mettre à jour. « Vue en liste » ouvre l'assistant habituel.
 
 1. **Ta copie du jeu** : tu choisis ta ROM, ton image disque ou ton dossier, selon ce que demande la recomp (manifeste `recomplauncher.json` du projet). Les ROM N64 (`.z64`, `.v64`, `.n64`) et les disques GameCube sont vérifiés par leur en-tête (bon jeu, bonne région). Aucun jeu n'est jamais téléchargé.
 2. **Installer** : dernière release GitHub des auteurs (archive Windows choisie automatiquement, SHA-256 contrôlé quand GitHub le publie), extraite dans `%LOCALAPPDATA%\RR Launcher\recomps\<recomp>`. Le programme, les arguments (`{game}` = ta copie) et les variables d'environnement viennent du manifeste ; pour les portages qui lisent la ROM dans leur dossier (HarbourMasters, Perfect Dark), elle y est copiée au bon nom. Le jeu apparaît sous sa console d'origine.
@@ -36,7 +38,6 @@ Les portages recompilés (.exe) peuvent être rangés sous leur console d'origin
 
 Mises à jour (« Rechercher une mise à jour », les fichiers ajoutés dans le dossier sont conservés), désinstallation (dossier + entrée de la bibliothèque, ta copie d'origine n'est pas touchée). `src/features/recomp/recomps.json` complète le catalogue (vérification des ROM N64 / GameCube, descriptions en français) et sert de secours sans connexion.
 
-L'onglet **Émulateurs** ouvre l'assistant d'installation, avec **toutes les consoles** (plus besoin d'avoir déjà des ROMs).
 
 ## Ajouter un jeu
 
