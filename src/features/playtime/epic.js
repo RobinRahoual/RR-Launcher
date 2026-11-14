@@ -79,7 +79,7 @@ function createEpic({ store, fetchImpl, safe, log = () => {} }) {
     const seen = new Set();
     const recs = records.filter((x) => x.namespace && x.namespace !== 'ue' && x.catalogItemId && x.appName && !seen.has(x.appName) && seen.add(x.appName));
     const cache = (store.data.epicCatalog ||= {});
-    const todo = recs.filter((x) => !cache[x.catalogItemId]);
+    const todo = recs.filter((x) => !cache[x.catalogItemId]?.title);
     let k = 0;
     await Promise.all(Array.from({ length: 6 }, async () => {
       while (k < todo.length) {
@@ -89,11 +89,12 @@ function createEpic({ store, fetchImpl, safe, log = () => {} }) {
           if (!r.ok) continue;
           const j = await r.json();
           const c = j[x.catalogItemId];
-          cache[x.catalogItemId] = c ? { title: c.title, categories: (c.categories || []).map((y) => ({ path: y.path })), keyImages: (c.keyImages || []).map((y) => ({ type: y.type, url: y.url })), mainGameItem: c.mainGameItem ? { id: c.mainGameItem.id } : null } : { title: '' };
+          if (c && c.title) cache[x.catalogItemId] = { title: c.title, categories: (c.categories || []).map((y) => ({ path: y.path })), keyImages: (c.keyImages || []).map((y) => ({ type: y.type, url: y.url })), mainGameItem: c.mainGameItem ? { id: c.mainGameItem.id } : null };
         } catch { /* réessayé à la prochaine synchro */ }
       }
     }));
     store.save?.();
+    log(`epic bibliothèque : ${records.length} entrées, ${recs.length} jeux candidats, ${recs.filter((x) => cache[x.catalogItemId]?.title).length} avec fiche catalogue`);
     return recs.map((rec) => ({ rec, cat: cache[rec.catalogItemId] || null }));
   }
   return {

@@ -27,7 +27,9 @@ function init(ctx) {
     const e = ctx.epic;
     if (!e?.connected()) return { skipped: 'Connecte ton compte Epic dans Réglages (Temps de jeu)' };
     const lib = await e.library();
-    return { items: lib.map(({ rec, cat }) => core.epicItem(rec, cat)).filter(Boolean) };
+    const items = lib.map(({ rec, cat }) => core.epicItem(rec, cat)).filter(Boolean);
+    if (!items.length) throw new Error(`aucun jeu trouvé (${lib.length} entrées reçues, ${lib.filter((x) => x.cat).length} avec fiche)`);
+    return { items };
   }
   function gog() {
     const f = process.env.RR_GOG_DB || path.join(process.env.ProgramData || 'C:\\ProgramData', 'GOG.com', 'Galaxy', 'storage', 'galaxy-2.0.db');

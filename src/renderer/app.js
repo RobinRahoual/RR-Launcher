@@ -802,7 +802,7 @@ function frameGames(t, dt) {
     if (visible.size) { for (const el of visible) el.style.display = 'none'; visible = new Set(); }
     return;
   }
-  spring(S, S.sel, dt);
+  spring(S, S.sel + (S.addSel ? 1 : 0), dt);
   S.flipCur += (S.flip - S.flipCur) * Math.min(1, 0.13 * dt);
   const { H } = S.dims;
   const W = S.dims.Wref || H * 0.66;
@@ -859,7 +859,31 @@ function frameGames(t, dt) {
   }
   for (const el of visible) if (!now.has(el)) el.style.display = 'none';
   visible = now;
+  addTileFrame(S.items.length, anchor, top, base, f0, g0, g1, H, W);
   syncActFocus();
+}
+// Tuile « Ajouter des jeux » en fin de rangée (sélectionnable avec → après le dernier jeu)
+function addTileFrame(n, anchor, top, base, f0, g0, g1, H, W) {
+  let el = $('#addTile');
+  if (!el) {
+    el = document.createElement('button');
+    el.id = 'addTile'; el.className = 'add-tile'; el.type = 'button'; el.tabIndex = -1; el.hidden = true;
+    el.innerHTML = '<span class="add-plus"></span><strong>Ajouter des jeux</strong><span class="add-sub">Importer, scanner ou installer depuis tes bibliothèques</span>';
+    el.addEventListener('click', () => { if (S.mode === 'main') action('addHub'); });
+    $('#carousel').appendChild(el);
+  }
+  const show = S.view === 'games' && n > 0 && S.mode === 'main';
+  el.hidden = !show;
+  document.body.classList.toggle('add-sel', !!(S.addSel && show));
+  el.classList.toggle('is-selected', !!S.addSel);
+  if (!show) return;
+  const w = W * 1.05, h = H * 0.92;
+  el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (-w / 2) + 'px'; el.style.top = (-h / 2) + 'px';
+  const o = n - S.pos;
+  const extra = (n > f0 ? g0 : 0) + (n > f0 + 1 ? g1 : 0);
+  const x = anchor + cumAt(n) - base + extra + w / 2, y = top + H / 2;
+  el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
+  el.style.opacity = clamp(1 - Math.max(0, o - 3) * 0.3, 0, 1).toFixed(3);
 }
 
 // ---------------------------------------------------------------- Fond
@@ -1023,7 +1047,7 @@ function renderCapActions(g) {
 // Zone de focus de l'écran jeux : la rangée de boîtes ou les boutons sous les infos (↓ / ↑)
 const capBtns = () => $$('#capActions .cap-btn');
 function setZone(z, silent = false) {
-  if (z === 'actions' && (!S.items.length || S.view !== 'games')) return;
+  if (z === 'actions' && (!S.items.length || S.view !== 'games' || S.addSel)) return;
   if (S.zone === z) return;
   S.zone = z;
   if (z === 'actions') S.act = 0;
@@ -1103,6 +1127,7 @@ function cycleTab(d) {
 // ---------------------------------------------------------------- Navigation jeux
 function select(i, { spin = true } = {}) {
   if (!S.items.length) return;
+  S.addSel = false; // quitte la tuile d'ajout
   i = clamp(i, 0, S.items.length - 1);
   if (i === S.sel) return;
   if (spin && !reduceMotion) S.spin.set(i, 360);
@@ -1121,7 +1146,11 @@ function emitSelection() {
   lastSelEmit = g?.id || null;
   RR.emit('selection', g);
 }
-const move = (d) => select(S.sel + d, { spin: Math.abs(d) === 1 });
+const move = (d) => {
+  if (S.addSel) { if (d < 0) { S.addSel = false; sfx('move'); if (d < -1) select(S.sel + d + 1); } return; } // sur la tuile : ← revient au dernier jeu
+  if (S.view === 'games' && S.items.length && d > 0 && S.sel >= S.items.length - 1) { S.addSel = true; S.flip = 0; sfx('move'); return; }
+  select(S.sel + d, { spin: Math.abs(d) === 1 });
+};
 let slotClickT;
 function onSlotClick(id) {
   if (S.mode !== 'main' || S.view !== 'games') return;
@@ -1592,6 +1621,7 @@ function boClear() {
 // Point d'entrée : A / Entrée / clic / X / I / « Détails » dans l'écran jeux
 function openGame() {
   if (BO.busy || S.mode !== 'main' || S.view !== 'games') return;
+  if (S.addSel) return action('addHub');
   const g = S.items[S.sel];
   if (!g) return;
   const slot = slots.get(g.id);
@@ -2365,7 +2395,7 @@ addEventListener('keydown', (e) => {
     if (z) { e.preventDefault(); z(); return; }
   }
   const map = {
-    ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
+    ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 && !S.addSel ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
     PageDown: () => move(5), PageUp: () => move(-5), Enter: () => (S.items.length ? openGame() : setTab('all')), // BOXOPEN
     ArrowDown: () => setZone('actions'), ArrowUp: () => shellFocusTop(),
     i: openGame, I: openGame, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
@@ -2480,7 +2510,7 @@ function onPadDir(dir, repeat) {
     if (dir === 'left') moveAct(-1); else if (dir === 'right') moveAct(1); else if (dir === 'up') setZone('row');
     return;
   }
-  if (dir === 'left') { if (S.sel === 0) { if (!repeat) goHome(); } else move(-1); }
+  if (dir === 'left') { if (S.sel === 0 && !S.addSel) { if (!repeat) goHome(); } else move(-1); }
   else if (dir === 'right') move(1);
   else if (dir === 'down' && !repeat) setZone('actions');
   else if (dir === 'up' && !repeat) shellFocusTop();

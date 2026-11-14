@@ -720,3 +720,14 @@ body[data-view="games"] .disc { cursor: pointer; }
 .status { grid-column: 2; }
 .clock { white-space: nowrap; }
 .status-row { flex-wrap: nowrap; }
+
+/* Tuile « Ajouter des jeux » en fin de rangée */
+.add-tile { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px; box-sizing: border-box; text-align: center; color: inherit; font: inherit; background: rgba(255, 255, 255, .05); border: 2px dashed rgba(255, 255, 255, .28); border-radius: 16px; cursor: pointer; will-change: transform; }
+.add-tile[hidden] { display: none; }
+.add-tile strong { font-size: calc(var(--sys, 24px) * .62); }
+.add-tile .add-sub { font-size: calc(var(--sys, 24px) * .42); opacity: .7; line-height: 1.35; }
+.add-tile .add-plus { position: relative; width: 56px; height: 56px; border-radius: 50%; border: 2px solid currentColor; }
+.add-tile .add-plus::before, .add-tile .add-plus::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; background: currentColor; transform: translate(-50%, -50%); }
+.add-tile .add-plus::after { transform: translate(-50%, -50%) rotate(90deg); }
+.add-tile.is-selected { border-style: solid; border-color: var(--color-accent); background: rgba(255, 255, 255, .12); box-shadow: 0 0 0 4px rgba(255, 255, 255, .12), 0 20px 50px rgba(0, 0, 0, .45); transform-origin: center; }
+body.add-sel #caption, body.add-sel #capActions, body.add-sel .cap-actions { visibility: hidden; }

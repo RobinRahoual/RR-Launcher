@@ -14,8 +14,8 @@ function steamOwned(json) {
 function epicIsGame(cat) {
   if (!cat || !cat.title) return false;
   const paths = (cat.categories || []).map((c) => String(c.path || '').toLowerCase());
-  if (!paths.some((p) => p === 'games' || p === 'games/edition/base' || p.startsWith('games'))) return false;
-  if (paths.some((p) => p === 'addons' || p.startsWith('addons') || p === 'digitalextras' || p === 'editors' || p === 'applications')) return false;
+  // On écarte ce qui est clairement autre chose qu'un jeu ; une fiche sans catégorie reste acceptée
+  if (paths.some((p) => p === 'addons' || p.startsWith('addons') || p === 'digitalextras' || p === 'editors' || p === 'applications' || p.startsWith('applications') || p === 'assets' || p.startsWith('plugins'))) return false;
   if (cat.mainGameItem) return false;
   return true;
 }
