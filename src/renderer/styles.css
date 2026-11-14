@@ -721,13 +721,12 @@ body[data-view="games"] .disc { cursor: pointer; }
 .clock { white-space: nowrap; }
 .status-row { flex-wrap: nowrap; }
 
-/* Tuile « Ajouter des jeux » en fin de rangée */
-.add-tile { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 18px; box-sizing: border-box; text-align: center; color: inherit; font: inherit; background: rgba(255, 255, 255, .05); border: 2px dashed rgba(255, 255, 255, .28); border-radius: 16px; cursor: pointer; will-change: transform; }
+/* Tuile « Ajouter » en fin de rangée : même style que celle de l'accueil */
+.add-tile { position: absolute; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6%; box-sizing: border-box; padding: 0; color: #fff; font: inherit; border: 0; border-radius: max(4px, .32vw); background: linear-gradient(145deg, #2b1522, #121219); box-shadow: 0 .6vh 1.4vh rgba(0, 0, 0, .14); cursor: pointer; will-change: transform; transition: box-shadow 240ms ease-out; }
 .add-tile[hidden] { display: none; }
-.add-tile strong { font-size: calc(var(--sys, 24px) * .62); }
-.add-tile .add-sub { font-size: calc(var(--sys, 24px) * .42); opacity: .7; line-height: 1.35; }
-.add-tile .add-plus { position: relative; width: 56px; height: 56px; border-radius: 50%; border: 2px solid currentColor; }
-.add-tile .add-plus::before, .add-tile .add-plus::after { content: ''; position: absolute; left: 50%; top: 50%; width: 22px; height: 2px; background: currentColor; transform: translate(-50%, -50%); }
-.add-tile .add-plus::after { transform: translate(-50%, -50%) rotate(90deg); }
-.add-tile.is-selected { border-style: solid; border-color: var(--color-accent); background: rgba(255, 255, 255, .12); box-shadow: 0 0 0 4px rgba(255, 255, 255, .12), 0 20px 50px rgba(0, 0, 0, .45); transform-origin: center; }
+.add-tile b { font-family: var(--font-display); font-weight: 400; font-size: calc(var(--box-h, 300px) * .08); text-transform: uppercase; letter-spacing: .04em; }
+.add-tile .t-plus { width: 34%; aspect-ratio: 1; border-radius: 50%; display: grid; place-items: center; border: max(2px, .22vw) dashed rgba(255, 255, 255, .55); }
+.add-tile .t-plus svg { width: 52%; height: 52%; fill: none; stroke: var(--color-accent, #3C91E6); stroke-width: 2.6; stroke-linecap: round; }
+.add-tile.is-selected { box-shadow: 0 1.6vh 3.2vh rgba(0, 0, 0, .34), 0 .4vh .8vh rgba(0, 0, 0, .2); }
+.add-tile.is-selected::after { content: ''; position: absolute; inset: 0; border-radius: inherit; border: max(4px, .46vw) solid var(--color-accent, #3C91E6); }
 body.add-sel #caption, body.add-sel #capActions, body.add-sel .cap-actions { visibility: hidden; }

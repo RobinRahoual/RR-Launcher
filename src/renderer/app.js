@@ -868,7 +868,7 @@ function addTileFrame(n, anchor, top, base, f0, g0, g1, H, W) {
   if (!el) {
     el = document.createElement('button');
     el.id = 'addTile'; el.className = 'add-tile'; el.type = 'button'; el.tabIndex = -1; el.hidden = true;
-    el.innerHTML = '<span class="add-plus"></span><strong>Ajouter des jeux</strong><span class="add-sub">Importer, scanner ou installer depuis tes bibliothèques</span>';
+    el.setAttribute('aria-label', 'Ajouter des jeux'); el.innerHTML = '<span class="t-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><b>Ajouter</b>';
     el.addEventListener('click', () => { if (S.mode === 'main') action('addHub'); });
     $('#carousel').appendChild(el);
   }
@@ -877,12 +877,12 @@ function addTileFrame(n, anchor, top, base, f0, g0, g1, H, W) {
   document.body.classList.toggle('add-sel', !!(S.addSel && show));
   el.classList.toggle('is-selected', !!S.addSel);
   if (!show) return;
-  const w = W * 1.05, h = H * 0.92;
-  el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (-w / 2) + 'px'; el.style.top = (-h / 2) + 'px';
+  const w = H * 0.7, h = w;
+  el.style.setProperty('--box-h', h + 'px'); el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (-w / 2) + 'px'; el.style.top = (-h / 2) + 'px';
   const o = n - S.pos;
   const extra = (n > f0 ? g0 : 0) + (n > f0 + 1 ? g1 : 0);
-  const x = anchor + cumAt(n) - base + extra + w / 2, y = top + H / 2;
-  el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0)`;
+  const x = anchor + cumAt(n) - base + extra + w / 2 + (S.addSel ? w * 0.083 : 0), y = top + H / 2;
+  el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${S.addSel ? 1.166 : 1})`;
   el.style.opacity = clamp(1 - Math.max(0, o - 3) * 0.3, 0, 1).toFixed(3);
 }
 
