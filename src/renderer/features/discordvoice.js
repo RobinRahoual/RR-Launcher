@@ -40,7 +40,7 @@
   }
   // ---- Menu principal : « Rejoindre / Quitter le vocal » (+ micro une fois dedans)
   function menuMount() {
-    const panel = $('#menu .panel'), before = panel?.querySelector('[data-action="settings"]');
+    const panel = $('#menu .panel'), before = panel?.querySelector('[data-action="dcStream"]') || panel?.querySelector('[data-action="settings"]');
     if (!panel || panel.querySelector('[data-action="dcVoice"]')) return;
     const mk = (action, ico, label, meta) => { const b = document.createElement('button'); b.className = 'menu-item dc-menu'; b.dataset.action = action; b.dataset.nav = ''; b.innerHTML = `${ico}<span class="mi-label">${label}</span><span class="mi-meta" id="${meta}"></span>`; return b; };
     const a = mk('dcVoice', ICO_VOC, 'Rejoindre le vocal', 'dvMenuMeta'), m = mk('dcMute', ICO_MIC, 'Couper le micro', 'dvMenuMute');

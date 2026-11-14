@@ -11,7 +11,30 @@
     quit.insertAdjacentHTML('beforebegin', `<button class="ig-item dc-ig" data-ig="dc-stream" role="menuitem" data-nav>${ICO_LIVE}<span class="ig-label">Lancer le stream</span><span class="ig-meta" id="dcMeta">Go Live</span></button>`);
   }
   let streaming = false;
+  // ---- Menu principal : « Lancer / Arrêter le stream » (sous le vocal)
+  function menuMount() {
+    const panel = $('#menu .panel'), before = panel?.querySelector('[data-action="settings"]');
+    if (!panel || panel.querySelector('[data-action="dcStream"]')) return;
+    const b = document.createElement('button');
+    b.className = 'menu-item dc-menu'; b.dataset.action = 'dcStream'; b.dataset.nav = '';
+    b.innerHTML = `${ICO_LIVE}<span class="mi-label">Lancer le stream</span><span class="mi-meta" id="dcMenuStreamMeta">Go Live</span>`;
+    if (before) before.before(b); else panel.append(b);
+  }
+  function menuUpdate() {
+    const b = $('[data-action="dcStream"]');
+    if (!b) return;
+    const s = S.lib?.settings || {};
+    b.hidden = s.discordStream === false || !s.discordClientId;
+    $('.mi-label', b).textContent = streaming ? 'Arrêter le stream' : 'Lancer le stream';
+    b.classList.toggle('danger', streaming);
+  }
+  RR.actions.dcStream = async () => {
+    closeAll(true);
+    const r = await rr.x('x:discord:stream', { delay: 500 });
+    if (!r?.ok) toast(`Stream Discord : ${r?.error || 'échec'}`, true);
+  };
   function igUpdate() {
+    menuUpdate();
     const b = $('[data-ig="dc-stream"]');
     if (!b) return;
     const s = S.lib?.settings || {};
@@ -34,6 +57,8 @@
   }, true);
   rr.onX('x:discord:streamState', (r) => { streaming = !!r?.streaming; igUpdate(); });
   rr.x('x:discord:streamState').then((r) => { streaming = !!r?.streaming; igUpdate(); }).catch(() => {});
+  menuMount(); menuUpdate();
+  RR.on('mode', (m) => { if (m === 'menu') menuUpdate(); });
   rr.onX('x:discord:streamed', (r) => {
     if (document.visibilityState === 'visible' && r && !r.ok) toast(`Stream Discord : ${r.error}`, true);
   });
