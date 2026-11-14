@@ -276,6 +276,28 @@
     await rr.x('x:friends:hide', f.key, true);
     toast(`${f.name} masqué — Réglages pour réafficher`, 'success');
   }
+  // Fusion : lier ce profil à un autre ami (même personne sur une autre source) ou séparer
+  function linkFocused() {
+    const f = friendOf(document.activeElement?.closest?.('[data-key]')?.dataset.key);
+    const d = FR.data;
+    if (!f || !d) return;
+    if ((f.keys || []).length > 1) {
+      return openPrompt({
+        title: `Séparer « ${f.name} » ?`, icon: 'edit',
+        body: `<p class="dim">Ce profil regroupe ${f.sources.length} comptes (${esc(f.sources.map((x) => ({ rr: 'RR Launcher', discord: 'Discord', steam: 'Steam' }[x] || x)).join(', '))}). Ils redeviendront des amis distincts, sauf s’ils ont exactement le même pseudo.</p>`,
+        actions: [{ label: 'Annuler', focus: true, onClick: () => closeOverlay() }, { label: 'Séparer', primary: true, onClick: async () => { closeOverlay(); await rr.x('x:friends:unlink', f.keys); toast('Profils séparés', 'success'); } }],
+      });
+    }
+    const others = [...d.playing, ...d.online, ...d.offline].filter((x) => x.key !== f.key && !(x.keys || []).includes(f.key));
+    if (!others.length) return toast('Aucun autre ami à fusionner', 'info');
+    others.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    const src = { rr: 'RR Launcher', discord: 'Discord', steam: 'Steam' };
+    openPrompt({
+      title: `Fusionner « ${f.name} » avec…`, icon: 'edit',
+      body: `<p class="dim">Choisis le même ami sur une autre source (ex. son profil Steam). Il n’apparaîtra plus qu’une fois.</p><select id="frLinkSel" data-nav>${others.map((x) => `<option value="${esc(x.key)}">${esc(x.name)} · ${esc(src[x.source] || x.source)}</option>`).join('')}</select>`,
+      actions: [{ label: 'Annuler', focus: true, onClick: () => closeOverlay() }, { label: 'Fusionner', primary: true, onClick: async () => { const k = $('#frLinkSel')?.value; closeOverlay(); if (!k) return; await rr.x('x:friends:link', f.key, k); toast('Profils fusionnés', 'success'); } }],
+    });
+  }
   function openSettings() {
     action('settings');
     setTimeout(() => {
@@ -356,7 +378,7 @@
     };
     const f = friendOf(document.activeElement?.closest?.('[data-key]')?.dataset.key);
     add('y', 'R', 'Actualiser', () => refresh(true));
-    if (f) add('x', 'X', 'Masquer', hideFocused);
+    if (f) { add('x', 'X', 'Masquer', hideFocused); add('lb', 'L', (f.keys || []).length > 1 ? 'Séparer' : 'Fusionner', linkFocused); }
     const a = $$('#hintList .hint-label').pop();
     if (a && f) a.textContent = f.gameId ? 'Voir le jeu' : f.streaming && f.activity?.url ? 'Voir le stream' : 'Valider';
   };
@@ -366,6 +388,7 @@
     if (src !== 'pad' || S.mode !== 'friends') return;
     if (k === 'x') hideFocused();
     else if (k === 'y') refresh(true);
+    else if (k === 'lb') linkFocused();
   });
   addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || e.target.matches?.('input, select, textarea')) return;
@@ -373,6 +396,7 @@
     if (S.mode === 'friends') {
       if (k === 'x') { e.preventDefault(); hideFocused(); }
       else if (k === 'r') { e.preventDefault(); refresh(true); }
+      else if (k === 'l') { e.preventDefault(); linkFocused(); }
       else if (k === 'a') { e.preventDefault(); overlayBack(); }
       return;
     }

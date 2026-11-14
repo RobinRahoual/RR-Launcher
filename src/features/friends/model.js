@@ -36,12 +36,44 @@ const inGame = (f) => !!f.activity && ['playing', 'streaming', 'competing'].incl
 const STATUS_RANK = { online: 0, idle: 1, dnd: 2, offline: 3 };
 const byName = (a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
 
+const SRC_PRIO = { rr: 0, discord: 1, steam: 2 };
+const STATE_RANK = (f) => (inGame(f) ? 0 : f.status !== 'offline' ? 1 : 2);
+
+/**
+ * Fusionne les doublons d'une même personne (profil RR, Discord, Steam) : liens manuels (groupes de clés)
+ * + même pseudo d'une source à l'autre. Le nom/avatar viennent de RR > Discord > Steam, l'état du plus actif.
+ */
+function merge(list, links = []) {
+  const parent = new Map();
+  const find = (k) => { while (parent.get(k) !== k) { parent.set(k, parent.get(parent.get(k))); k = parent.get(k); } return k; };
+  const union = (a, b) => { if (!parent.has(a) || !parent.has(b)) return; parent.set(find(a), find(b)); };
+  for (const f of list) parent.set(f.key, f.key);
+  for (const grp of links) for (let i = 1; i < grp.length; i++) union(grp[0], grp[i]);
+  const byNick = new Map();
+  for (const f of list) {
+    const n = norm(f.name);
+    if (n.length < 3) continue;
+    const prev = byNick.get(n);
+    if (prev && prev.source !== f.source) union(prev.key, f.key); else if (!prev) byNick.set(n, f);
+  }
+  const groups = new Map();
+  for (const f of list) { const r = find(f.key); (groups.get(r) || groups.set(r, []).get(r)).push(f); }
+  const out = [];
+  for (const g of groups.values()) {
+    if (g.length === 1) { out.push(g[0]); continue; }
+    const named = [...g].sort((a, b) => (SRC_PRIO[a.source] ?? 9) - (SRC_PRIO[b.source] ?? 9))[0];
+    const active = [...g].sort((a, b) => STATE_RANK(a) - STATE_RANK(b) || (STATUS_RANK[a.status] - STATUS_RANK[b.status]) || ((b.lastSeen || 0) - (a.lastSeen || 0)))[0];
+    out.push({ ...active, key: named.key, name: named.name, avatar: named.avatar ?? active.avatar, av: named.av ?? active.av, keys: g.map((x) => x.key), sources: [...new Set(g.map((x) => x.source))] });
+  }
+  return out;
+}
+
 /** Ajoute gameId (jeu de ta bibliothèque) et range en sections. hidden : Set de clés masquées. */
 function build(list, games, { hidden = new Set(), offlineMax = 300 } = {}) {
   const idx = libraryIndex(games);
   const playing = [], online = [], offline = [];
   for (const f0 of list) {
-    if (hidden.has(f0.key)) continue;
+    if ((f0.keys || [f0.key]).some((k) => hidden.has(k))) continue;
     const g = matchGame(f0.activity, idx);
     const f = { ...f0, inGame: inGame(f0), streaming: f0.activity?.kind === 'streaming' || !!f0.activity?.streaming, gameId: g ? g.id : null };
     if (f.inGame) playing.push(f);
@@ -72,4 +104,4 @@ function playingMap(list) {
   return m;
 }
 
-module.exports = { norm, libraryIndex, matchGame, build, started, playingMap, inGame };
+module.exports = { merge, norm, libraryIndex, matchGame, build, started, playingMap, inGame };
