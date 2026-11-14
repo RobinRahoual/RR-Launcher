@@ -954,7 +954,7 @@ function updateBrand() {
   const t = $('#brandTitle');
   if (S.view === 'home') {
     t.className = 'brand-title is-home';
-    t.innerHTML = '<span class="brand-mark" role="img" aria-label="RR Launcher">RR</span>';
+    t.innerHTML = '<button class="brand-mark" data-action="home" data-nav data-tip="Accueil" aria-label="RR Launcher : retour à l’accueil">RR</button>';
     return;
   }
   const p = S.plat === 'all' ? null : plat(S.plat);
