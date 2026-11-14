@@ -9,9 +9,9 @@
   // FIXES : musique activée par défaut (demande de Robin) — ambiance générée douce, volume « Normal » (0,3),
   // jamais pendant une partie ni fenêtre masquée ; migration unique côté main (src/features/fixes.js, fixesMusicV1).
   const DEF = {
-    mediaVideos: true, mediaVideoDelay: '1.5', mediaVideoSound: false, mediaVideoVolume: '0.6',
+    mediaVideos: true, mediaVideoDelay: '1.5', mediaVideoSound: false, mediaVideoVolume: '0.3',
     mediaSsDelay: '5', mediaSsMode: 'slides',
-    mediaMusic: true, mediaMusicVolume: '0.3', mediaMusicSource: 'synth',
+    mediaMusic: true, mediaMusicVolume: '0.12', mediaMusicSource: 'synth',
   };
   const opt = (k) => (S.lib.settings?.[k] ?? DEF[k]);
   const num = (k) => Number(opt(k)) || 0;

@@ -2010,7 +2010,7 @@ $('#scanImport').addEventListener('click', async () => {
 // ---------------------------------------------------------------- Curseurs de volume (sons, vidéos, musique)
 // <label class="vol" data-vol="clé"><input type="range"> : 0–100 % ↔ 0–1 dans les réglages. Aperçu en direct,
 // enregistrement groupé ; flèches gauche / droite au clavier comme à la manette.
-const VOL_DEF = { volume: 0.7, mediaVideoVolume: 0.6, mediaMusicVolume: 0.3 };
+const VOL_DEF = { volume: 0.35, mediaVideoVolume: 0.3, mediaMusicVolume: 0.12 };
 function volSlider(k, label) {
   return `<label class="vol" data-vol="${k}"><input type="range" min="0" max="100" step="5" aria-label="${label}" data-nav /><output></output></label>`;
 }
@@ -2730,7 +2730,7 @@ function applyLib(state) {
   S.lib = state;
   applyTheme();
   S.P = Object.fromEntries(state.platforms.map((p) => [p.id, p]));
-  Sfx.set(state.settings.sounds, state.settings.volume ?? 0.7);
+  Sfx.set(state.settings.sounds, state.settings.volume ?? 0.35);
   refresh();
   if (S.mode === 'settings') renderSettings();
   RR.emit('library', state);
@@ -2978,7 +2978,7 @@ rr.onRunning(({ id, running }) => {
 function wakeQuiet(fn) { // navigation sans les sons intermédiaires : un seul son d'ouverture
   const s = S.lib.settings || {};
   Sfx.set(false);
-  try { fn(); } finally { Sfx.set(s.sounds, s.volume ?? 0.7); }
+  try { fn(); } finally { Sfx.set(s.sounds, s.volume ?? 0.35); }
 }
 // Rangée de jeux de la console du jeu quitté, sélection sur ce jeu
 function wakeShowGame(id, pid) {

@@ -67,10 +67,18 @@ function imageSize(file) {
 function init(ctx) {
   const { ipcMain, store, MEDIA, meta, log } = ctx;
   const s = store.data.settings;
+  // ---- Volumes par défaut trop forts (1.20.1) : une fois, on baisse les valeurs restées à l'ancien défaut
+  if (!s.volumeV2) {
+    if (s.volume === undefined || Number(s.volume) === 0.7) s.volume = 0.35;
+    if (s.mediaMusicVolume === undefined || String(s.mediaMusicVolume) === '0.3') s.mediaMusicVolume = '0.12';
+    if (s.mediaVideoVolume === undefined || String(s.mediaVideoVolume) === '0.6') s.mediaVideoVolume = '0.3';
+    s.volumeV2 = true;
+    store.save();
+  }
   // ---- Musique d'ambiance : activée par défaut (1.9) ; une seule fois pour les installations existantes
   if (!s.fixesMusicV1) {
     s.mediaMusic = true;
-    if (s.mediaMusicVolume === undefined) s.mediaMusicVolume = '0.3';
+    if (s.mediaMusicVolume === undefined) s.mediaMusicVolume = '0.12';
     s.fixesMusicV1 = true;
     store.save();
   }

@@ -3,14 +3,15 @@
 'use strict';
 
 const Sfx = (() => {
-  let ctx, master, wet, dry, verb, enabled = true, volume = 0.7;
+  let ctx, master, wet, dry, verb, enabled = true, volume = 0.35;
 
   function init() {
     if (ctx) return true;
     try {
       ctx = new AudioContext();
       master = ctx.createGain();
-      master.gain.value = volume;
+      master.gain.setValueAtTime(0, ctx.currentTime); // montée douce : jamais de claque dans les oreilles au premier son
+      master.gain.linearRampToValueAtTime(volume, ctx.currentTime + 1.2);
       master.connect(ctx.destination);
       dry = ctx.createGain(); dry.gain.value = 0.9; dry.connect(master);
       wet = ctx.createGain(); wet.gain.value = 0.35;
@@ -152,7 +153,7 @@ const Sfx = (() => {
     play,
     set(on, vol) {
       enabled = !!on;
-      if (typeof vol === 'number') { volume = vol; if (master) master.gain.value = vol; }
+      if (typeof vol === 'number') { volume = vol; if (master) { master.gain.cancelScheduledValues(ctx.currentTime); master.gain.setValueAtTime(vol, ctx.currentTime); } }
     },
   };
 })();

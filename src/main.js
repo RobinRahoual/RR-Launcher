@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS = {
   trackOutside: true, // PLAYTIME : compter les jeux lancés hors du launcher
   syncPlaytime: true, // PLAYTIME : reprendre les heures de Steam / GOG Galaxy / itch.io
   sounds: true,
-  volume: 0.7,
+  volume: 0.35,
   caseStyle: 'blue', // boîtes PC : red | black | blue | auto
   theme: 'light', // light | dark | system
   sort: 'recent',
