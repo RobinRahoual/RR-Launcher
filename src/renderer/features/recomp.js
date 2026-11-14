@@ -1,20 +1,25 @@
-// Module RECOMP — boutique : recomp et portages PC à installer en un clic (catalogue façon RecompLauncher),
-// avec la copie du jeu du joueur vérifiée puis placée au bon endroit. Onglet « Émulateurs » → assistant EMU.
-// Côté main : src/features/recomp.js (x:recomp:*). Accroches : OVERLAYS.recomp, entrée du menu, carte du hub d'ajout.
+// Module RECOMP — « Recomps » : catalogue de recomp et portages PC (façon RecompLauncher) présenté comme une
+// ludothèque : une étagère par console, les boîtes de face sur les rayons. Choisir un jeu le sort du rayon
+// (la boîte glisse jusqu'à la fiche) ; revenir l'y repose. La copie du jeu du joueur est vérifiée puis placée
+// au bon endroit. Onglet « Émulateurs » → assistant EMU.
+// Côté main : src/features/recomp.js (x:recomp:*). Accroches : OVERLAYS.recomp, overlayBack (window.recompBack),
+// entrée du menu, carte du hub d'ajout.
 (() => {
   const ICO = {
-    shop: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h16l-1 11H5z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg>',
+    shelf: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18M3 12h18M4 4v16M20 4v16"/><path d="M7 12V6h3v6M12 12V7l3-.5L16 12M7 20v-5h3v5M13 20v-6h3v6"/></svg>',
     ok: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="m5 12.5 4.5 4.5L19 7.5"/></svg>',
     warn: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8v5M12 16.5h.01"/><path d="M10.3 3.9 2.6 17.5A2 2 0 0 0 4.3 20.5h15.4a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
     back: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg>',
+    up: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M6 11l6-6 6 6"/></svg>',
   };
   const mo = (b) => (b / 1048576).toLocaleString('fr-FR', { maximumFractionDigits: 1, minimumFractionDigits: 1 });
   const PLACE = {
     copy: 'Le launcher copie ta ROM dans le dossier de la recomp : rien à faire au lancement.',
-    select: 'Au premier lancement, la recomp te demande ta ROM (« Select ROM ») : choisis le fichier indiqué ci-dessous, son chemin est copié pour toi.',
-    installer: 'Au premier lancement, l’assistant de la recomp te demande les fichiers de ton jeu : indique le dossier ci-dessous.',
+    select: 'Au premier lancement, la recomp te demande ta ROM (« Select ROM ») : choisis le fichier indiqué plus haut, son chemin est copié pour toi.',
+    installer: 'Au premier lancement, l’assistant de la recomp te demande les fichiers de ton jeu : indique le dossier choisi plus haut.',
   };
-  const ST = { items: [], root: '', view: 'grid', cur: null, prog: {}, busy: null, filter: 'all' };
+  const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const ST = { items: [], root: '', view: 'shelves', cur: null, prog: {}, busy: null, filter: 'all', anim: false };
 
   const ov = document.createElement('div');
   ov.className = 'overlay center'; ov.id = 'recompStore'; ov.hidden = true;
@@ -26,8 +31,9 @@
   const panel = $('.panel', ov);
 
   async function open(id = null) {
-    ST.view = id ? 'detail' : 'grid'; ST.cur = id;
-    panel.innerHTML = '<h2 id="rcTitle">Boutique</h2><p class="panel-lead"><span class="spinner tiny"></span> Chargement du catalogue…</p>';
+    ST.view = id ? 'detail' : 'shelves'; ST.cur = id;
+    panel.classList.remove('is-detail');
+    panel.innerHTML = '<h2 id="rcTitle">Recomps</h2><p class="panel-lead"><span class="spinner tiny"></span> Chargement du catalogue…</p>';
     openOverlay('recomp');
     await refresh();
   }
@@ -46,41 +52,82 @@
     const f = key ? $(`[${key}="${CSS.escape(val)}"]`, panel) : null;
     if (f) setFocus(f); else if (S.mode === 'recomp' && !ov.contains(document.activeElement)) focusFirst();
   }
-  function render() { keepFocus(() => { panel.innerHTML = ST.view === 'detail' && item(ST.cur) ? detailHtml(item(ST.cur)) : gridHtml(); }); }
+  function render() {
+    keepFocus(() => {
+      const x = ST.view === 'detail' && item(ST.cur);
+      panel.classList.toggle('is-detail', !!x);
+      panel.innerHTML = x ? detailHtml(x) : shelvesHtml();
+    });
+  }
 
+  // ---------------------------------------------------------------- Boîtes
+  const SHELF_H = 176, GAP = 18; // = --shelf-h et gap de .rc-boxes (recomp.css)
+  const ratio = (x) => Math.max(0.6, Math.min(1.45, plat(x.platform).case?.ratio || 0.7));
+  function boxFace(x, big = false) {
+    const p = plat(x.platform);
+    return x.cover
+      ? `<img src="${esc(x.cover)}" alt="" draggable="false" />`
+      : `<span class="rc-blank" style="--pc:${p.color}"><small>${esc(p.short || p.name)}</small><b>${esc(big ? x.name : x.game)}</b></span>`;
+  }
   function badge(x) {
-    if (ST.busy === x.id) return '<span class="rc-badge busy">Installation…</span>';
-    if (x.update) return '<span class="rc-badge up">Mise à jour</span>';
-    if (x.installed) return `<span class="rc-badge ok">${ICO.ok}Installé</span>`;
+    if (ST.busy === x.id) return '<span class="rc-tag busy">Installation…</span>';
+    if (x.update) return `<span class="rc-tag up">${ICO.up}Mise à jour</span>`;
+    if (x.installed) return `<span class="rc-tag ok">${ICO.ok}Installé</span>`;
     return '';
   }
-  function gridHtml() {
-    const plats = [...new Set(ST.items.map((x) => x.platform))];
-    const list = ST.items.filter((x) => ST.filter === 'all' || (ST.filter === 'mine' ? x.installed : x.platform === ST.filter));
+  function boxHtml(x) {
+    return `<button class="rc-box" data-rc-open="${esc(x.id)}" data-nav style="--r:${ratio(x)};--pc:${plat(x.platform).color}" aria-label="${esc(`${x.name} — ${x.game}${x.installed ? ', installé' : ''}`)}">
+      <span class="rc-front">${boxFace(x)}</span><span class="rc-side"></span>${badge(x)}
+    </button>`;
+  }
+
+  // ---------------------------------------------------------------- Ludothèque : une étagère par console
+  function shelvesHtml() {
+    const list = ST.items.filter((x) => ST.filter === 'all' || x.installed);
+    const order = Object.keys(S.P || {});
+    const plats = [...new Set(list.map((x) => x.platform))].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    // Largeur utile d'un rayon (panneau - marges de la pièce) → nombre de boîtes par planche, une planche de plus si besoin
+    const roomW = Math.max(480, (panel.clientWidth || 1100) - 2 * 32 - 2 * 26 + 16 - 2 * 18);
+    const shelves = plats.map((pid) => {
+      const p = plat(pid);
+      const xs = list.filter((x) => x.platform === pid);
+      const r = ratio(xs[0]);
+      const boxW = SHELF_H * (r >= 1 ? 0.72 : 1) * r + 7; // + tranche
+      const per = Math.max(1, Math.floor((roomW + GAP) / (boxW + GAP)));
+      const rows = [];
+      for (let i = 0; i < xs.length; i += per) rows.push(xs.slice(i, i + per));
+      return rows.map((row, i) => `<section class="rc-shelf" style="--pc:${p.color}" aria-label="${esc(p.name)}${rows.length > 1 ? ` (${i + 1}/${rows.length})` : ''}">
+        <div class="rc-boxes">${row.map(boxHtml).join('')}</div>
+        <div class="rc-plank">${i === 0 ? `<span class="rc-plaque">${esc(p.name)}<i>${xs.length}</i></span>` : ''}</div>
+      </section>`).join('');
+    }).join('');
     return `
       <div class="rc-head">
-        <h2 id="rcTitle">Boutique</h2>
+        <h2 id="rcTitle">Recomps</h2>
         <div class="rc-tabs" role="tablist">
-          <button class="rc-tab" role="tab" aria-selected="true" data-nav>Recomp &amp; portages</button>
+          <button class="rc-tab" role="tab" aria-selected="true" data-nav>Recomps &amp; portages</button>
           <button class="rc-tab" role="tab" aria-selected="false" data-rc-emu data-nav>Émulateurs</button>
         </div>
       </div>
-      <p class="panel-lead">Des jeux console recompilés pour tourner nativement sur PC. Tu fournis ta propre copie du jeu : le launcher la vérifie, télécharge la recomp depuis le GitHub de ses auteurs et range le jeu sous sa console.</p>
-      <div class="rc-filters" role="radiogroup" aria-label="Filtrer">
-        ${[['all', 'Tout'], ['mine', 'Installés'], ...plats.map((p) => [p, plat(p).short || plat(p).name])].map(([v, l]) => `<button class="ew-opt" role="radio" aria-checked="${ST.filter === v}" data-rc-filter="${esc(v)}" data-nav>${esc(l)}</button>`).join('')}
+      <div class="rc-sub">
+        <p class="panel-lead">Des jeux console recompilés pour tourner nativement sur PC. Prends un jeu sur le rayon : tu fournis ta copie, le launcher la vérifie et installe la recomp depuis le GitHub de ses auteurs.</p>
+        <div class="rc-filters" role="radiogroup" aria-label="Afficher">
+          ${[['all', 'Tout le catalogue'], ['mine', 'Installés']].map(([v, l]) => `<button class="ew-opt" role="radio" aria-checked="${ST.filter === v}" data-rc-filter="${v}" data-nav>${l}</button>`).join('')}
+        </div>
       </div>
-      <div class="rc-grid">${list.map((x) => `
-        <button class="rc-card" data-rc-open="${esc(x.id)}" data-nav style="--pc:${plat(x.platform).color}">
-          <span class="rc-plat">${esc(plat(x.platform).short || x.platform)}</span>${badge(x)}
-          <strong>${esc(x.name)}</strong>
-          <span class="rc-game">${esc(x.game)}</span>
-          <span class="dim rc-desc">${esc(x.desc || '')}</span>
-          <span class="rc-kind">${esc(x.kind || 'Recomp')} · ${esc(x.repo)}</span>
-        </button>`).join('') || '<p class="dim">Rien ici pour l’instant.</p>'}
-      </div>
+      <div class="rc-room">${shelves || '<p class="dim rc-empty">Aucune recomp installée pour l’instant.</p>'}</div>
+      <div class="rc-caption" aria-live="polite"><span id="rcCap">Choisis un jeu sur les rayons.</span></div>
       <div class="ew-foot"><button class="btn" data-rc-refresh data-nav>Actualiser le catalogue</button><button class="btn" data-rc-close data-nav>Fermer</button></div>`;
   }
+  function caption(id) {
+    const x = item(id), c = $('#rcCap', panel);
+    if (!c || !x) return;
+    c.innerHTML = `<b>${esc(x.name)}</b> · ${esc(x.game)} <span class="dim">· ${esc(x.kind || 'Recomp')}${x.installed ? ` · installé (${esc(x.installed.version || '?')})` : ''}</span>`;
+  }
+  ov.addEventListener('focusin', (e) => { const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen); });
+  ov.addEventListener('mouseover', (e) => { const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen); });
 
+  // ---------------------------------------------------------------- Fiche (jeu sorti du rayon)
   function progHtml(id) {
     const p = ST.prog[id];
     if (!p) return '';
@@ -92,6 +139,7 @@
       <div class="ew-pl"><span>${esc(p.label || '')}</span><span class="ew-mo">${pct != null && !err ? `${pct} % · ` : ''}${size}</span></div></div>`;
   }
   function detailHtml(x) {
+    const p = plat(x.platform);
     const needRom = x.rom.system !== 'folder';
     const r = x.mine; // copie choisie par le joueur
     const busy = ST.busy === x.id;
@@ -101,7 +149,7 @@
       <p class="dim">${esc(x.rom.label)}</p>
       ${r ? `<div class="ew-bios ${r.warn ? 'warn' : 'ok'}">${r.warn ? ICO.warn : ICO.ok}<span><b>${esc(r.info || '')}</b><br/><code>${esc(ltr(r.path))}</code>${r.warn ? `<br/>${esc(r.warn)}` : ''}</span></div>` : ''}
       <div class="rc-row"><button class="btn small ${r ? '' : 'primary'}" data-rc-rom="${esc(x.id)}" data-nav>${r ? 'Changer de fichier' : needRom ? 'Choisir ma ROM…' : 'Choisir le dossier du jeu…'}</button>
-      ${x.rom.place === 'copy' ? '' : `<span class="dim">Facultatif ici : sert à vérifier ta copie et à copier son chemin.</span>`}</div>
+      ${x.rom.place === 'copy' ? '' : '<span class="dim">Facultatif : sert à vérifier ta copie et à copier son chemin.</span>'}</div>
       <p class="dim rc-legal">Le launcher ne télécharge jamais de jeu : utilise le dump de ta propre cartouche ou de ton propre disque.</p>`;
     const insBody = x.installed
       ? `<p class="dim">Version ${esc(x.installed.version || '?')} dans <code>${esc(ltr(x.installed.dir))}</code>${x.latest ? ` · dernière : ${esc(x.latest)}` : ''}</p>
@@ -109,26 +157,112 @@
          <button class="btn small" data-rc-folder="${esc(x.id)}" data-nav>Ouvrir le dossier</button>
          <button class="btn small danger" data-rc-uninstall="${esc(x.id)}" data-nav>Désinstaller</button></div>`
       : `<p class="dim">Dernière release de <code>${esc(x.repo)}</code>, installée dans <code>${esc(ltr(ST.root))}</code>.</p>
-         <div class="rc-row">${busy ? `<button class="btn small danger" data-rc-cancel data-nav>Annuler</button>` : `<button class="btn small primary" data-rc-install="${esc(x.id)}" data-nav ${canInstall ? '' : 'disabled'}>Installer</button>`}
+         <div class="rc-row">${busy ? '<button class="btn small danger" data-rc-cancel data-nav>Annuler</button>' : `<button class="btn small primary" data-rc-install="${esc(x.id)}" data-nav ${canInstall ? '' : 'disabled'}>Installer</button>`}
          ${!canInstall && !busy && x.rom.place === 'copy' ? '<span class="dim">Choisis d’abord ta ROM (étape 1).</span>' : ''}</div>`;
     const playBody = `<p class="dim">${esc(PLACE[x.rom.place] || '')}</p>
       ${x.installed ? `<div class="rc-row"><button class="btn small primary" data-rc-play="${esc(x.id)}" data-nav>Jouer</button>${x.rom.place !== 'copy' && r ? `<button class="btn small" data-rc-copy="${esc(r.path)}" data-nav>Copier le chemin de ma copie</button>` : ''}</div>` : ''}`;
     return `
-      <div class="rc-head"><button class="btn small rc-back" data-rc-back data-nav>${ICO.back}Boutique</button><h2 id="rcTitle">${esc(x.name)}</h2></div>
-      <p class="panel-lead"><span class="rc-plat inline" style="--pc:${plat(x.platform).color}">${esc(plat(x.platform).short || x.platform)}</span> ${esc(x.game)} · ${esc(x.kind || 'Recomp')} — ${esc(x.desc || '')}</p>
-      <ol class="rc-steps">
-        ${step(1, !!r || (!needRom && x.installed), 'Ta copie du jeu', romBody)}
-        ${step(2, !!x.installed && !x.update, x.installed ? 'Installée' : 'Installer la recomp', insBody + `<div class="ew-progwrap">${progHtml(x.id)}</div>`)}
-        ${step(3, false, 'Jouer', playBody)}
-      </ol>
+      <div class="rc-detail">
+        <div class="rc-held">
+          <button class="btn small rc-back" data-rc-back data-nav>${ICO.back}Remettre sur le rayon</button>
+          <div class="rc-box is-held" data-rc-held style="--r:${ratio(x)};--pc:${p.color}"><span class="rc-front">${boxFace(x, true)}</span><span class="rc-side"></span></div>
+          <div class="rc-held-meta"><span class="rc-plat" style="--pc:${p.color}">${esc(p.short || p.name)}</span><span class="dim">${esc(x.kind || 'Recomp')} · ${esc(x.repo)}</span></div>
+        </div>
+        <div class="rc-info">
+          <h2 id="rcTitle">${esc(x.name)}</h2>
+          <p class="rc-orig">${esc(x.game)}</p>
+          <p class="dim rc-about">${esc(x.desc || '')}</p>
+          <ol class="rc-steps">
+            ${step(1, !!r || (!needRom && x.installed), 'Ta copie du jeu', romBody)}
+            ${step(2, !!x.installed && !x.update, x.installed ? 'Installée' : 'Installer la recomp', insBody + `<div class="ew-progwrap">${progHtml(x.id)}</div>`)}
+            ${step(3, false, 'Jouer', playBody)}
+          </ol>
+        </div>
+      </div>
       <div class="ew-foot"><button class="btn" data-rc-repo="${esc(x.repo)}" data-nav>Page GitHub</button><button class="btn" data-rc-close data-nav>Fermer</button></div>`;
   }
 
+  // ---------------------------------------------------------------- Prendre / reposer une boîte (FLIP)
+  function flyer(fromEl) {
+    const front = $('.rc-front', fromEl) || fromEl;
+    const r = front.getBoundingClientRect();
+    const f = document.createElement('div');
+    f.className = 'rc-flyer';
+    f.style.setProperty('--pc', fromEl.style.getPropertyValue('--pc'));
+    f.innerHTML = `<span class="rc-front">${front.innerHTML}</span>`;
+    Object.assign(f.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    document.body.append(f);
+    return { f, r };
+  }
+  function fly(f, from, to, dir) {
+    const dx = to.left - from.left, dy = to.top - from.top, sx = to.width / from.width, sy = to.height / from.height;
+    const kf = dir === 'out'
+      ? [ // sortie du rayon : la boîte avance vers soi, puis glisse jusqu'à la fiche
+        { transform: 'translate(0,0) scale(1,1)', boxShadow: '0 4px 10px rgba(0,0,0,.25)' },
+        { transform: `translate(0,-${Math.min(36, from.height * 0.2)}px) scale(1.08,1.08)`, boxShadow: '0 22px 36px rgba(0,0,0,.35)', offset: 0.3 },
+        { transform: `translate(${dx}px,${dy}px) scale(${sx},${sy})`, boxShadow: '0 30px 60px rgba(0,0,0,.3)' },
+      ]
+      : [ // retour : la boîte revient au-dessus de sa place puis redescend sur la planche
+        { transform: 'translate(0,0) scale(1,1)', boxShadow: '0 30px 60px rgba(0,0,0,.3)' },
+        { transform: `translate(${dx}px,${dy - Math.min(36, to.height * 0.2)}px) scale(${sx * 1.06},${sy * 1.06})`, boxShadow: '0 22px 36px rgba(0,0,0,.3)', offset: 0.72 },
+        { transform: `translate(${dx}px,${dy}px) scale(${sx},${sy})`, boxShadow: '0 4px 10px rgba(0,0,0,.25)' },
+      ];
+    return f.animate(kf, { duration: dir === 'out' ? 640 : 540, easing: 'cubic-bezier(.3,.7,.2,1)', fill: 'forwards' }).finished;
+  }
+  async function takeFromShelf(id, src) {
+    if (ST.anim) return;
+    ST.view = 'detail'; ST.cur = id;
+    sfx('confirm');
+    if (reduced() || !src) { render(); setTimeout(focusFirst, 30); return; }
+    ST.anim = true;
+    const { f, r } = flyer(src);
+    render();
+    const held = $('[data-rc-held]', panel);
+    held.classList.add('is-hidden');
+    panel.classList.add('is-arriving');
+    try { await fly(f, r, $('.rc-front', held).getBoundingClientRect(), 'out'); } catch {}
+    held.classList.remove('is-hidden');
+    panel.classList.remove('is-arriving');
+    f.remove();
+    ST.anim = false;
+    focusFirst();
+  }
+  async function putBack() {
+    if (ST.anim) return;
+    const id = ST.cur;
+    const held = $('[data-rc-held]', panel);
+    ST.view = 'shelves';
+    sfx('back');
+    if (reduced() || !held) { render(); const c = $(`[data-rc-open="${CSS.escape(id)}"]`, panel); if (c) setFocus(c); return; }
+    ST.anim = true;
+    const { f, r } = flyer(held);
+    render();
+    const slot = $(`[data-rc-open="${CSS.escape(id)}"]`, panel);
+    if (slot) {
+      slot.scrollIntoView({ block: 'nearest' });
+      slot.classList.add('is-gone');
+      try { await fly(f, r, $('.rc-front', slot).getBoundingClientRect(), 'in'); } catch {}
+      slot.classList.remove('is-gone');
+      setFocus(slot);
+      caption(id);
+    }
+    f.remove();
+    ST.anim = false;
+  }
+
+  // ---------------------------------------------------------------- Évènements
   rr.onX('x:recomp:progress', (p) => {
     if (!p?.id) return;
     ST.prog[p.id] = { ...(ST.prog[p.id] || {}), ...p, ...(p.phase !== 'download' ? { got: 0, total: 0 } : {}) };
     const box = ST.view === 'detail' && ST.cur === p.id ? $('.ew-progwrap', panel) : null;
     if (box) box.innerHTML = progHtml(p.id);
+  });
+  rr.onX('x:recomp:cover', (c) => {
+    const x = c && item(c.id);
+    if (!x || !c.url) return;
+    x.cover = c.url;
+    const sel = `[data-rc-open="${CSS.escape(c.id)}"] .rc-front` + (ST.view === 'detail' && ST.cur === c.id ? ', [data-rc-held] .rc-front' : '');
+    for (const front of $$(sel, panel)) front.innerHTML = `<img src="${esc(c.url)}" alt="" draggable="false" />`;
   });
 
   async function install(id, update = false) {
@@ -159,12 +293,13 @@
   ov.addEventListener('click', async (e) => {
     const t = (s) => e.target.closest(s);
     let b;
+    if (ST.anim) return;
     if (t('[data-rc-close]')) return closeOverlay();
     if (t('[data-rc-emu]')) { closeOverlay(true); return RR.actions.emuWizardAll?.(); }
     if (t('[data-rc-refresh]')) { toast('Catalogue actualisé'); return refresh(true); }
     if ((b = t('[data-rc-filter]'))) { ST.filter = b.dataset.rcFilter; sfx('toggle'); return render(); }
-    if ((b = t('[data-rc-open]'))) { ST.view = 'detail'; ST.cur = b.dataset.rcOpen; sfx('confirm'); render(); setTimeout(focusFirst, 30); return; }
-    if (t('[data-rc-back]')) { const id = ST.cur; ST.view = 'grid'; render(); const c = $(`[data-rc-open="${CSS.escape(id)}"]`, panel); if (c) setFocus(c); sfx('back'); return; }
+    if ((b = t('[data-rc-open]'))) return takeFromShelf(b.dataset.rcOpen, b);
+    if (t('[data-rc-back]')) return putBack();
     if ((b = t('[data-rc-rom]'))) {
       const r = await rr.x('x:recomp:pickRom', b.dataset.rcRom);
       if (r?.cancelled) return;
@@ -192,22 +327,31 @@
       rr.launch(x.installed.gameId);
     }
   });
+  // B / Échap sur la fiche : la boîte retourne sur le rayon au lieu de fermer (appelé par overlayBack)
+  window.recompBack = () => {
+    if (S.mode !== 'recomp' || ST.view !== 'detail') return false;
+    putBack();
+    return true;
+  };
+
+  let rz;
+  addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.mode === 'recomp' && ST.view === 'shelves' && !ST.anim) render(); }, 150); });
 
   RR.actions.recompStore = () => { closeAll(); open(); };
   window.openRecompStore = open;
 
-  // Menu : « Boutique » sous « Ajouter des jeux » ; hub d'ajout : carte « Boutique de recomp »
+  // Menu : « Recomps » sous « Ajouter des jeux » ; hub d'ajout : carte « Recomps »
   const add = $('#menu [data-action="addHub"]');
-  add?.insertAdjacentHTML('afterend', `<button class="menu-item" data-action="recompStore" data-nav>${ICO.shop}<span class="mi-label">Boutique</span><kbd class="mi-key">B</kbd></button>`);
+  add?.insertAdjacentHTML('afterend', `<button class="menu-item" data-action="recompStore" data-nav>${ICO.shelf}<span class="mi-label">Recomps</span><kbd class="mi-key">R</kbd></button>`);
   $('#addHub .hub-grid')?.insertAdjacentHTML('beforeend', `
     <button class="hub-card" data-action="recompStore" data-nav>
-      <span class="hub-ico"><svg viewBox="0 0 24 24"><path d="M4 9h16l-1 11H5z"/><path d="M8 9V7a4 4 0 0 1 8 0v2"/></svg></span>
-      <strong>Boutique de recomp</strong><span class="dim">Zelda, Mario Kart 64, Star Fox, Sonic Unleashed… avec ta propre copie du jeu</span>
+      <span class="hub-ico"><svg viewBox="0 0 24 24"><path d="M3 20h18M3 12h18M4 4v16M20 4v16"/><path d="M7 12V6h3v6M12 12V7l3-.5L16 12M7 20v-5h3v5M13 20v-6h3v6"/></svg></span>
+      <strong>Recomps</strong><span class="dim">Zelda, Mario Kart 64, Star Fox, Sonic Unleashed… recompilés pour PC, avec ta propre copie du jeu</span>
       <span class="hub-meta">Installation et mises à jour automatiques</span>
     </button>`);
-  // Raccourci clavier B dans l'interface principale (hors saisie)
+  // Raccourci clavier R dans l'interface principale (hors saisie)
   document.addEventListener('keydown', (e) => {
-    if (e.key !== 'b' && e.key !== 'B') return;
+    if (e.key !== 'r' && e.key !== 'R') return;
     if (e.ctrlKey || e.altKey || e.metaKey || S.mode !== 'main' || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || '')) return;
     e.preventDefault();
     open();

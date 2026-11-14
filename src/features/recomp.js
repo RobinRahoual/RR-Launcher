@@ -42,13 +42,60 @@ function init(ctx) {
     const lt = latest.get(e.id);
     return {
       ...e,
+      cover: coverUrl(e.id),
       installed: exists ? { version: ins.version, exe: ins.exe, dir: ins.dir, gameId: ins.gameId, date: ins.date } : null,
       mine: rom?.path && fs.existsSync(rom.path) ? rom : null, // copie du jeu choisie par le joueur
       latest: lt?.tag || null,
       update: !!(exists && lt?.tag && ins.version && lt.tag !== ins.version),
     };
   }
-  ipcMain.handle('x:recomp:list', async (_e, o = {}) => ({ root, items: (await catalog(!!o.refresh)).map(state) }));
+  ipcMain.handle('x:recomp:list', async (_e, o = {}) => {
+    const items = (await catalog(!!o.refresh)).map(state);
+    if (!process.env.RR_RECOMP_NO_COVERS) setTimeout(() => fetchCovers(items).catch((e) => log(`recomp : jaquettes ${e.message}`)), 50);
+    return { root, items };
+  });
+
+  // ---------------------------------------------------------------- Jaquettes (rayons du catalogue)
+  // Ordre : e.cover (URL du catalogue) → libretro-thumbnails (nom No-Intro / Redump le plus proche) → Wikipédia EN
+  // (image de l'infobox). Cache : <DATA>/recomp-covers/<id>.<ext>, servi par rr://recomp/<id>.
+  const coverDir = path.join(ctx.DATA, 'recomp-covers');
+  const coverFile = (id) => { try { return fs.readdirSync(coverDir).find((f) => f.replace(/\.\w+$/, '') === id) || null; } catch { return null; } };
+  const coverUrl = (id) => { const f = coverFile(id); if (!f) return null; let v = 0; try { v = Math.round(fs.statSync(path.join(coverDir, f)).mtimeMs); } catch {} return `rr://recomp/${encodeURIComponent(f)}?v=${v}`; };
+  ctx.protoRoute?.('recomp', (_req, u) => {
+    const f = path.basename(decodeURIComponent(u.pathname));
+    const full = path.join(coverDir, f);
+    if (!f || !fs.existsSync(full)) return new Response('Not found', { status: 404 });
+    const type = { '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' }[path.extname(f).toLowerCase()] || 'image/jpeg';
+    return new Response(fs.readFileSync(full), { headers: { 'Content-Type': type, 'Cache-Control': 'max-age=86400' } });
+  });
+  const tried = new Set();
+  let coverBusy = false;
+  async function fetchCovers(items) {
+    if (coverBusy) return;
+    coverBusy = true;
+    try {
+      const meta = require('../metadata');
+      const { BY_ID } = require('../platforms');
+      for (const e of items) {
+        if (coverFile(e.id) || tried.has(e.id)) continue;
+        tried.add(e.id);
+        const urls = [];
+        if (/^https:\/\//.test(e.cover || '')) urls.push(e.cover);
+        const repo = BY_ID[e.platform]?.libretro;
+        if (repo) {
+          const name = await meta.libretroMatch(repo, [e.boxart || e.game, e.game]).catch(() => null);
+          if (name) urls.push(`https://raw.githubusercontent.com/libretro-thumbnails/${repo}/master/Named_Boxarts/${encodeURIComponent(name.replace(/[&*/:`<>?\\|"]/g, '_'))}.png`);
+        }
+        try {
+          const sum = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent((e.wiki || e.game).replace(/ /g, '_'))}`, { headers: { 'User-Agent': 'RR-Launcher' }, signal: AbortSignal.timeout(12000) }).then((r) => (r.ok ? r.json() : null));
+          if (sum?.originalimage?.source) urls.push(sum.originalimage.source);
+          else if (sum?.thumbnail?.source) urls.push(sum.thumbnail.source);
+        } catch {}
+        const f = await meta.downloadFirst(urls, coverDir, e.id).catch(() => null);
+        if (f) send('x:recomp:cover', { id: e.id, url: coverUrl(e.id) });
+      }
+    } finally { coverBusy = false; }
+  }
 
   // ---------------------------------------------------------------- Release GitHub
   async function release(e, { signal } = {}) {

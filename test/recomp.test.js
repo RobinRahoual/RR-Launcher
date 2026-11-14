@@ -133,6 +133,7 @@ test('installation : catalogue distant, ROM copiée, jeu ajouté, mise à jour, 
   process.env.RR_EMU_GITHUB_API = base;
   process.env.RR_RECOMP_CATALOG = `${base}/catalog.json`;
   process.env.RR_RECOMP_ROOT = path.join(work, 'recomps');
+  process.env.RR_RECOMP_NO_COVERS = '1';
   for (const k of Object.keys(require.cache)) if (/features[\\/](recomp|emu)/.test(k)) delete require.cache[k];
   const feature = require('../src/features/recomp');
 

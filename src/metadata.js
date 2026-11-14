@@ -734,4 +734,4 @@ async function upgradeHero(game, dir, settings, platformTgdb) {
   return downloadBest(urls, dir, `hero-hd-${Date.now().toString(36)}`, { minWidth: 1280 });
 }
 
-module.exports = { englishTitle, tgdbBoxart, steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };
+module.exports = { libretroMatch, englishTitle, tgdbBoxart, steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };

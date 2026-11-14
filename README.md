@@ -24,15 +24,17 @@ Les portages recompilés (.exe) peuvent être rangés sous leur console d'origin
 
 **Switch 2** : les dumps ont le même format que la Switch (`.nsp`, `.xci`…). Range-les dans un dossier dont le nom contient *Switch 2*, *Switch2* ou *NS2* (ex. `ROMs\Switch 2\`) pour qu'ils soient classés sous Switch 2 au scan, ou choisis la console à l'ajout. Les archives `.nup` (un seul fichier jeu + mise à jour + DLC, créées par Fritchii / Lichii) vont directement sous Switch 2. Émulateurs : **Fritchii** (conseillé, réglé pour Ocarina of Time) et **Lichii**, installés automatiquement depuis leurs releases GitHub (exécutable `lichii.exe`, lancé avec `-f -g "{rom}"`) ; Eden reste au choix. Les clés et le firmware de ta console s'installent depuis l'émulateur (Outils → Installer les clés / le firmware). Fritchii peut se mettre à jour au démarrage et se relancer : le launcher suit son dossier pour ne pas couper la session.
 
-## Boutique (recomp & émulateurs)
+## Recomps (catalogue de recomp & émulateurs)
 
-**Menu → Boutique** (touche `B`, ou la carte « Boutique de recomp » dans Ajouter des jeux) : des jeux console recompilés ou portés pour tourner nativement sur PC, comme sur [RecompLauncher](https://recomplauncher.com) — Zelda 64: Recompiled, Ship of Harkinian, 2 Ship 2 Harkinian, SpaghettiKart, Starship, Ghostship, Star Fox 64 / Banjo / Donkey Kong 64 Recompiled, Snap 64, Perfect Dark, Unleashed Recompiled, Dusklight…
+**Menu → Recomps** (touche `R`, ou la carte « Recomps » dans Ajouter des jeux) : des jeux console recompilés ou portés pour tourner nativement sur PC, comme sur [RecompLauncher](https://recomplauncher.com) — Zelda 64: Recompiled, Ship of Harkinian, 2 Ship 2 Harkinian, SpaghettiKart, Starship, Ghostship, Star Fox 64 / Banjo / Donkey Kong 64 Recompiled, Snap 64, Perfect Dark, Unleashed Recompiled, Dusklight…
+
+Présenté comme une ludothèque : une étagère par console (plaque au nom de la console), les jaquettes de face sur les rayons. Choisir un jeu le **sort du rayon** — la boîte avance puis glisse jusqu'à sa fiche — et « Remettre sur le rayon » (B / Échap) l'y repose. Jaquettes : libretro-thumbnails (nom No-Intro / Redump le plus proche), sinon l'image Wikipédia du jeu, gardées dans `%APPDATA%\RR Launcher\recomp-covers`.
 
 1. **Ta copie du jeu** : tu choisis ta ROM (ou ton dump). Le launcher lit son en-tête (N64 : `.z64`, `.v64` ou `.n64` ; GameCube : identifiant du disque) et vérifie que c'est le bon jeu et la bonne région (avertissement si la région diffère). Aucun jeu n'est jamais téléchargé.
 2. **Installer** : dernière release GitHub des auteurs (archive Windows choisie automatiquement, SHA-256 contrôlé quand GitHub le publie), extraite dans `%LOCALAPPDATA%\RR Launcher\recomps\<recomp>`. Pour les portages qui lisent la ROM dans leur dossier (HarbourMasters, Perfect Dark), elle y est copiée au bon nom. Le jeu apparaît sous sa console d'origine avec la fiche du jeu original.
 3. **Jouer** : pour les recomp qui demandent la ROM au premier lancement (« Select ROM »), le chemin de ta copie est mis dans le presse-papiers.
 
-Mises à jour (bouton « Rechercher une mise à jour », les fichiers ajoutés dans le dossier sont conservés), désinstallation (dossier + entrée de la bibliothèque, ta ROM d'origine n'est pas touchée). Le catalogue est `src/features/recomp/recomps.json` : le launcher relit la copie de la branche `main` (toutes les 6 h ou « Actualiser le catalogue »), donc ajouter une recomp ne demande pas de nouvelle version.
+Mises à jour (« Rechercher une mise à jour », les fichiers ajoutés dans le dossier sont conservés), désinstallation (dossier + entrée de la bibliothèque, ta ROM d'origine n'est pas touchée). Le catalogue est `src/features/recomp/recomps.json` (champ `cover` facultatif pour imposer une jaquette) : le launcher relit la copie de la branche `main` (toutes les 6 h ou « Actualiser le catalogue »), donc ajouter une recomp ne demande pas de nouvelle version.
 
 L'onglet **Émulateurs** ouvre l'assistant d'installation, avec **toutes les consoles** (plus besoin d'avoir déjà des ROMs).
 
@@ -68,6 +70,7 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 | Sauter de 5 jeux | LT / RT | Page ↑ / ↓ | |
 | Retour aux consoles | B / ○ | Échap | Flèche en haut à gauche |
 | Ajouter des jeux | View / Share | N | Menu |
+| Recomps | | R | Menu |
 | Favori | | F | Détails |
 | Menu | Menu / Options | M (Échap sur l'accueil) | Bouton Menu |
 | Réduire en arrière-plan | Menu → Réduire | | Bouton — en haut à droite |

@@ -1279,6 +1279,7 @@ function closeOverlay(silent = false) {
 function closeAll() { while (S.mode !== 'main') closeOverlay(true); }
 // Retour contextuel : ferme d'abord un sous-menu ouvert, sinon l'overlay
 function overlayBack() {
+  if (S.mode === 'recomp' && window.recompBack?.()) return; // RECOMP : la fiche repose la boîte sur le rayon
   if (S.mode === 'details' && !$('#dSub').hidden) return toggleImageMenu(false);
   if (S.mode === 'ingame') return igBack(); // GUIDE : B / Échap = sous-menu précédent, sinon reprendre le jeu
   if (S.mode === 'details' && !S.stack.length) return closeGamePage(); // BOXOPEN : la boîte se referme
