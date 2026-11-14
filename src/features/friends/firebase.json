@@ -1,5 +1,5 @@
 {
-  "note": "Projet Firebase des amis RR Launcher (configuration web publique, pas un secret). Vide : les amis RR se configurent dans Réglages → Fonctions → Amis.",
-  "apiKey": "",
-  "databaseURL": ""
+  "note": "Projet Firebase des amis RR Launcher (configuration web publique, pas un secret : la base est protégée par firebase/database.rules.json).",
+  "apiKey": "AIzaSyBUuvHW_PRaJU_mdCsg8UlmFbtpbcfyTVQ",
+  "databaseURL": "https://rr-launcher-default-rtdb.europe-west1.firebasedatabase.app"
 }
