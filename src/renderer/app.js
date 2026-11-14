@@ -2005,6 +2005,22 @@ function volStep(dir) {
   return true;
 }
 
+// PLAYTIME : synchronisation manuelle des heures (Steam / GOG Galaxy / itch.io)
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest?.('#ptSync');
+  if (!b) return;
+  b.disabled = true;
+  const st = await rr.x('x:playtime:sync').catch(() => null);
+  b.disabled = false;
+  if (!st) return toast('Synchronisation impossible', true);
+  if (st.error) return toast(st.error, 'info');
+  const found = Object.entries(st.sources || {}).filter(([, n]) => n >= 0).map(([k]) => ({ steam: 'Steam', gog: 'GOG Galaxy', itch: 'itch.io' })[k]);
+  const msg = !found.length ? 'Aucun launcher trouvé (Steam, GOG Galaxy, itch.io)' : st.updated ? `${st.updated} jeu${st.updated > 1 ? 'x' : ''} mis à jour depuis ${found.join(', ')}` : `Déjà à jour (${found.join(', ')})`;
+  toast(msg, st.updated ? 'success' : 'info');
+  const el = $('#ptStatus');
+  if (el) el.textContent = `Dernière synchronisation : ${new Date(st.at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} · ${found.join(', ') || 'aucun launcher trouvé'}`;
+});
+
 // ---------------------------------------------------------------- Réglages
 let setPage = 'general';
 function renderSettings() {

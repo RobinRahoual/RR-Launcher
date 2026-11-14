@@ -393,6 +393,15 @@
           <div><strong id="lbLogin">Lancer au démarrage de Windows</strong><span class="dim">Démarre discrètement en arrière-plan</span></div>
           <button class="toggle" data-toggle="openAtLogin" role="switch" aria-labelledby="lbLogin" data-nav></button>
         </div>
+        <h3 class="set-group">Temps de jeu</h3>
+        <div class="setting">
+          <div><strong id="lbTrack">Compter les jeux lancés hors du launcher</strong><span class="dim">Un jeu de ta bibliothèque ouvert depuis Steam, un raccourci… est compté tant que le launcher tourne, même réduit. Avec « Lancer au démarrage de Windows », rien n’échappe au compteur.</span></div>
+          <button class="toggle" data-toggle="trackOutside" role="switch" aria-labelledby="lbTrack" data-nav></button>
+        </div>
+        <div class="setting">
+          <div><strong id="lbSyncPt">Reprendre les heures de Steam, GOG Galaxy et itch.io</strong><span class="dim" id="ptStatus">Le temps affiché devient le plus grand des deux (jamais additionnés deux fois).</span></div>
+          <div class="row-gap"><button class="btn small" id="ptSync" data-nav>Synchroniser</button><button class="toggle" data-toggle="syncPlaytime" role="switch" aria-labelledby="lbSyncPt" data-nav></button></div>
+        </div>
         <div class="setting">
           <div><strong id="lbFull">Plein écran</strong><span class="dim">Aussi avec F11</span></div>
           <button class="toggle" data-toggle="fullscreen" role="switch" aria-labelledby="lbFull" data-nav></button>

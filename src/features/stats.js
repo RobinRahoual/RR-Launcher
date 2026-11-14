@@ -242,6 +242,23 @@ function migrate(db, games) {
   return true;
 }
 
+// PLAYTIME : heures venues de Steam / GOG / itch (g.playtimeExt) au-delà de ce que le journal connaît →
+// une entrée « historique » par jeu ({ legacy, ext }), mise à jour à chaque synchronisation (jamais en double).
+function reconcileExternal(db, games) {
+  let changed = false;
+  for (const g of games) {
+    if (!g.playtimeExt?.sec) continue;
+    const mine = db.sessions.filter((s) => s.id === g.id && (!s.profile || s.profile === 'main'));
+    const known = mine.filter((s) => !s.ext).reduce((a, s) => a + (s.seconds || 0), 0);
+    const want = Math.max(0, Math.round((g.playtime || 0) - known));
+    const cur = mine.find((s) => s.ext);
+    if (want < MIN_SECONDS) { if (cur) { db.sessions.splice(db.sessions.indexOf(cur), 1); changed = true; } continue; }
+    if (cur) { if (cur.seconds !== want) { cur.seconds = want; changed = true; } }
+    else { db.sessions.push({ id: g.id, start: null, end: null, seconds: want, legacy: true, ext: g.playtimeExt.src || true }); changed = true; }
+  }
+  return changed;
+}
+
 function init(ctx) {
   const { ipcMain, hub, DATA } = ctx;
   const file = path.join(DATA, 'stats', 'sessions.json');
@@ -264,6 +281,7 @@ function init(ctx) {
   };
   if (migrate(db, games()) || !fs.existsSync(file)) save();
 
+  hub.on('playtime:ext', () => { if (reconcileExternal(db, games())) { save(); ctx.send('x:stats:changed', {}); } });
   hub.on('session:end', (id, s) => {
     if (!s || !(s.seconds >= MIN_SECONDS)) return;
     db.sessions.push({ id, start: s.start, end: s.end, seconds: s.seconds, ...(ctx.profiles ? { profile: ctx.profiles.active() } : {}) }); // PROFILES : profil de la session
@@ -284,4 +302,4 @@ function init(ctx) {
   });
 }
 
-module.exports = { init, TZ, MIN_SECONDS, dayKey, dayNum, keyOf, splitSession, segments, streaks, periodRange, buckets, heatmap, aggregate, gameActivity, toCsv, migrate, readDb };
+module.exports = { init, reconcileExternal, TZ, MIN_SECONDS, dayKey, dayNum, keyOf, splitSession, segments, streaks, periodRange, buckets, heatmap, aggregate, gameActivity, toCsv, migrate, readDb };

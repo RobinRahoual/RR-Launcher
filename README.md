@@ -102,6 +102,11 @@ Mauvais jeu trouvé ? **Détails → Corriger le jeu**. Image à changer (jaquet
 - **Succès** Steam (clé Web API + profil public) et RetroAchievements (utilisateur + clé) ; état des **mises à jour** Steam / Epic sur les boîtes.
 - **Confort** : vibrations, notifications, taille de l'interface (TV).
 
+## Temps de jeu complet (1.17)
+
+- **Jeux lancés hors du launcher** : tant que RR Launcher tourne (même réduit près de l’horloge), un jeu de ta bibliothèque ouvert depuis Steam, Epic, un raccourci… est détecté (processus de son dossier avec une fenêtre) et compté comme une partie normale : statistiques, « dernier lancé », amis. Le launcher ne se montre pas et ne se masque pas pour autant. Activer « Lancer au démarrage de Windows » pour ne rien manquer. Les ROM lancées directement dans un émulateur ne sont pas reconnues.
+- **Heures des autres launchers** : Steam (`userdata/*/config/localconfig.vdf`, sans clé ni connexion), GOG Galaxy (`galaxy-2.0.db`) et itch.io (`butler.db`). Le temps affiché devient le plus grand des deux, jamais l’addition ; l’écart apparaît dans les statistiques comme une entrée « historique ». Au démarrage, toutes les 30 min, après chaque partie et via Réglages → Temps de jeu → Synchroniser. Epic Games ne garde pas le temps de jeu sur le PC : ses jeux sont comptés par le suivi ci-dessus.
+
 ## Amis RR Launcher (1.15)
 
 Une vraie liste d’amis dans le launcher, sans Steam ni Discord, portée par un projet Firebase (offre gratuite) :

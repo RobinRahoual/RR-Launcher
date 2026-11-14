@@ -36,6 +36,8 @@ const DEFAULT_SETTINGS = {
   hideOnLaunch: true, // masquer le launcher pendant le jeu, le réafficher à la fin
   closeToTray: true, // la croix / Alt+F4 envoie le launcher dans la zone de notification
   openAtLogin: false,
+  trackOutside: true, // PLAYTIME : compter les jeux lancés hors du launcher
+  syncPlaytime: true, // PLAYTIME : reprendre les heures de Steam / GOG Galaxy / itch.io
   sounds: true,
   volume: 0.7,
   caseStyle: 'blue', // boîtes PC : red | black | blue | auto
@@ -815,7 +817,7 @@ function finishSession(id) {
   commit();
   send('game:running', { id, running: false, name: g?.name });
   // WAKE : dernière session terminée → le launcher revient devant, que hideOnLaunch soit actif ou non
-  if (running.size === 0) bringToFront('session-end', { id, platform: g?.platform || null });
+  if (running.size === 0 && !r.auto) bringToFront('session-end', { id, platform: g?.platform || null }); // PLAYTIME : jeu lancé hors du launcher → on ne vient pas s'imposer
   updatePadWake();
 }
 
@@ -849,6 +851,22 @@ function watchDir(id, dir, { graceMs = 180000, exe = '' } = {}) {
   };
   r.check = check;
   r.timer = setInterval(check, winNative() ? 2000 : 3000);
+}
+// PLAYTIME : un jeu de la bibliothèque lancé hors du launcher (Steam, raccourci…) est compté comme une session
+// normale, sans masquer ni réafficher le launcher. start = première détection.
+function startDetectedSession(id, dir, start = Date.now()) {
+  const g = findGame(id);
+  if (!g || running.has(id)) return false;
+  g.lastPlayed = start;
+  g.playCount = (g.playCount || 0) + 1;
+  running.set(id, { start, auto: true });
+  hub?.emit('session:start', id, { start, auto: true });
+  send('game:running', { id, running: true, auto: true });
+  commit();
+  updatePadWake();
+  watchDir(id, dir, { graceMs: 30000, exe: g.exePath || '' });
+  meta.log(`suivi : ${g.name} détecté hors du launcher`);
+  return true;
 }
 // Revérifie tout de suite les sessions en cours (ex. quand on revient sur le launcher)
 function recheckSessions() { for (const r of running.values()) r.check?.(); }
@@ -1194,6 +1212,7 @@ function loadFeatures() {
     app, ipcMain, store, meta, hub, running, DATA, MEDIA,
     commit, send, findGame, showWindow, bringToFront, hideToTray,
     getWin: () => win, winNative: () => winNative(), log: (m) => meta.log(m),
+    startDetectedSession, tooBroad, HELPER_EXE, normDir, // PLAYTIME
     protoRoute: (host, fn) => { protoRoutes[host] = fn; }, // CAPTURE
     // RECOMP : ajoute un jeu à la bibliothèque et lance la récupération des visuels (null si déjà présent)
     addGame: (data) => {
