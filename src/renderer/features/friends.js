@@ -472,14 +472,8 @@
       <div><label for="frRRName"><strong>Pseudo</strong></label><span class="dim">Vide : le nom de ton profil joueur.</span></div>
       <input id="frRRName" maxlength="40" spellcheck="false" data-nav />
     </div>
-    <div class="setting col fr-guide" id="frRRFb">
-      <div><strong>Projet Firebase</strong><span class="dim" id="frRRFbState"></span></div>
-      <div class="fr-tok-row">
-        <input id="frRRKey" placeholder="apiKey" autocomplete="off" spellcheck="false" aria-label="Clé API Firebase (apiKey)" data-nav />
-        <input id="frRRDb" placeholder="https://…firebasedatabase.app" autocomplete="off" spellcheck="false" aria-label="Adresse de la base (databaseURL)" data-nav />
-        <button class="btn" id="frRRSave" data-nav>Se connecter</button>
-      </div>
-      <span class="dim">Déjà renseigné dans le launcher pour tes amis : ce champ ne sert qu’à changer de projet.</span>
+    <div class="setting" id="frRRFb">
+      <div><strong>Compte amis RR Launcher</strong><span class="dim" id="frRRFbState"></span></div>
     </div>
     <div class="setting">
       <div><strong id="lbFrNotify">Prévenir quand un ami lance un jeu</strong><span class="dim">Petite notification en bas de l’écran (jamais pendant une partie).</span></div>
@@ -534,14 +528,6 @@
       test();
     });
     $('#frClear').addEventListener('click', async () => { await rr.x('x:friends:clearToken'); toast('Jeton du bot retiré', 'success'); setStatus('', ''); refresh(); });
-    $('#frRRSave').addEventListener('click', async () => {
-      const k = $('#frRRKey').value.trim(), u = $('#frRRDb').value.trim().replace(/\/+$/, '');
-      if ((k || u) && !(k && /^https:\/\/[\w.-]+\.(firebaseio\.com|firebasedatabase\.app)$/.test(u))) return toast('Il faut l’apiKey et l’adresse de la base (databaseURL)', true);
-      await rr.setSettings({ rrFirebaseApiKey: k, rrFirebaseDb: u });
-      const r = await rr.x('x:friends:rrRestart');
-      toast(r?.state === 'ok' ? `Amis RR connectés · code ${r.code}` : r?.error || 'Connexion…', r?.state === 'ok' ? 'success' : r?.state === 'error');
-      refresh();
-    });
     $('#frRRName').addEventListener('change', async (e) => { await rr.setSettings({ friendsRRName: e.target.value.trim().slice(0, 40) }); rr.x('x:friends:rrRestart'); toast('Pseudo enregistré', 'success'); });
     $('#frUnhide').addEventListener('click', async () => { await rr.x('x:friends:unhideAll'); toast('Tous les membres sont réaffichés', 'success'); });
   }
@@ -564,10 +550,9 @@
     }
     const d = FR.data;
     if ($('#frRRName') && document.activeElement !== $('#frRRName')) $('#frRRName').value = s.friendsRRName || '';
-    if ($('#frRRKey') && !$('#frRRKey').value && s.rrFirebaseApiKey) { $('#frRRKey').value = s.rrFirebaseApiKey; $('#frRRDb').value = s.rrFirebaseDb || ''; }
     if (d && $('#frRRFbState')) {
       const r = d.rr || {};
-      $('#frRRFbState').textContent = !r.configured ? 'Pas encore configuré.' : r.state === 'ok' ? `Connecté · ton code : ${r.code}` : r.state === 'error' ? r.error : r.state === 'off' ? 'Désactivé' : 'Connexion…';
+      $('#frRRFbState').textContent = !r.configured ? 'Indisponible.' : r.state === 'ok' ? `Connecté · ton code : ${r.code}` : r.state === 'error' ? r.error : r.state === 'off' ? 'Désactivé' : 'Connexion…';
     }
     if (d) {
       $('#frClear').hidden = !d.discord.hasToken;

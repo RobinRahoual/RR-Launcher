@@ -1,7 +1,7 @@
 {
   "name": "rr-launcher",
   "productName": "RR Launcher",
-  "version": "1.27.3",
+  "version": "1.27.4",
   "description": "Launcher pour jeux PC",
   "author": "Robin Rahoual",
   "main": "src/main.js",
