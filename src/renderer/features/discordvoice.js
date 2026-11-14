@@ -12,17 +12,26 @@
     if (!main || $('[data-ig="dc-voice"]', main)) return;
     const quit = $('[data-ig="quit"]', main);
     quit.insertAdjacentHTML('beforebegin',
-      `<button class="ig-item dc-ig" data-ig="dc-voice" role="menuitem" data-nav>${ICO_VOC}<span class="ig-label">Vocal Discord</span><span class="ig-meta" id="dvMeta">Rejoindre / quitter</span></button>`
-      + `<button class="ig-item dc-ig" data-ig="dc-mute" role="menuitem" data-nav>${ICO_MIC}<span class="ig-label">Micro Discord</span><span class="ig-meta" id="dvMuteMeta">Couper / réactiver</span></button>`);
+      `<button class="ig-item dc-ig" data-ig="dc-voice" role="menuitem" data-nav>${ICO_VOC}<span class="ig-label">Rejoindre le vocal</span><span class="ig-meta" id="dvMeta"></span></button>`
+      + `<button class="ig-item dc-ig" data-ig="dc-mute" role="menuitem" data-nav>${ICO_MIC}<span class="ig-label">Couper le micro</span><span class="ig-meta" id="dvMuteMeta"></span></button>`);
   }
+  let vs = { inVoice: null, muted: null }; // état réel lu dans Discord à l'ouverture du menu
   function igUpdate() {
     const s = S.lib?.settings || {};
     const ready = !!s.discordClientId && !!s.discordClientSecret;
     const pad = S.device === 'pad' && s.discordVoicePad !== false, ps = S.padType === 'ps';
     for (const k of ['dc-voice', 'dc-mute']) { const b = $(`[data-ig="${k}"]`); if (b) b.hidden = !ready; }
+    const lv = $('[data-ig="dc-voice"] .ig-label'), lm = $('[data-ig="dc-mute"] .ig-label');
+    if (lv) lv.textContent = vs.inVoice ? 'Quitter le vocal' : 'Rejoindre le vocal';
+    if (lm) lm.textContent = vs.muted ? 'Réactiver le micro' : 'Couper le micro';
     const m = $('#dvMeta'), m2 = $('#dvMuteMeta');
-    if (m) m.textContent = pad ? `${ps ? 'PS' : 'Guide'} + ${ps ? '□' : 'X'}` : (s.discordVoiceChannel?.name || 'Rejoindre / quitter');
-    if (m2) m2.textContent = pad ? `${ps ? 'PS' : 'Guide'} + ${ps ? '✕' : 'A'}` : 'Couper / réactiver';
+    const chan = vs.inVoice ? vs.name : (s.discordVoiceChannel?.name || '');
+    if (m) m.textContent = pad ? `${ps ? 'PS' : 'Guide'} + ${ps ? '□' : 'X'}` : chan;
+    if (m2) m2.textContent = pad ? `${ps ? 'PS' : 'Guide'} + ${ps ? '✕' : 'A'}` : '';
+  }
+  async function igRefresh() {
+    const r = await rr.x('x:discordvoice:state').catch(() => null);
+    if (r && r.ok !== false) { vs = { inVoice: !!r.inVoice, name: r.name || '', muted: !!r.muted }; igUpdate(); }
   }
   $('#ingame').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-ig="dc-voice"], [data-ig="dc-mute"]');
@@ -33,8 +42,10 @@
     rr.resumeGame(id); // on rend la main au jeu ; la notification Windows confirme
     const r = await rr.x(mute ? 'x:discordvoice:mute' : 'x:discordvoice:toggle', mute ? undefined : { delay: 300 });
     if (r && r.ok === false) toast(`Vocal Discord : ${r.error}`, true);
+    else if (r) { if (mute) vs.muted = r.muted; else { vs.inVoice = r.joined; vs.name = r.name || ''; } igUpdate(); }
   }, true);
-  rr.onX('x:discordvoice:done', (r) => { if (document.visibilityState === 'visible' && r && r.ok === false) toast(`Vocal Discord : ${r.error}`, true); });
+  rr.onX('x:discordvoice:done', (r) => {
+    if (r && r.ok) { if ('muted' in r) vs.muted = r.muted; else if ('joined' in r) { vs.inVoice = r.joined; vs.name = r.name || ''; } igUpdate(); } if (document.visibilityState === 'visible' && r && r.ok === false) toast(`Vocal Discord : ${r.error}`, true); });
 
   // ---- Réglages (dans le bloc Discord existant)
   const host = $('#set-discord');
@@ -106,6 +117,6 @@
   }
   igInsert();
   RR.on('library', applyState);
-  RR.on('mode', (m) => { if (m === 'ingame') igUpdate(); if (m === 'settings') status(); });
+  RR.on('mode', (m) => { if (m === 'ingame') { igUpdate(); igRefresh(); } if (m === 'settings') status(); });
   rr.getLibrary().then((st) => { applyState(st); status(); });
 })();

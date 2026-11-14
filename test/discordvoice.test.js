@@ -47,7 +47,7 @@ function setup(extra = {}) {
     if (extra.refuseToken) return { ok: false, status: 400, json: async () => ({ error: 'invalid_grant', error_description: 'Code invalide' }) };
     return { ok: true, status: 200, json: async () => ({ access_token: grant === 'refresh_token' ? 'TOKEN1' : 'TOKEN1', refresh_token: 'REFRESH1', expires_in: 604800 }) };
   };
-  const voice = V.createVoice({ cfg: () => ({ clientId: extra.clientId ?? CLIENT, clientSecret: extra.secret ?? 'secret' }), tokens: { get: () => t.tok, set: (x) => { t.tok = x; } }, fetchImpl });
+  const voice = V.createVoice({ cfg: () => ({ clientId: extra.clientId ?? CLIENT, clientSecret: extra.secret ?? 'secret' }), tokens: { get: () => t.tok, set: (x) => { t.tok = x; } }, fetchImpl, launch: extra.launch, sleep: async () => {}, launchWait: extra.launchWait });
   return { voice, t, fetchCalls };
 }
 
@@ -133,6 +133,40 @@ test('salons vocaux : uniquement vocal et scène', async () => {
     const { voice } = setup({ tok: { access: 'TOKEN1', refresh: '', expiresAt: Date.now() + 3600e3 } });
     const list = await voice.channels();
     assert.deepStrictEqual(list.map((c) => [c.guild, c.name]), [['Mon serveur', 'Général'], ['Mon serveur', 'Scène']]);
+    voice.logout();
+  } finally { server.close(); }
+});
+
+test('Discord fermé : il est lancé puis le salon est rejoint', async () => {
+  fs.rmSync(path.join(dir, 'discord-ipc-0'), { force: true });
+  let fake = null, launched = 0;
+  const { voice } = setup({ tok: { access: 'TOKEN1', refresh: 'R', expiresAt: Date.now() + 3600e3 }, launchWait: 6000, launch: async () => { launched++; fake = await fakeDiscord(); } });
+  try {
+    const r = await voice.toggle(FAV);
+    assert.strictEqual(launched, 1);
+    assert.deepStrictEqual(r, { ok: true, joined: true, name: 'Général' });
+    voice.logout();
+  } finally { fake?.server.close(); }
+});
+
+test('Discord ne démarre jamais : erreur après l’attente', async () => {
+  fs.rmSync(path.join(dir, 'discord-ipc-0'), { force: true });
+  const { voice } = setup({ launchWait: 4000, launch: async () => {} });
+  await assert.rejects(voice.toggle(FAV), /pas ouvert/);
+});
+
+test('peek : état réel sans jamais lancer Discord', async () => {
+  fs.rmSync(path.join(dir, 'discord-ipc-0'), { force: true });
+  let launched = 0;
+  const closed = setup({ launch: async () => { launched++; } });
+  assert.deepStrictEqual(await closed.voice.peek(), { discord: false });
+  assert.strictEqual(launched, 0);
+  const { server, st } = await fakeDiscord();
+  try {
+    const { voice } = setup({ tok: { access: 'TOKEN1', refresh: 'R', expiresAt: Date.now() + 3600e3 } });
+    assert.deepStrictEqual(await voice.peek(), { discord: true, authed: true, inVoice: false, name: '', muted: false });
+    await voice.toggle(FAV); st.mute = true;
+    assert.deepStrictEqual(await voice.peek(), { discord: true, authed: true, inVoice: true, name: 'Salon', muted: true });
     voice.logout();
   } finally { server.close(); }
 });

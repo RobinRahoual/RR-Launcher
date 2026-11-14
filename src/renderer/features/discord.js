@@ -8,14 +8,16 @@
     const main = $('#igMain');
     if (!main || $('[data-ig="dc-stream"]', main)) return;
     const quit = $('[data-ig="quit"]', main);
-    quit.insertAdjacentHTML('beforebegin', `<button class="ig-item dc-ig" data-ig="dc-stream" role="menuitem" data-nav>${ICO_LIVE}<span class="ig-label">Streamer sur Discord</span><span class="ig-meta" id="dcMeta">Go Live</span></button>`);
+    quit.insertAdjacentHTML('beforebegin', `<button class="ig-item dc-ig" data-ig="dc-stream" role="menuitem" data-nav>${ICO_LIVE}<span class="ig-label">Lancer le stream</span><span class="ig-meta" id="dcMeta">Go Live</span></button>`);
   }
+  let streaming = false;
   function igUpdate() {
     const b = $('[data-ig="dc-stream"]');
     if (!b) return;
     const s = S.lib?.settings || {};
     b.hidden = s.discordStream === false;
     const pad = S.device === 'pad', ps = S.padType === 'ps';
+    $('.ig-label', b).textContent = streaming ? 'Arrêter le stream' : 'Lancer le stream';
     $('#dcMeta').textContent = pad && s.discordStreamPad !== false ? `${ps ? 'PS' : 'Guide'} + ${ps ? '△' : 'Y'}` : (s.discordStreamKeys || '');
   }
   $('#ingame').addEventListener('click', async (e) => {
@@ -29,6 +31,8 @@
     const r = await rr.x('x:discord:stream', { delay: 700 });
     if (!r?.ok) toast(`Stream Discord : ${r?.error || 'échec'}`, true);
   }, true);
+  rr.onX('x:discord:streamState', (r) => { streaming = !!r?.streaming; igUpdate(); });
+  rr.x('x:discord:streamState').then((r) => { streaming = !!r?.streaming; igUpdate(); }).catch(() => {});
   rr.onX('x:discord:streamed', (r) => {
     if (document.visibilityState === 'visible' && r && !r.ok) toast(`Stream Discord : ${r.error}`, true);
   });

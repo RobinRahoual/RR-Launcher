@@ -9,7 +9,7 @@
 // au RPC sans validation de Discord. Le jeton est conservé dans la bibliothèque locale (store.data.discordVoice).
 //
 // Réglages : discordClientId (partagé avec la Rich Presence), discordClientSecret, discordVoiceChannel { id, name, guild },
-// discordVoicePad (défaut oui). Canaux : x:discordvoice:status | connect | channels | setChannel | toggle | mute | logout.
+// discordVoicePad (défaut oui). Canaux : x:discordvoice:status | state | connect | channels | setChannel | toggle | mute | logout.
 'use strict';
 const net = require('net');
 const path = require('path');
@@ -95,7 +95,7 @@ function createRpc({ log = () => {}, defaultTimeout = 8000 } = {}) {
 /**
  * Client haut niveau. cfg() → { clientId, clientSecret } ; tokens = { get(), set(t) } ; fetchImpl : fetch du jeton OAuth2.
  */
-function createVoice({ log = () => {}, cfg, tokens, fetchImpl = globalThis.fetch, rpc = createRpc({ log }), now = () => Date.now() }) {
+function createVoice({ log = () => {}, cfg, tokens, fetchImpl = globalThis.fetch, rpc = createRpc({ log }), now = () => Date.now(), launch = null, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), launchWait = 40000 }) {
   let authed = false;
 
   async function oauth(params) {
@@ -112,11 +112,17 @@ function createVoice({ log = () => {}, cfg, tokens, fetchImpl = globalThis.fetch
   }
 
   // Connexion + authentification (autorisation interactive la première fois ou si le jeton est perdu)
-  async function ensure({ interactive = false } = {}) {
+  async function ensure({ interactive = false, start = false } = {}) {
     const { clientId, clientSecret } = cfg();
     if (!/^\d{15,22}$/.test(clientId || '')) throw new RpcError('ID d’application Discord manquant (Réglages → Discord)');
     if (!clientSecret) throw new RpcError('Secret de l’application Discord manquant (Réglages → Discord)');
-    if (!(await rpc.connect(clientId))) { authed = false; throw new RpcError('Discord n’est pas ouvert (application de bureau)'); }
+    let up = await rpc.connect(clientId);
+    if (!up && start && launch) { // Discord fermé : on le lance puis on attend qu'il soit prêt
+      authed = false;
+      await launch();
+      for (let waited = 0; !up && waited < launchWait; waited += 2000) { await sleep(2000); up = await rpc.connect(clientId); }
+    }
+    if (!up) { authed = false; throw new RpcError('Discord n’est pas ouvert (application de bureau)'); }
     if (authed && rpc.ready) return;
     authed = false;
     let t = tokens.get();
@@ -133,7 +139,7 @@ function createVoice({ log = () => {}, cfg, tokens, fetchImpl = globalThis.fetch
 
   const selected = async () => (await rpc.request('GET_SELECTED_VOICE_CHANNEL')) || null;
   async function toggle(favorite) {
-    await ensure();
+    await ensure({ start: true });
     const cur = await selected();
     const plan = planToggle(cur, favorite);
     if (plan.action === 'none') return { ok: false, error: plan.error };
@@ -142,7 +148,7 @@ function createVoice({ log = () => {}, cfg, tokens, fetchImpl = globalThis.fetch
     return { ok: true, joined: true, name: plan.channel.name || '' };
   }
   async function mute() {
-    await ensure();
+    await ensure({ start: true });
     const v = await rpc.request('GET_VOICE_SETTINGS');
     const want = !v?.mute;
     await rpc.request('SET_VOICE_SETTINGS', { mute: want });
@@ -159,9 +165,19 @@ function createVoice({ log = () => {}, cfg, tokens, fetchImpl = globalThis.fetch
     }
     return out;
   }
-  const connect = async () => { await ensure({ interactive: true }); return { ok: true }; };
+  const connect = async () => { await ensure({ interactive: true, start: true }); return { ok: true }; };
+  // État actuel sans jamais lancer Discord : { discord, authed, inVoice, name, muted }
+  async function peek() {
+    const { clientId } = cfg();
+    if (!/^\d{15,22}$/.test(clientId || '')) return { discord: false };
+    if (!(await rpc.connect(clientId))) return { discord: false };
+    try { await ensure(); } catch { return { discord: true, authed: false }; }
+    const cur = await selected();
+    const v = await rpc.request('GET_VOICE_SETTINGS').catch(() => null);
+    return { discord: true, authed: true, inVoice: !!cur?.id, name: cur?.name || '', muted: !!v?.mute };
+  }
   const logout = () => { tokens.set(null); authed = false; rpc.close(); };
-  return { ensure, connect, toggle, mute, channels, selected, logout, planToggle, get authed() { return authed; } };
+  return { ensure, connect, toggle, mute, peek, channels, selected, logout, planToggle, get authed() { return authed; } };
 }
 
 function init(ctx) {
@@ -170,14 +186,26 @@ function init(ctx) {
   if (S().discordVoicePad === undefined) S().discordVoicePad = true;
   const cfg = () => ({ clientId: String(S().discordClientId || '').trim(), clientSecret: String(S().discordClientSecret || '').trim() });
   const tokens = { get: () => store.data.discordVoice || null, set: (t) => { if (t) store.data.discordVoice = t; else delete store.data.discordVoice; commit(); } };
-  const voice = createVoice({ log, cfg, tokens });
+  // Lance Discord (application de bureau) s'il est fermé
+  function launchDiscord() {
+    const { spawn } = require('child_process');
+    const fs = require('fs');
+    log('discord vocal : lancement de Discord');
+    notify('Discord', 'Lancement de Discord…');
+    try {
+      const up = process.env.LOCALAPPDATA && path.win32.join(process.env.LOCALAPPDATA, 'Discord', 'Update.exe');
+      if (process.platform === 'win32' && up && fs.existsSync(up)) { spawn(up, ['--processStart', 'Discord.exe'], { detached: true, stdio: 'ignore' }).unref(); return; }
+      require('electron').shell.openExternal('discord://');
+    } catch (e) { log(`discord vocal : lancement impossible (${e.message})`); }
+  }
+  const voice = createVoice({ log, cfg, tokens, launch: launchDiscord });
   const msg = (e) => (e instanceof Error ? e.message : String(e));
   const wrap = (fn) => async (...a) => { try { return await fn(...a); } catch (e) { log(`discord vocal : ${msg(e)}`); return { ok: false, error: msg(e) }; } };
 
   function notify(title, body) {
     try { const { Notification } = require('electron'); if (Notification.isSupported()) new Notification({ title, body, silent: true }).show(); } catch {}
   }
-  const doToggle = wrap(() => voice.toggle(S().discordVoiceChannel));
+  const doToggle = wrap(async () => { const r = await voice.toggle(S().discordVoiceChannel); if (r.ok) hub.emit('discord:voice', { inVoice: !!r.joined }); return r; });
   const doMute = wrap(() => voice.mute());
   const report = (r, ok, ko) => { if (r.ok) notify(...ok(r)); else notify(ko, r.error || ''); };
   hub.on('pad:combo', async (name, src) => {
@@ -193,6 +221,8 @@ function init(ctx) {
     if (out.configured && out.authorized && voice.authed) { try { const s = await voice.selected(); out.inVoice = s ? s.name || true : false; } catch {} }
     return out;
   }));
+  // État pour le menu en jeu (ne lance jamais Discord)
+  ipcMain.handle('x:discordvoice:state', wrap(async () => ({ ok: true, ...(await voice.peek()) })));
   ipcMain.handle('x:discordvoice:connect', wrap(() => voice.connect()));
   ipcMain.handle('x:discordvoice:channels', wrap(async () => ({ ok: true, channels: await voice.channels() })));
   ipcMain.handle('x:discordvoice:setChannel', (_e, ch) => {
