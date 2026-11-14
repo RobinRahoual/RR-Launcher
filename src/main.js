@@ -1288,7 +1288,7 @@ function heroWidth(g) {
 }
 async function upgradeHeroes(force) {
   const s = store.data.settings;
-  if (heroBusy || (!s.sgdbKey && !s.tgdbKey)) return;
+  if (heroBusy || (!meta.sgdbKeyOf(s) && !s.tgdbKey)) return;
   heroBusy = true;
   try {
     const WEEK = 7 * 864e5;

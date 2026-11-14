@@ -1,5 +1,9 @@
 {
   "rules": {
+    "config": {
+      ".read": "auth != null",
+      ".write": false
+    },
     "codes": {
       "$code": {
         ".read": "auth != null",

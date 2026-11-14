@@ -18,6 +18,7 @@ const { createDiscordState } = require('./friends/discord-state');
 const { steamFriends } = require('./friends/steam');
 const model = require('./friends/model');
 const { createRR } = require('./friends/rr');
+const metadata = require('../metadata');
 const FIREBASE = require('./friends/firebase.json');
 
 const STEAM_VISIBLE_MS = 60 * 1000; // onglet Amis ouvert
@@ -314,6 +315,12 @@ function init(ctx) {
   ipcMain.handle('x:friends:rrRemove', rrCall((_e, uid) => rr.remove(String(uid))));
   ipcMain.handle('x:friends:rrStats', async (_e, uid) => { try { return { ok: true, stats: await rr.stats(String(uid)) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('x:friends:rrRestart', async () => { await rr.start(); await pollRR(); return rr.info(); });
+  // Clé SteamGridDB partagée (base Firebase : config/sgdbKey, lecture réservée aux comptes connectés)
+  setTimeout(async () => {
+    if (demo || S().sgdbKey) return;
+    const k = await rr.readPublic('config/sgdbKey');
+    if (typeof k === 'string' && /^[\w-]{16,64}$/.test(k)) { metadata.setShared({ sgdb: k }); say('clé SteamGridDB partagée chargée'); }
+  }, 6000);
   // Fusion manuelle de deux profils (même personne) / séparation
   ipcMain.handle('x:friends:link', (_e, a, b) => {
     a = String(a); b = String(b);

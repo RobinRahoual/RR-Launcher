@@ -180,3 +180,7 @@ npm run dist       # construire l'installateur Windows (dist/)
 ```
 
 Stack : Electron, HTML/CSS 3D (sans framework), Gamepad API + lecture native des manettes. Icône : `build/icon.html` rendue en PNG 512 px (Chrome sans interface), copiée dans `src/renderer/assets/icon.png`. Direction visuelle issue du skill UI/UX Pro Max (Russo One + Chakra Petch). Palette : accent #3C91E6, navy #0C335A, thème clair (fond #FFFFFF, texte #101010) ou sombre (fond #101010, texte #FFFFFF) — Réglages → Thème.
+
+## Clé SteamGridDB partagée (optionnel)
+
+Ajoute dans la base Firebase des amis un nœud `config/sgdbKey` (chaîne) et colle les règles de `firebase/database.rules.json` : les launchers sans clé personnelle l'utilisent automatiquement (lecture seule, jamais écrite sur disque ni dans le dépôt). La clé perso des Réglages reste prioritaire.

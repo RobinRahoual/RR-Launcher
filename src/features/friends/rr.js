@@ -215,6 +215,7 @@ function createRR({ fetchImpl, getConfig, store, log = () => {}, profileName = (
   return {
     start, stop, refresh: async () => { if (state.state === 'ok') { try { await refresh(); } catch (e) { log(`rr : ${e.message}`); } } },
     add, accept, decline, remove, stats, setPlaying, goOffline, publishStats,
+    readPublic: async (p) => { if (!configured()) return null; try { return await db('GET', p); } catch { return null; } },
     list: () => friends, requests: () => requests, configured,
     info: () => ({ ...state, configured: configured(), code: R().code || '', uid: R().uid || '', name: profileName(), requests }),
   };

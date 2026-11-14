@@ -572,12 +572,12 @@ async function wikiSearch(term, platformName) {
 async function search(term, settings, platform) {
   if (platform && platform.id !== 'pc') {
     const tasks = [wikiSearch(term, platform.name).catch(() => [])];
-    if (settings.sgdbKey) tasks.push(sgdbSearch(term, settings.sgdbKey).catch(() => []));
+    if (sgdbKeyOf(settings)) tasks.push(sgdbSearch(term, sgdbKeyOf(settings)).catch(() => []));
     const [wiki, sg = []] = await Promise.all(tasks);
     return [...sg.slice(0, 5), ...wiki.slice(0, 6)];
   }
   const tasks = [steamSearch(term).catch(() => [])];
-  if (settings.sgdbKey) tasks.push(sgdbSearch(term, settings.sgdbKey).catch(() => []));
+  if (sgdbKeyOf(settings)) tasks.push(sgdbSearch(term, sgdbKeyOf(settings)).catch(() => []));
   const [steam, sg = []] = await Promise.all(tasks);
   const n = normalize(term);
   const rank = (x) => (normalize(x.name) === n ? 0 : normalize(x.name).startsWith(n) ? 1 : 2);
@@ -670,20 +670,20 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
   }
 
   // SteamGridDB en complément (ou en source principale pour les jeux hors Steam)
-  if (settings.sgdbKey) {
+  if (sgdbKeyOf(settings)) {
     try {
       progress('Visuels SteamGridDB…');
       let id = match.sgdbId;
-      if (!id && match.appid) id = (await sgdb(`/games/steam/${match.appid}`, settings.sgdbKey))?.id;
+      if (!id && match.appid) id = (await sgdb(`/games/steam/${match.appid}`, sgdbKeyOf(settings)))?.id;
       if (!id && !match.appid) {
         const cands = ctx.cands || [match.name];
-        const res = await sgdbSearch(cands[0], settings.sgdbKey).catch(() => []);
+        const res = await sgdbSearch(cands[0], sgdbKeyOf(settings)).catch(() => []);
         const b = names.best(res, cands);
         id = b && b.score >= 0.6 ? b.item.sgdbId : null;
       }
       if (id) {
         out.sgdbId = id;
-        const g = await sgdbImages(id, settings.sgdbKey);
+        const g = await sgdbImages(id, sgdbKeyOf(settings));
         urls.cover.push(...g.cover);
         urls.hero.push(...g.hero);
         urls.logo.push(...g.logo);
@@ -734,12 +734,12 @@ async function fetchAll(match, dir, settings, progress = () => {}, ctx = {}) {
 // Amélioration d'un fond existant en basse définition (clé SteamGridDB et/ou TheGamesDB nécessaire).
 async function upgradeHero(game, dir, settings, platformTgdb) {
   const urls = [];
-  if (settings.sgdbKey) {
+  if (sgdbKeyOf(settings)) {
     try {
       let id = game.sgdbId;
-      if (!id && game.appid) id = (await sgdb(`/games/steam/${game.appid}`, settings.sgdbKey))?.id;
-      if (!id) id = (await sgdbSearch(game.name, settings.sgdbKey))[0]?.sgdbId;
-      if (id) urls.push(...(await sgdbImages(id, settings.sgdbKey)).hero);
+      if (!id && game.appid) id = (await sgdb(`/games/steam/${game.appid}`, sgdbKeyOf(settings)))?.id;
+      if (!id) id = (await sgdbSearch(game.name, sgdbKeyOf(settings)))[0]?.sgdbId;
+      if (id) urls.push(...(await sgdbImages(id, sgdbKeyOf(settings))).hero);
     } catch (e) { log(`hero sgdb ${game.name} : ${e.message}`); }
   }
   if (settings.tgdbKey) {
@@ -749,4 +749,8 @@ async function upgradeHero(game, dir, settings, platformTgdb) {
   return downloadBest(urls, dir, `hero-hd-${Date.now().toString(36)}`, { minWidth: 1280 });
 }
 
-module.exports = { libretroMatch, englishTitle, tgdbBoxart, steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };
+// Clé SteamGridDB partagée (lue dans la base Firebase des amis, jamais écrite sur disque) : sert quand l'utilisateur n'a pas la sienne
+let SHARED = {};
+const setShared = (o) => { SHARED = { ...SHARED, ...(o || {}) }; };
+const sgdbKeyOf = (s) => (s && s.sgdbKey) || SHARED.sgdb || '';
+module.exports = { setShared, sgdbKeyOf, libretroMatch, englishTitle, tgdbBoxart, steamDetails, coopInfo, search, fetchAll, upgradeHero, downloadBest, dominantColor, normalize, setLogFile, log, platformImage, platformLogo, downloadFirst, LOGOS_VERSION, commonsInfoUrl, commonsFilePathUrl };
