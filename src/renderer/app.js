@@ -224,6 +224,7 @@ function checkLogoTone(img) {
     let sum = 0, n = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 100) { sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
     img.classList.toggle('is-light', n > 0 && sum / n > 205);
+    img.classList.toggle('is-dark', n > 0 && sum / n < 70); // logo noir : illisible sur le panneau sombre → passé en blanc (CSS)
   } catch { /* image non lisible (origine) : on garde le rendu d'origine */ }
 }
 // Logos de console : forcer un logo en silhouette (blanc sur les tuiles, noir sur la barre claire) n'a de sens
