@@ -15,7 +15,7 @@ test('Epic : seuls les vrais jeux, URI d’installation', () => {
   assert.strictEqual(c.epicItem({ appName: 'D', namespace: 'ns', catalogItemId: 'd' }, { title: 'Pack', categories: [{ path: 'addons' }] }), null);
   assert.strictEqual(c.epicItem({ appName: 'D', namespace: 'ns', catalogItemId: 'd' }, { title: 'DLC', categories: [{ path: 'games' }], mainGameItem: { id: 'x' } }), null);
   const it = c.epicItem({ appName: 'Min', namespace: 'ns', catalogItemId: 'ci' }, game);
-  assert.strictEqual(c.installPlan(it).uri, 'com.epicgames.launcher://apps/ns%3Aci%3AMin?action=install');
+  assert.strictEqual(c.installPlan(it).uri, 'com.epicgames.launcher://apps/Min?action=install');
   assert.strictEqual(c.notInstalled([it], [{ epicApp: 'Min', name: 'x' }]).length, 0);
 });
 test('GOG : OwnedGames + GamePieces', () => {

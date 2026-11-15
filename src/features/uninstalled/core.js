@@ -70,7 +70,7 @@ function notInstalled(items, games = []) {
 function installPlan(it) {
   if (!it) return null;
   if (it.store === 'steam') return { uri: `steam://install/${Number(it.id)}`, label: 'Steam' };
-  if (it.store === 'epic') return { uri: it.ns && it.item ? `com.epicgames.launcher://apps/${encodeURIComponent(it.ns)}%3A${encodeURIComponent(it.item)}%3A${encodeURIComponent(it.id)}?action=install` : 'com.epicgames.launcher://store/library', label: 'Epic Games' };
+  if (it.store === 'epic') return { uri: `com.epicgames.launcher://apps/${encodeURIComponent(it.id)}?action=install`, label: 'Epic Games' };
   if (it.store === 'gog') return { uri: `goggalaxy://openGameView/${Number(it.id)}`, label: 'GOG Galaxy' };
   return null;
 }
