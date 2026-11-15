@@ -8,7 +8,34 @@
   let st = null;
 
   async function refresh() { st = await rr.x('x:stream:status').catch(() => null); draw(); }
+  // ---- Menu principal : « Streamer (Sunshine) »
+  const ICO_SUN = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2.5" y="4" width="14" height="10" rx="2"/><path d="M6.5 18h6M9.5 14v4"/><path d="M18 9a4 4 0 0 1 0 6M20.5 7a7 7 0 0 1 0 10"/></svg>';
+  function menuMount() {
+    const panel = $('#menu .panel'), before = panel?.querySelector('[data-action="settings"]');
+    if (!panel || panel.querySelector('[data-action="sunStream"]')) return;
+    const b = document.createElement('button');
+    b.className = 'menu-item'; b.dataset.action = 'sunStream'; b.dataset.nav = ''; b.hidden = true;
+    b.innerHTML = `${ICO_SUN}<span class="mi-label">Streamer (Sunshine)</span><span class="mi-meta" id="sunMenuMeta"></span>`;
+    if (before) before.before(b); else panel.append(b);
+  }
+  function menuUpdate() {
+    const b = $('[data-action="sunStream"]');
+    if (!b) return;
+    const sun = st?.sunshine;
+    b.hidden = !sun?.installed;
+    $('#sunMenuMeta').textContent = sun?.running ? 'Actif' : 'Démarrer';
+  }
+  RR.actions.sunStream = async () => {
+    closeAll(true);
+    toast('Démarrage de Sunshine…', 'progress');
+    const r = await rr.x('x:stream:start');
+    if (r?.ok === false) { toast(`Sunshine : ${r.error || 'échec'}`, true); return; }
+    rr.x('x:stream:openUi'); st = r; refresh();
+  };
+  RR.on('mode', (m) => { if (m === 'menu') refresh(); });
+  menuMount();
   function draw() {
+    menuUpdate();
     if (!st) { box.innerHTML = ''; return; }
     const sun = st.sunshine, moon = st.moonlight, games = (S.lib?.games || []).filter((g) => !g.hidden).sort((a, b) => a.name.localeCompare(b.name));
     box.innerHTML = `
