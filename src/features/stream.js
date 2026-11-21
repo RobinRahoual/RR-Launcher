@@ -356,6 +356,12 @@ function init(ctx) {
     const urls = localAddresses().map((a) => `http://${a.address}:${MEASURE_PORT}/${mToken}/`);
     return { ok: true, url: urls[0] || '', urls };
   });
+  // Ouvre l'adresse de mesure dans le navigateur de ce PC (seulement l'URL du test en cours : adresse LAN de ce PC + jeton)
+  ipcMain.handle('x:stream:measure:open', (_e, url) => {
+    const ok = mSrv && localAddresses().some((a) => url === `http://${a.address}:${MEASURE_PORT}/${mToken}/`);
+    if (!ok) return { ok: false, error: 'Adresse de mesure non valide : relance la mesure' };
+    shell.openExternal(url); return { ok: true };
+  });
   ipcMain.handle('x:stream:measure:get', () => ({ ok: true, running: measured.running, mbps: measured.mbps, minMbps: measured.minMbps }));
   ipcMain.handle('x:stream:measure:stop', (_e, o = {}) => { mStop(); if (o?.reset) measured = { running: false, mbps: null, minMbps: null, at: 0 }; return { ok: true }; });
 

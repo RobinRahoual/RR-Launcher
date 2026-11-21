@@ -86,7 +86,7 @@
         <span style="font-size:1.6em;font-weight:700"><code>${esc(meas.url)}</code></span>
         ${meas.urls.length > 1 ? `<span class="dim">Autres adresses : ${meas.urls.map((u) => `<code>${esc(u)}</code>`).join(' · ')}</span>` : ''}
         <span class="dim" id="stMeas">En attente de la mesure…</span></div>
-      <span class="set-btns"><button class="btn" data-st="mskip" data-nav>Passer</button></span></div>`;
+      <span class="set-btns"><button class="btn" data-st="copy" data-addr="${esc(meas.url)}" data-nav>Copier l’adresse</button><button class="btn" data-st="mopen" data-nav>Ouvrir dans le navigateur</button><button class="btn" data-st="mskip" data-nav>Passer</button></span></div>`;
     return `<div class="setting"><div>${head(3, 'Mesurer ma connexion', false, locked)}<span class="dim">Optionnel : un petit test depuis le navigateur du receveur pour choisir un débit réaliste.</span></div>
       <span class="set-btns"><button class="btn" data-st="mstart" data-nav${locked ? ' disabled' : ''}>Mesurer</button><button class="btn" data-st="mskip" data-nav${locked ? ' disabled' : ''}>Passer</button></span></div>`;
   }
@@ -199,6 +199,7 @@
       if (!r.ok || !r.saved) { toast(r.error || 'Renseigne l’identifiant et le mot de passe', 'info'); return; }
       toast('Identifiants enregistrés', 'success'); const f = needLogin; needLogin = null; draw(); if (f) f();
     }
+    else if (k === 'mopen') { const r = await rr.x('x:stream:measure:open', meas.url); if (r?.ok === false) toast(r.error, true); }
     else if (k === 'copy') { try { await navigator.clipboard.writeText(b.dataset.addr); toast('Adresse copiée', 'success'); } catch { toast('Copie impossible', true); } }
     else if (k === 'pin') {
       const pin = $('#stPin').value.trim(); if (!pin) { toast('Saisis le code PIN affiché par Moonlight', 'info'); return; }
