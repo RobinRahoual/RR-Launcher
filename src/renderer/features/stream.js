@@ -34,7 +34,7 @@
   }
   RR.actions.apolloStream = async () => {
     if (!st?.apollo?.installed) { // pas encore installé : Réglages → Streaming (assistant)
-      closeAll(); renderSettings(); openOverlay('settings');
+      closeAll(); setPage = 'more'; renderSettings(); openOverlay('settings'); // le bloc Streaming est dans l'onglet « Fonctions »
       setTimeout(() => box.scrollIntoView({ block: 'start' }), 50);
       return;
     }
