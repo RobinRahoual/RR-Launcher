@@ -2,7 +2,8 @@
 'use strict';
 const fs = require('fs');
 const path = require('path');
-const { BIOS } = require('./catalog');
+const crypto = require('crypto');
+const { BIOS, BIOS_MD5 } = require('./catalog');
 const { emuKind } = require('./launch');
 
 // Dossier « system » de RetroArch : system_directory de retroarch.cfg (":\" = dossier de l'exe), sinon <exe>/system
@@ -27,6 +28,18 @@ function globMatch(pat, name) {
   if (!pat.includes('*')) return pat.toLowerCase() === name.toLowerCase();
   const re = new RegExp('^' + pat.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$', 'i');
   return re.test(name);
+}
+// Vérification par empreinte : 'ok' (conforme) | 'bad' (différent de la référence) | null (pas de référence / trop gros)
+const MAX_HASH_BYTES = 16 * 1024 * 1024;
+function md5File(full, fsx = fs) {
+  try { return crypto.createHash('md5').update(fsx.readFileSync(full)).digest('hex'); } catch { return null; }
+}
+function verify(full, size, fsx = fs) {
+  const refs = BIOS_MD5[path.basename(full).toLowerCase()];
+  if (!refs || size > MAX_HASH_BYTES) return { verified: null };
+  const hash = md5File(full, fsx);
+  if (!hash) return { verified: null };
+  return { verified: refs.includes(hash), hash };
 }
 function listDir(d, fsx) { try { return fsx.readdirSync(d); } catch { return null; } }
 
@@ -54,9 +67,16 @@ function check(platform, emu, { env = process.env, fsx = fs } = {}) {
       if (r.minSize && size < r.minSize) continue;
       found = full; break;
     }
-    out.push({ label: r.label, optional: !!r.optional, ok: !!found, found, warn, folder, files: r.any.filter((x) => !x.includes('*')) });
+    let v = { verified: null };
+    if (found) {
+      let size = 0;
+      try { size = fsx.statSync(found).size; } catch {}
+      v = verify(found, size, fsx);
+      if (v.verified === false) warn = `${path.basename(found)} : empreinte MD5 différente de la référence (autre révision, dump modifié ou fichier corrompu) — il peut quand même fonctionner`;
+    }
+    out.push({ label: r.label, optional: !!r.optional, ok: !!found, found, warn, verified: v.verified, hash: v.hash || null, folder, files: r.any.filter((x) => !x.includes('*')) });
   }
   return out;
 }
 
-module.exports = { check, retroarchSystemDir, emuDataDir, globMatch };
+module.exports = { verify, md5File, check, retroarchSystemDir, emuDataDir, globMatch };

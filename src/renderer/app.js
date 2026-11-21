@@ -42,7 +42,7 @@ const S = {
 // Évènements : 'library' (state), 'selection' (jeu), 'view' (home|games), 'mode' (mode), 'play' (jeu),
 // 'session' ({ id, running }), 'input' (source) — toute entrée clavier / manette / souris.
 const RR = {
-  _h: {}, actions: {}, hints: [],
+  _h: {}, actions: {}, hints: [], ovHints: [], navHooks: [], // ovHints : aides de la barre du bas dans les panneaux ; navHooks : (dir) => true si la direction est gérée par le module
   on(e, f) { (this._h[e] ||= []).push(f); },
   emit(e, ...a) { for (const f of this._h[e] || []) { try { f(...a); } catch (err) { console.error('RR.' + e, err); } } },
 };
@@ -224,6 +224,7 @@ function checkLogoTone(img) {
     let sum = 0, n = 0;
     for (let i = 0; i < d.length; i += 4) if (d[i + 3] > 100) { sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2]; n++; }
     img.classList.toggle('is-light', n > 0 && sum / n > 205);
+    img.classList.toggle('is-dark', n > 0 && sum / n < 70); // logo noir : illisible sur le panneau sombre → passé en blanc (CSS)
   } catch { /* image non lisible (origine) : on garde le rendu d'origine */ }
 }
 // Logos de console : forcer un logo en silhouette (blanc sur les tuiles, noir sur la barre claire) n'a de sens
@@ -802,7 +803,7 @@ function frameGames(t, dt) {
     if (visible.size) { for (const el of visible) el.style.display = 'none'; visible = new Set(); }
     return;
   }
-  spring(S, S.sel, dt);
+  spring(S, S.sel + (S.addSel ? 1 : 0), dt);
   S.flipCur += (S.flip - S.flipCur) * Math.min(1, 0.13 * dt);
   const { H } = S.dims;
   const W = S.dims.Wref || H * 0.66;
@@ -859,7 +860,31 @@ function frameGames(t, dt) {
   }
   for (const el of visible) if (!now.has(el)) el.style.display = 'none';
   visible = now;
+  addTileFrame(S.items.length, anchor, top, base, f0, g0, g1, H, W);
   syncActFocus();
+}
+// Tuile « Ajouter des jeux » en fin de rangée (sélectionnable avec → après le dernier jeu)
+function addTileFrame(n, anchor, top, base, f0, g0, g1, H, W) {
+  let el = $('#addTile');
+  if (!el) {
+    el = document.createElement('button');
+    el.id = 'addTile'; el.className = 'add-tile'; el.type = 'button'; el.tabIndex = -1; el.hidden = true;
+    el.setAttribute('aria-label', 'Ajouter des jeux'); el.innerHTML = '<span class="t-plus" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></span><b>Ajouter</b>';
+    el.addEventListener('click', () => { if (S.mode === 'main') action('addHub'); });
+    $('#carousel').appendChild(el);
+  }
+  const show = S.view === 'games' && n > 0 && S.mode === 'main';
+  el.hidden = !show;
+  document.body.classList.toggle('add-sel', !!(S.addSel && show));
+  el.classList.toggle('is-selected', !!S.addSel);
+  if (!show) return;
+  const w = H * 0.7, h = w;
+  el.style.setProperty('--box-h', h + 'px'); el.style.width = w + 'px'; el.style.height = h + 'px'; el.style.left = (-w / 2) + 'px'; el.style.top = (-h / 2) + 'px';
+  const o = n - S.pos;
+  const extra = (n > f0 ? g0 : 0) + (n > f0 + 1 ? g1 : 0);
+  const x = anchor + cumAt(n) - base + extra + w / 2 + (S.addSel ? w * 0.083 : 0), y = top + H / 2;
+  el.style.transform = `translate3d(${x.toFixed(2)}px, ${y.toFixed(2)}px, 0) scale(${S.addSel ? 1.166 : 1})`;
+  el.style.opacity = clamp(1 - Math.max(0, o - 3) * 0.3, 0, 1).toFixed(3);
 }
 
 // ---------------------------------------------------------------- Fond
@@ -954,7 +979,7 @@ function updateBrand() {
   const t = $('#brandTitle');
   if (S.view === 'home') {
     t.className = 'brand-title is-home';
-    t.innerHTML = '<span class="brand-mark" role="img" aria-label="RR Launcher">RR</span>';
+    t.innerHTML = '<button class="brand-mark" data-action="home" data-nav data-tip="Accueil" aria-label="RR Launcher : retour à l’accueil">RR</button>';
     return;
   }
   const p = S.plat === 'all' ? null : plat(S.plat);
@@ -1023,7 +1048,7 @@ function renderCapActions(g) {
 // Zone de focus de l'écran jeux : la rangée de boîtes ou les boutons sous les infos (↓ / ↑)
 const capBtns = () => $$('#capActions .cap-btn');
 function setZone(z, silent = false) {
-  if (z === 'actions' && (!S.items.length || S.view !== 'games')) return;
+  if (z === 'actions' && (!S.items.length || S.view !== 'games' || S.addSel)) return;
   if (S.zone === z) return;
   S.zone = z;
   if (z === 'actions') S.act = 0;
@@ -1103,6 +1128,7 @@ function cycleTab(d) {
 // ---------------------------------------------------------------- Navigation jeux
 function select(i, { spin = true } = {}) {
   if (!S.items.length) return;
+  S.addSel = false; // quitte la tuile d'ajout
   i = clamp(i, 0, S.items.length - 1);
   if (i === S.sel) return;
   if (spin && !reduceMotion) S.spin.set(i, 360);
@@ -1121,7 +1147,11 @@ function emitSelection() {
   lastSelEmit = g?.id || null;
   RR.emit('selection', g);
 }
-const move = (d) => select(S.sel + d, { spin: Math.abs(d) === 1 });
+const move = (d) => {
+  if (S.addSel) { if (d < 0) { S.addSel = false; sfx('move'); if (d < -1) select(S.sel + d + 1); } return; } // sur la tuile : ← revient au dernier jeu
+  if (S.view === 'games' && S.items.length && d > 0 && S.sel >= S.items.length - 1) { S.addSel = true; S.flip = 0; sfx('move'); return; }
+  select(S.sel + d, { spin: Math.abs(d) === 1 });
+};
 let slotClickT;
 function onSlotClick(id) {
   if (S.mode !== 'main' || S.view !== 'games') return;
@@ -1303,6 +1333,10 @@ function setFocus(el) {
   el.focus({ preventScroll: false });
   if (S.device !== 'mouse') el.classList.add('is-focus');
   el.scrollIntoView({ block: 'nearest' });
+  if (S.mode !== 'main' && !el.matches('[data-rc-open]')) { // premier / dernier élément d'un panneau : on montre l'en-tête / le pied
+    const sc = scrollerOf(el);
+    if (sc) { const inSc = navables().filter((n) => sc.contains(n)); if (el === inSc[0]) sc.scrollTop = 0; else if (el === inSc.at(-1)) sc.scrollTop = sc.scrollHeight; }
+  }
   if (S.mode === 'details') renderHints(); // BOXOPEN : libellé de A selon le bouton focalisé
 }
 function focusFirst() {
@@ -1310,7 +1344,40 @@ function focusFirst() {
   const pref = list.find((el) => el.matches('[data-default]')) || list.find((el) => el.matches('.primary, [aria-selected="true"]')) || list[0];
   setFocus(S.mode === 'add' && !$('#addStep2').hidden ? $('#addConfirm') : pref);
 }
+// ---------------------------------------------------------------- Défilement à la manette (panneaux)
+const isScrollable = (p) => { const o = getComputedStyle(p).overflowY; return (o === 'auto' || o === 'scroll') && p.scrollHeight > p.clientHeight + 4; };
+function scrollerOf(el) {
+  for (let p = el && el.parentElement; p && p !== document.body; p = p.parentElement) if (isScrollable(p)) return p;
+  return null;
+}
+function overlayScroller() {
+  const a = document.activeElement;
+  const s = a && a !== document.body ? scrollerOf(a) : null;
+  if (s) return s;
+  const root = $(OVERLAYS[S.mode]);
+  return root ? [root, ...$$('*', root)].find((x) => x.offsetParent !== null && isScrollable(x)) || null : null;
+}
+// Stick droit : défile le panneau (courbe progressive : doux au début, rapide à fond)
+function padScroll(ry, dtMs) {
+  const sc = overlayScroller();
+  if (!sc) return;
+  const k = (Math.abs(ry) - 0.2) / 0.8;
+  sc.scrollTop += Math.sign(ry) * k * k * dtMs * 1.6 + Math.sign(ry) * k * dtMs * 0.3;
+}
+// LT / RT : une page vers le haut / le bas, et le focus suit sur le premier élément visible
+function padPage(step) {
+  const sc = overlayScroller();
+  if (!sc) return false;
+  const before = sc.scrollTop;
+  sc.scrollTop += step * sc.clientHeight * 0.85;
+  const box = sc.getBoundingClientRect();
+  const vis = navables().filter((el) => sc.contains(el) && el.getBoundingClientRect().top >= box.top - 2 && el.getBoundingClientRect().bottom <= box.bottom + 2);
+  const target = step > 0 ? vis[0] : vis.at(-1);
+  if (target) { setFocus(target); sfx('move'); }
+  return sc.scrollTop !== before || !!target;
+}
 function spatial(dir) {
+  for (const f of RR.navHooks) { try { if (f(dir)) return; } catch (err) { console.error('RR.navHook', err); } }
   const list = navables();
   if (!list.length) return;
   const cur = list.includes(document.activeElement) ? document.activeElement : null;
@@ -1325,8 +1392,13 @@ function spatial(dir) {
     const dx = x - cx, dy = y - cy;
     const ok = { left: dx < -4 && Math.abs(dy) < r0.height * 1.2 + 20, right: dx > 4 && Math.abs(dy) < r0.height * 1.2 + 20, up: dy < -4, down: dy > 4 }[dir];
     if (!ok) continue;
-    const d = dir === 'left' || dir === 'right' ? Math.abs(dx) + Math.abs(dy) * 3 : Math.abs(dy) + Math.abs(dx) * 0.6;
+    const overlap = Math.max(0, Math.min(r.right, r0.right) - Math.max(r.left, r0.left)); // colonne commune : on reste dans la colonne
+    const d = dir === 'left' || dir === 'right' ? Math.abs(dx) + Math.abs(dy) * 3 : Math.abs(dy) + Math.abs(dx) * (overlap > 0 ? 0.2 : 1.2);
     if (d < bestD) { bestD = d; best = el; }
+  }
+  if (!best && (dir === 'up' || dir === 'down') && S.mode !== 'main') { // plus rien dans cette direction : on défile d'abord pour lire la suite
+    const sc = scrollerOf(cur);
+    if (sc && (dir === 'down' ? sc.scrollTop + sc.clientHeight < sc.scrollHeight - 4 : sc.scrollTop > 4)) { sc.scrollTop += (dir === 'down' ? 1 : -1) * sc.clientHeight * 0.6; return; }
   }
   if (!best && (dir === 'down' || dir === 'right')) best = list[(list.indexOf(cur) + 1) % list.length];
   if (!best && (dir === 'up' || dir === 'left')) best = list[(list.indexOf(cur) - 1 + list.length) % list.length];
@@ -1550,6 +1622,7 @@ function boClear() {
 // Point d'entrée : A / Entrée / clic / X / I / « Détails » dans l'écran jeux
 function openGame() {
   if (BO.busy || S.mode !== 'main' || S.view !== 'games') return;
+  if (S.addSel) return action('addHub');
   const g = S.items[S.sel];
   if (!g) return;
   const slot = slots.get(g.id);
@@ -1968,7 +2041,7 @@ $('#scanImport').addEventListener('click', async () => {
 // ---------------------------------------------------------------- Curseurs de volume (sons, vidéos, musique)
 // <label class="vol" data-vol="clé"><input type="range"> : 0–100 % ↔ 0–1 dans les réglages. Aperçu en direct,
 // enregistrement groupé ; flèches gauche / droite au clavier comme à la manette.
-const VOL_DEF = { volume: 0.7, mediaVideoVolume: 0.6, mediaMusicVolume: 0.3 };
+const VOL_DEF = { volume: 0.35, mediaVideoVolume: 0.3, mediaMusicVolume: 0.12 };
 function volSlider(k, label) {
   return `<label class="vol" data-vol="${k}"><input type="range" min="0" max="100" step="5" aria-label="${label}" data-nav /><output></output></label>`;
 }
@@ -2013,7 +2086,7 @@ async function ptEpicRender() {
   const on = st.epic?.connected;
   b.textContent = on ? 'Déconnecter' : 'Connecter';
   b.dataset.on = on ? '1' : '';
-  if (on) t.textContent = `Connecté${st.epic.name ? ` : ${st.epic.name}` : ''}${st.errors?.epic ? ` · ${st.errors.epic}` : st.sources?.epic >= 0 ? ` · ${st.sources.epic} jeu(x) avec du temps de jeu` : ''}`;
+  if (on) t.textContent = `Connecté${st.epic.name ? ` : ${st.epic.name}` : ''}${st.errors?.epic ? ` · ${st.errors.epic}` : st.epicInfo ? ` · ${st.epicInfo.entries} jeu(x) avec du temps chez Epic, ${st.epicInfo.matched}/${st.epicInfo.games} de ta bibliothèque associé(s)${st.epicInfo.miss?.length ? ` · sans correspondance : ${st.epicInfo.miss.join(', ')}` : ''}${st.epicInfo.entries && st.epicInfo.matched < st.epicInfo.games && st.epicInfo.ids?.length ? ` · ex. chez Epic : ${st.epicInfo.ids.slice(0, 4).join(', ')}` : ''}` : ' · pas encore synchronisé'}`;
   else t.textContent = 'Epic ne garde pas le temps de jeu sur le PC : connecte ton compte pour reprendre les heures affichées dans le launcher Epic.';
 }
 setTimeout(ptEpicRender, 1500);
@@ -2195,10 +2268,10 @@ function glyph(btn) {
     // LOOK : boutons Menu / Vue / croix en glyphes ronds (réf. ES-DE « ⊜ MENU », Switch « ⊕ Options »)
     const roundIco = { menu: ICON.menu, view: ICON.view, lr: ICON.lr, ud: ICON.ud }[btn];
     if (roundIco) return `<span class="glyph round g-ico">${roundIco}</span>`;
-    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB' }[btn];
+    const pill = { lb: ps ? 'L1' : 'LB', rb: ps ? 'R1' : 'RB', rs: ps ? 'R3' : 'RS', lt: ps ? 'L2' : 'LT', rt: ps ? 'R2' : 'RT' }[btn] || btn;
     return `<span class="glyph pill">${pill}</span>`;
   }
-  const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
+  const keys = { a: 'Entrée', b: 'Échap', x: 'I', y: S.mode === 'details' ? 'Ctrl+Entrée' : 'Espace', lb: 'Tab', pgud: 'PgUp/PgDn', tab: 'Ctrl+Tab', view: 'N', menu: S.view === 'home' ? 'Échap' : 'M', lr: ICON.lr, ud: ICON.ud };
   const k = keys[btn];
   if (!k) return '';
   // LOOK : touche d'un caractère ou flèches → glyphe rond ; nom de touche → pastille arrondie
@@ -2221,6 +2294,7 @@ function renderHints() {
     if (S.mode === 'settings') h(S.device === 'pad' ? ['lb', 'rb'] : ['tab'], 'Sections', 'setNext');
     const onPlay = S.mode === 'details' && document.activeElement?.matches?.('.d-play'); // BOXOPEN : A = Jouer sur la page du jeu
     if (S.mode === 'details' && !onPlay) h(['y'], 'Jouer', 'play');
+    if (S.device === 'pad' && S.mode !== 'recomp' && S.mode !== 'menu' && overlayScroller()) h(['rs'], 'Défiler', null);
     h(['ud'], 'Se déplacer', null);
     h(['a'], onPlay ? 'Jouer' : S.mode === 'scan' && !$('#scanResults').hidden ? 'Cocher / valider' : 'Valider', null);
   }
@@ -2245,6 +2319,7 @@ function renderHints() {
       h(['a'], 'Ouvrir', 'details'); // BOXOPEN : A ouvre la page du jeu (Jouer y est focalisé)
     }
   }
+  if (S.mode !== 'main') for (const f of RR.ovHints) { try { f(h, S.mode); } catch (err) { console.error(err); } }
   if (S.mode === 'main') for (const f of RR.hints) { try { f(h); } catch (err) { console.error(err); } }
   $('#hintList').innerHTML = H.map((x, i) => `<button class="hint" data-hint="${i}" ${x.act ? '' : 'tabindex="-1"'}>${x.btns.map(glyph).join('')}<span class="hint-label">${esc(x.label)}</span></button>`).join('');
   $$('#hints .hint').forEach((b) => b.addEventListener('click', () => { const a = H[+b.dataset.hint].act; if (a) action(a); }));
@@ -2321,7 +2396,7 @@ addEventListener('keydown', (e) => {
     if (z) { e.preventDefault(); z(); return; }
   }
   const map = {
-    ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
+    ArrowRight: () => move(1), ArrowLeft: () => (S.sel === 0 && !S.addSel ? goHome() : move(-1)), Home: () => select(0, { spin: false }), End: () => select(S.items.length - 1, { spin: false }),
     PageDown: () => move(5), PageUp: () => move(-5), Enter: () => (S.items.length ? openGame() : setTab('all')), // BOXOPEN
     ArrowDown: () => setZone('actions'), ArrowUp: () => shellFocusTop(),
     i: openGame, I: openGame, ' ': flip, f: () => toggleFav(), F: () => toggleFav(),
@@ -2377,7 +2452,7 @@ const NAV_BITS = [[0x1000, 0], [0x2000, 1], [0x4000, 2], [0x8000, 3], [0x0100, 4
 const padKind = (id) => (/054c|dualsense|dualshock|wireless controller|playstation/i.test(id) ? 'ps' : 'xbox');
 function padSnapshot(useApi = document.hasFocus()) {
   const b = new Array(17).fill(false);
-  let ax = 0, ay = 0, any = false, kind = null;
+  let ax = 0, ay = 0, ry = 0, any = false, kind = null;
   const pads = useApi ? [...(navigator.getGamepads?.() || [])].filter((g) => g && g.connected) : [];
   const std = pads.filter((g) => g.mapping === 'standard');
   const native = NATIVE.mask && performance.now() - NATIVE.at < 1200 ? NATIVE.mask : 0;
@@ -2389,9 +2464,10 @@ function padSnapshot(useApi = document.hasFocus()) {
     const x = gp.axes[0] || 0, y = gp.axes[1] || 0;
     if (Math.abs(x) > Math.abs(ax)) ax = x;
     if (Math.abs(y) > Math.abs(ay)) ay = y;
+    const r = gp.axes[3] || 0; if (Math.abs(r) > Math.abs(ry)) ry = r; // stick droit : défilement
   }
   if (native) { any = true; for (const [bit, i] of NAV_BITS) if (native & bit) b[i] = true; }
-  return { b, ax, ay, any, kind };
+  return { b, ax, ay, ry, any, kind };
 }
 window.padSnapshot = padSnapshot;
 function pollPad(t) {
@@ -2403,6 +2479,8 @@ function pollPad(t) {
   const ax = snap.ax, ay = snap.ay;
   const dir = b[14] || ax < -0.55 ? 'left' : b[15] || ax > 0.55 ? 'right' : b[12] || ay < -0.55 ? 'up' : b[13] || ay > 0.55 ? 'down' : null;
   const pressed = (i) => b[i] && !pad.prev[i];
+  if (Math.abs(snap.ry) > 0.2 && S.mode !== 'main' && !LD.active && BO.kind !== 'open' && BO.kind !== 'cancel') { setDevice('pad'); padScroll(snap.ry, Math.min(64, t - (pad.t || t))); }
+  pad.t = t;
   if (b.some(Boolean) || dir) setDevice('pad');
   if (dir) {
     if (pad.axisDir !== dir) { pad.axisDir = dir; pad.next = t + REPEAT_DELAY; onPadDir(dir, false); }
@@ -2433,7 +2511,7 @@ function onPadDir(dir, repeat) {
     if (dir === 'left') moveAct(-1); else if (dir === 'right') moveAct(1); else if (dir === 'up') setZone('row');
     return;
   }
-  if (dir === 'left') { if (S.sel === 0) { if (!repeat) goHome(); } else move(-1); }
+  if (dir === 'left') { if (S.sel === 0 && !S.addSel) { if (!repeat) goHome(); } else move(-1); }
   else if (dir === 'right') move(1);
   else if (dir === 'down' && !repeat) setZone('actions');
   else if (dir === 'up' && !repeat) shellFocusTop();
@@ -2471,6 +2549,7 @@ function onPadBtn(btn) {
   else if (btn === 'menu') action('menu');
   else if (btn === 'y' && S.mode === 'details') play();
   else if (S.mode === 'settings' && (btn === 'lb' || btn === 'rb')) cycleSettingsPage(btn === 'lb' ? -1 : 1);
+  else if ((btn === 'lt' || btn === 'rt') && !document.activeElement?.matches?.('[data-rc-open]')) padPage(btn === 'lt' ? -1 : 1);
 }
 addEventListener('gamepadconnected', () => { setDevice('pad'); }); // la notification est affichée par features/polish.js
 
@@ -2682,7 +2761,7 @@ function applyLib(state) {
   S.lib = state;
   applyTheme();
   S.P = Object.fromEntries(state.platforms.map((p) => [p.id, p]));
-  Sfx.set(state.settings.sounds, state.settings.volume ?? 0.7);
+  Sfx.set(state.settings.sounds, state.settings.volume ?? 0.35);
   refresh();
   if (S.mode === 'settings') renderSettings();
   RR.emit('library', state);
@@ -2930,7 +3009,7 @@ rr.onRunning(({ id, running }) => {
 function wakeQuiet(fn) { // navigation sans les sons intermédiaires : un seul son d'ouverture
   const s = S.lib.settings || {};
   Sfx.set(false);
-  try { fn(); } finally { Sfx.set(s.sounds, s.volume ?? 0.7); }
+  try { fn(); } finally { Sfx.set(s.sounds, s.volume ?? 0.35); }
 }
 // Rangée de jeux de la console du jeu quitté, sélection sur ce jeu
 function wakeShowGame(id, pid) {

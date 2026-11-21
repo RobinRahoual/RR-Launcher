@@ -435,3 +435,13 @@ body[data-view="home"] .cap-badges { display: none; }
 .vol:has(input.is-focus), .vol:has(input:focus-visible) { box-shadow: 0 0 0 2px var(--accent); }
 .vol output { min-width: 44px; text-align: right; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; color: rgba(var(--fg-rgb),.8); }
 .vol.is-off { opacity: .4; pointer-events: none; }
+
+/* Recherche dans les Réglages */
+.set-search { display: flex; align-items: center; gap: 12px; margin: 10px 0 2px; }
+.set-search input { flex: 1; }
+.sx-hide { display: none !important; }
+#settings.searching .set-tabs { opacity: .55; }
+#settings .set-scroll { display: contents; }
+#settings.searching .set-scroll { display: block; flex: 1 1 auto; min-height: 0; overflow: auto; padding-right: 10px; margin-right: -10px; scrollbar-width: thin; }
+#settings.searching .set-page, #settings.searching .set-page:not([hidden]) { flex: none; min-height: 0; overflow: visible; padding-right: 0; margin-right: 0; }
+#settings.searching .set-tab[aria-selected="true"] { background: transparent; box-shadow: none; color: inherit; }

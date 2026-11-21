@@ -53,10 +53,52 @@ function createEpic({ store, fetchImpl, safe, log = () => {} }) {
     const t = await bearer();
     const acc = unpack()?.account;
     const r = await fetchImpl(PLAYTIME_URL(acc), { headers: { Authorization: `Bearer ${t}` } });
-    if (!r.ok) throw new Error(`Epic : HTTP ${r.status}`);
-    return core.epicTimes(await r.json());
+    if (!r.ok) {
+      const body = await r.json().catch(() => ({}));
+      throw new Error(`Epic : HTTP ${r.status}${body.errorMessage ? ` — ${String(body.errorMessage).slice(0, 120)}` : ''}`);
+    }
+    const list = await r.json();
+    log(`epic : ${Array.isArray(list) ? list.length : 0} entrée(s) de temps de jeu reçues`);
+    return core.epicTimes(list);
+  }
+  // Bibliothèque possédée : records (library-service) puis titres / catégories (catalogue), mis en cache.
+  const CAT = (ns, id) => `https://catalog-public-service-prod06.ol.epicgames.com/catalog/api/shared/namespace/${encodeURIComponent(ns)}/bulk/items?id=${encodeURIComponent(id)}&includeDLCDetails=true&includeMainGameDetails=true&country=FR&locale=fr`;
+  async function library() {
+    const t = await bearer();
+    const H = { Authorization: `Bearer ${t}` };
+    const records = [];
+    let cursor = '';
+    for (let i = 0; i < 30; i++) {
+      const r = await fetchImpl(`https://library-service.live.use1a.on.epicgames.com/library/api/public/items?includeMetadata=true&platform=Windows${cursor ? `&cursor=${encodeURIComponent(cursor)}` : ''}`, { headers: H });
+      if (!r.ok) throw new Error(`Epic : HTTP ${r.status}`);
+      const j = await r.json();
+      records.push(...(j.records || []));
+      cursor = j.responseMetadata?.nextCursor || '';
+      if (!cursor) break;
+    }
+    const seen = new Set();
+    const recs = records.filter((x) => x.namespace && x.namespace !== 'ue' && x.catalogItemId && x.appName && !seen.has(x.appName) && seen.add(x.appName));
+    const cache = (store.data.epicCatalog ||= {});
+    const todo = recs.filter((x) => !cache[x.catalogItemId]?.title);
+    let k = 0;
+    await Promise.all(Array.from({ length: 6 }, async () => {
+      while (k < todo.length) {
+        const x = todo[k++];
+        try {
+          const r = await fetchImpl(CAT(x.namespace, x.catalogItemId), { headers: H });
+          if (!r.ok) continue;
+          const j = await r.json();
+          const c = j[x.catalogItemId];
+          if (c && c.title) cache[x.catalogItemId] = { title: c.title, categories: (c.categories || []).map((y) => ({ path: y.path })), keyImages: (c.keyImages || []).map((y) => ({ type: y.type, url: y.url })), mainGameItem: c.mainGameItem ? { id: c.mainGameItem.id } : null };
+        } catch { /* réessayé à la prochaine synchro */ }
+      }
+    }));
+    store.save?.();
+    log(`epic bibliothèque : ${records.length} entrées, ${recs.length} jeux candidats, ${recs.filter((x) => cache[x.catalogItemId]?.title).length} avec fiche catalogue`);
+    return recs.map((rec) => ({ rec, cat: cache[rec.catalogItemId] || null }));
   }
   return {
+    library,
     connected: () => !!(D().enc || D().plain),
     name: () => D().name || '',
     loginWithCode: (code) => token({ grant_type: 'authorization_code', code }),

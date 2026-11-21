@@ -14,6 +14,8 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -58,11 +60,47 @@ jobs:
       - run: npm ci
         if: steps.check.outputs.skip == 'false'
 
-      - name: Build & publish
-        if: steps.check.outputs.skip == 'false'
+      # Sans signature (secret SIGNPATH_API_TOKEN absent) : build + publication directe, comme avant.
+      - name: Build & publish (non signé)
+        if: steps.check.outputs.skip == 'false' && env.SIGNPATH_API_TOKEN == ''
         run: npx electron-builder --win nsis --x64 --publish always
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Avec signature : build sans publier → SignPath signe l'installateur → latest.yml recalculé → publication.
+      - name: Build (sans publier)
+        if: steps.check.outputs.skip == 'false' && env.SIGNPATH_API_TOKEN != ''
+        run: npx electron-builder --win nsis --x64 --publish never
+
+      - name: Envoyer l'installateur à SignPath
+        id: unsigned
+        if: steps.check.outputs.skip == 'false' && env.SIGNPATH_API_TOKEN != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: installateur-non-signe
+          path: dist/*.exe
+
+      - name: Signer avec SignPath
+        if: steps.check.outputs.skip == 'false' && env.SIGNPATH_API_TOKEN != ''
+        uses: signpath/github-action-submit-signing-request@v1
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+
+      - name: Publier l'installateur signé
+        if: steps.check.outputs.skip == 'false' && env.SIGNPATH_API_TOKEN != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cp signed/*.exe dist/            # remplace l'installateur non signé
+          node build/finalize-release.js dist
+          gh release upload "v${{ steps.check.outputs.version }}" dist/*.exe dist/latest.yml --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Nettoyer les releases en double
         if: always()

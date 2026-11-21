@@ -133,6 +133,34 @@ Une vraie liste d’amis dans le launcher, sans Steam ni Discord, portée par un
 - **Rich Presence** : ton profil Discord affiche le jeu en cours, la console et la durée. Crée une application gratuite sur [discord.com/developers/applications](https://discord.com/developers/applications) (son nom est affiché : appelle-la « RR Launcher »), copie l'**Application ID** dans **Réglages → Fonctions → Discord**, puis « Tester ». Optionnel : image `logo` dans *Rich Presence → Art Assets*. Les jeux Steam affichent leur jaquette.
 - **Stream (Go Live) sans quitter le jeu** : menu en jeu → **Streamer sur Discord**, ou **Guide + Y** (PS + △). Il faut être déjà en vocal. Discord ne laisse pas les applications démarrer un partage d'écran : le launcher appuie à ta place sur le raccourci Discord du stream — crée-le une fois dans Discord → Paramètres → Raccourcis clavier (action stream / Go Live) avec la même combinaison que dans le launcher (par défaut **Ctrl+Shift+F9**).
 
+## Nouveautés 1.25
+
+- **Jeux à installer** (Menu) : tes jeux possédés mais pas installés sur Steam (clé API des Réglages), Epic (compte connecté) et GOG (Galaxy), avec recherche et filtre par store. « Installer » ouvre le client du store sur le jeu.
+
+## Nouveautés 1.21
+
+- **Mettre à jour** et **Désinstaller** sur la page d’un jeu (Steam : direct ; Epic/GOG : ouvre leur client ; autres : désinstalleur du dossier du jeu).
+- Onglet **À mettre à jour** dans la liste des jeux.
+
+## Nouveautés 1.19
+- **Mode Kiosque / TV** : s'active tout seul quand une manette est branchée (Réglages → Kiosque : auto / toujours / jamais) — plein écran, curseur masqué, interface agrandie.
+- **Epic & GOG** : import des jeux installés et lancement direct (Epic sans client si le jeu n'a pas de protection ; GOG direct ou via Galaxy). Réglable jeu par jeu.
+- **BIOS** : vérification des empreintes MD5 (« non conforme » signalé, sans bloquer).
+- **Reprise** : relance un émulateur sur le dernier état sauvegardé (option globale ou par jeu).
+- **Collections intelligentes** : règles (jamais lancé, court, coop, récent, oublié, adoré…) affichées comme onglets ; éditeur dans les réglages.
+- **Journal de lancement** : commande exacte, code de sortie, erreurs — consultable et exportable.
+- **Mods & patchs** : activer / ordonner des mods de fichiers (réversible, sauvegardes) et appliquer des patchs IPS / BPS / UPS sur une copie de la ROM (« <ROM> (patché) »).
+- **Vocal Discord à la manette** : Guide + X rejoint / quitte le salon, Guide + A coupe le micro (+ entrées du menu en jeu). Réglages → Discord : renseigner le *Client Secret* de ton application Discord, choisir le salon, « Se connecter ». Le redirect `http://127.0.0.1` doit être ajouté dans l'application Discord (OAuth2).
+- **Streaming vers un autre écran** (Apollo, fork de Sunshine) : Réglages → Streaming, un assistant en 4 étapes.
+  1. *Installer Apollo* : installation automatique (confirmation Windows), puis démarrage ; les identifiants de l'interface sont créés automatiquement.
+  2. *Mon objectif* : receveur (TV, Fire TV, Apple TV, téléphone, PC…), liaison Ethernet / Wi-Fi, cible (4K 60, 1440p 120, 1080p 120, 1080p 60).
+  3. *Mesurer ma connexion* (optionnel) : ouvre l'adresse affichée dans le navigateur du receveur pour mesurer le débit réel.
+  4. *Appliquer* : le launcher calcule le profil (résolution, codec, débit, avertissements) et configure Apollo ; il affiche les réglages à saisir dans Moonlight / Artemis et permet d'appairer avec le code PIN.
+  Ensuite, ajoute « RR Launcher » ou un jeu précis comme application Apollo (`RR Launcher.exe --launch=<id>` lance le jeu directement).
+
+### Signature de l'installateur (SignPath)
+Le workflow `release.yml` signe l'installateur si le secret `SIGNPATH_API_TOKEN` existe (sinon publication non signée, comme avant). Prérequis : candidature **SignPath Foundation** (gratuit pour l'open source, validation manuelle), puis dans GitHub → Settings : secret `SIGNPATH_API_TOKEN` et variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`. Après signature, `build/finalize-release.js` recalcule `latest.yml` (sha512 / taille) pour que la mise à jour automatique reste valide.
+
 ## Thème
 
 **Réglages → Apparence → Thème** : Clair (défaut), Sombre ou Auto (suit Windows).
@@ -161,3 +189,9 @@ npm run dist       # construire l'installateur Windows (dist/)
 ```
 
 Stack : Electron, HTML/CSS 3D (sans framework), Gamepad API + lecture native des manettes. Icône : `build/icon.html` rendue en PNG 512 px (Chrome sans interface), copiée dans `src/renderer/assets/icon.png`. Direction visuelle issue du skill UI/UX Pro Max (Russo One + Chakra Petch). Palette : accent #3C91E6, navy #0C335A, thème clair (fond #FFFFFF, texte #101010) ou sombre (fond #101010, texte #FFFFFF) — Réglages → Thème.
+
+## Clé SteamGridDB partagée (optionnel)
+
+Ajoute dans la base Firebase des amis un nœud `config/sgdbKey` (chaîne) et colle les règles de `firebase/database.rules.json` : les launchers sans clé personnelle l'utilisent automatiquement (lecture seule, jamais écrite sur disque ni dans le dépôt). La clé perso des Réglages reste prioritaire.
+
+Même principe pour Discord : `config/discordClientId` et `config/discordClientSecret` (Firebase) évitent à chacun de créer son application. La Rich Presence marche pour tout le monde ; pour le vocal, Discord n'autorise que les testeurs de l'application (Developer Portal → App Testers, 50 max).

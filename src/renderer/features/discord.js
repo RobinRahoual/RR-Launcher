@@ -1,6 +1,11 @@
 // Module DISCORD — Rich Presence + stream Discord (Go Live) depuis le menu en jeu / Guide + Y.
 // Côté main : src/features/discord.js (canaux x:discord:*).
 (() => {
+  // Configuration Discord partagée (lue dans la base Firebase) : pas besoin de créer sa propre application
+  window.RRShared ||= { discord: false };
+  const sharedUpd = (r) => { window.RRShared.discord = !!r?.discord; if (typeof menuUpdate === 'function') menuUpdate(); };
+  rr.onX('x:shared:update', sharedUpd);
+  rr.x('x:shared:get').then(sharedUpd).catch(() => {});
   const ICO_LIVE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="12" rx="2.5"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="11" r="2.2"/><path d="M8.2 7.8a5 5 0 0 0 0 6.4M15.8 7.8a5 5 0 0 1 0 6.4"/></svg>';
 
   // ---- Menu en jeu : « Streamer sur Discord »
@@ -8,14 +13,40 @@
     const main = $('#igMain');
     if (!main || $('[data-ig="dc-stream"]', main)) return;
     const quit = $('[data-ig="quit"]', main);
-    quit.insertAdjacentHTML('beforebegin', `<button class="ig-item dc-ig" data-ig="dc-stream" role="menuitem" data-nav>${ICO_LIVE}<span class="ig-label">Streamer sur Discord</span><span class="ig-meta" id="dcMeta">Go Live</span></button>`);
+    quit.insertAdjacentHTML('beforebegin', `<button class="ig-item dc-ig" data-ig="dc-stream" role="menuitem" data-nav>${ICO_LIVE}<span class="ig-label">Lancer le stream</span><span class="ig-meta" id="dcMeta">Go Live</span></button>`);
   }
+  let streaming = false;
+  // ---- Menu principal : « Lancer / Arrêter le stream » (sous le vocal)
+  function menuMount() {
+    const panel = $('#menu .panel'), before = panel?.querySelector('[data-action="settings"]');
+    if (!panel || panel.querySelector('[data-action="dcStream"]')) return;
+    const b = document.createElement('button');
+    b.className = 'menu-item dc-menu'; b.dataset.action = 'dcStream'; b.dataset.nav = '';
+    b.innerHTML = `${ICO_LIVE}<span class="mi-label">Lancer le stream</span><span class="mi-meta" id="dcMenuStreamMeta">Go Live</span>`;
+    if (before) before.before(b); else panel.append(b);
+  }
+  function menuUpdate() {
+    const b = $('[data-action="dcStream"]');
+    if (!b) return;
+    const s = S.lib?.settings || {};
+    b.hidden = s.discordStream === false || !(s.discordClientId || RRShared.discord);
+    $('.mi-label', b).textContent = streaming ? 'Arrêter le stream' : 'Lancer le stream';
+    b.classList.toggle('danger', streaming);
+  }
+  RR.actions.dcStream = async () => {
+    closeAll(true);
+    const r = await rr.x('x:discord:stream', { delay: 500 });
+    if (!r?.ok) toast(`Stream Discord : ${r?.error || 'échec'}`, true);
+  };
   function igUpdate() {
+    menuUpdate();
     const b = $('[data-ig="dc-stream"]');
     if (!b) return;
     const s = S.lib?.settings || {};
     b.hidden = s.discordStream === false;
     const pad = S.device === 'pad', ps = S.padType === 'ps';
+    $('.ig-label', b).textContent = streaming ? 'Arrêter le stream' : 'Lancer le stream';
+    b.classList.toggle('danger', streaming);
     $('#dcMeta').textContent = pad && s.discordStreamPad !== false ? `${ps ? 'PS' : 'Guide'} + ${ps ? '△' : 'Y'}` : (s.discordStreamKeys || '');
   }
   $('#ingame').addEventListener('click', async (e) => {
@@ -29,6 +60,10 @@
     const r = await rr.x('x:discord:stream', { delay: 700 });
     if (!r?.ok) toast(`Stream Discord : ${r?.error || 'échec'}`, true);
   }, true);
+  rr.onX('x:discord:streamState', (r) => { streaming = !!r?.streaming; igUpdate(); });
+  rr.x('x:discord:streamState').then((r) => { streaming = !!r?.streaming; igUpdate(); }).catch(() => {});
+  menuMount(); menuUpdate();
+  RR.on('mode', (m) => { if (m === 'menu') menuUpdate(); });
   rr.onX('x:discord:streamed', (r) => {
     if (document.visibilityState === 'visible' && r && !r.ok) toast(`Stream Discord : ${r.error}`, true);
   });

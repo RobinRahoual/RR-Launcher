@@ -240,7 +240,7 @@ function makeEdges({ minGapMs = 150 } = {}) {
  * Anti-rebond : un front montant d'un même bouton n'est accepté que `minGapMs` après le précédent,
  * et un nouvel appui Guide moins de `guideCooldownMs` après un relâchement est ignoré.
  */
-const COMBOS = [[BTN.RB, 'capture'], [BTN.LB, 'clip'], [BTN.B, 'quit'], [BTN.Y, 'stream'], [BTN.UP, 'emu-save'], [BTN.DOWN, 'emu-load']]; // DISCORD : Guide + Y = stream ; EMU : Guide + ↑ / ↓ = sauvegarde / chargement d'état (réglage, désactivé par défaut)
+const COMBOS = [[BTN.RB, 'capture'], [BTN.LB, 'clip'], [BTN.B, 'quit'], [BTN.Y, 'stream'], [BTN.UP, 'emu-save'], [BTN.DOWN, 'emu-load'], [BTN.X, 'voice'], [BTN.A, 'voice-mute']]; // DISCORD vocal : Guide + X = rejoindre / quitter le salon vocal, Guide + A = micro ; DISCORD : Guide + Y = stream ; EMU : Guide + ↑ / ↓ = sauvegarde / chargement d'état (réglage, désactivé par défaut)
 function createComboMachine({ longMs = 1000, minGapMs = 150, guideCooldownMs = 120 } = {}) {
   let prev = 0, held = false, t0 = 0, used = false, lastRelease = -Infinity;
   const lastDown = new Map();
@@ -307,6 +307,7 @@ function createGuideWatcher({
   let native = null, nativeErr = null, HID = null, hidErr = null;
   let timer = null, timerMs = 0, scanTimer = null, lastGuide = 0;
   let guideOn = false, connectOn = false;
+  let xiCount = 0; // KIOSK : nombre de manettes XInput vues au dernier sondage
   const hidOpen = new Map(); // path -> device (null = ouverture impossible, ne pas réessayer)
 
   function loadNative() {
@@ -422,6 +423,7 @@ function createGuideWatcher({
         else handle('xi' + i, states[i]);
       }
     }
+    xiCount = states.filter((x) => x != null).length;
     seen('xinput', xinputKeys(states));
   }
 
@@ -495,6 +497,7 @@ function createGuideWatcher({
       if (on) { log('manette : surveillance des connexions active'); if (native?.xinputOk) pollXInput(); }
     },
     get running() { return guideOn; },
+    get padCount() { return xiCount + [...hidOpen.values()].filter(Boolean).length; }, // KIOSK
     navFlush, // NAV : à appeler quand wantNav() change (fenêtre affichée / masquée)
     get connecting() { return connectOn; },
     // Pour les tests : injecter un masque comme s'il venait d'une source

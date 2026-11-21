@@ -221,3 +221,16 @@ test('Jeton du bot : nettoyage et format', () => {
   assert.ok(TOKEN_RE.test(TOKEN));
   assert.ok(!TOKEN_RE.test('1234567890123456789'));
 });
+
+test('merge : même pseudo entre sources et liens manuels', () => {
+  const mk = (key, source, name, extra = {}) => ({ key, source, name, status: 'offline', activity: null, ...extra });
+  const list = [mk('rr:1', 'rr', 'Miky', { status: 'online' }), mk('st:9', 'steam', 'Raiden_Nika', { status: 'online', activity: { kind: 'playing', name: 'REMATCH' } }), mk('dc:3', 'discord', 'miky')];
+  let out = model.merge(list, []);
+  assert.strictEqual(out.length, 2); // rr + discord « miky » fusionnés
+  out = model.merge(list, [['rr:1', 'st:9']]);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].name, 'Miky');
+  assert.strictEqual(out[0].key, 'rr:1');
+  assert.strictEqual(out[0].activity.name, 'REMATCH');
+  assert.deepStrictEqual(out[0].keys.sort(), ['dc:3', 'rr:1', 'st:9']);
+});

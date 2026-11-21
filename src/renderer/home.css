@@ -48,6 +48,8 @@ body[data-view="games"] #home * { pointer-events: none !important; }
   width: 94%; height: 74%; max-width: 100%; max-height: 100%; object-fit: contain; /* agrandi : ≈ 30 % de la largeur (réf. ES-DE) */
   filter: drop-shadow(0 .7vh 1.1vh rgba(0, 0, 0, .32)) drop-shadow(0 0 .2vh rgba(0, 0, 0, .15));
 }
+.h-logo-img.is-dark:not([data-tone="multi"]):not([data-tone="opaque"]):not([data-tone="multi-light"]) { filter: brightness(0) invert(1) drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .35)); }
+[data-theme="light"] .h-logo-img.is-dark:not([data-tone="multi"]):not([data-tone="opaque"]):not([data-tone="multi-light"]) { filter: drop-shadow(0 .7vh 1.1vh rgba(0, 0, 0, .32)); }
 .h-logo-img.is-light:not([data-tone="multi"]):not([data-tone="opaque"]) { filter: brightness(0) opacity(.86) drop-shadow(0 .6vh 1vh rgba(0, 0, 0, .25)); }
 .h-name {
   font-family: var(--font-display); font-size: calc(9.6vw * var(--fit, 1)); line-height: .92; text-align: center;

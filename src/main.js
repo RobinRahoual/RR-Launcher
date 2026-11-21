@@ -39,7 +39,7 @@ const DEFAULT_SETTINGS = {
   trackOutside: true, // PLAYTIME : compter les jeux lancés hors du launcher
   syncPlaytime: true, // PLAYTIME : reprendre les heures de Steam / GOG Galaxy / itch.io
   sounds: true,
-  volume: 0.7,
+  volume: 0.35,
   caseStyle: 'blue', // boîtes PC : red | black | blue | auto
   theme: 'light', // light | dark | system
   sort: 'recent',
@@ -209,7 +209,13 @@ function send(ch, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(ch, payload);
 }
 
-app.on('second-instance', showWindow);
+// STREAM : « RR Launcher.exe --launch=<id> » (application Apollo d’un jeu) lance le jeu, au démarrage comme à chaud
+function launchFromArgv(argv) {
+  const id = require('./features/stream').launchArg(argv);
+  if (id && findGame(id)) launchGame(id).then((r) => { if (r?.ok === false) meta.log(`--launch ${id} : ${r.error}`); });
+  else if (id) meta.log(`--launch ${id} : jeu introuvable`);
+}
+app.on('second-instance', (_e, argv) => { if (require('./features/stream').launchArg(argv)) launchFromArgv(argv); else showWindow(); });
 app.on('before-quit', () => { quitting = true; guideWatch.stop(); guideWatch.setConnect(false); });
 app.on('will-quit', () => globalShortcut.unregisterAll());
 
@@ -271,6 +277,7 @@ app.whenReady().then(() => {
   createWindow();
   loadFeatures();
   scheduleHeroUpgrade(25000);
+  setTimeout(() => launchFromArgv(process.argv), 1500); // STREAM : --launch=<id>
   createTray();
   setupUpdater();
   refreshShellIcons();
@@ -473,7 +480,10 @@ function newGame(data) {
     installDir: data.installDir || '',
     launchUri: data.launchUri || '',
     appid: data.appid || null,
-    args: '',
+    args: data.args || '',
+    // STORES : Epic (epicArgs, epicApp) et GOG (galaxyId) — lancement direct ou via le client
+    ...(data.epicApp ? { epicApp: data.epicApp, epicArgs: data.epicArgs || '' } : {}),
+    ...(data.galaxyId ? { galaxyId: data.galaxyId } : {}),
     addedAt: Date.now(),
     lastPlayed: 0,
     playtime: 0,
@@ -692,6 +702,14 @@ ipcMain.handle('scan:run', async (_e, { mode, folders }) => {
     return { ok: false, error: String(e.message || e), items: [], emulators: [] };
   }
   const items = (res.items || []).map((it, i) => ({ ...it, key: i, exists: alreadyHave(it) }));
+  { // STORES : jeux Epic / GOG déjà importés → on complète les champs du lancement direct
+    let touched = false;
+    for (const it of items) if (it.exists && (it.source === 'gog' || it.source === 'epic')) {
+      const g = games().find((x) => gameKey(x) === gameKey(it) || (it.installDir && x.installDir && x.installDir.toLowerCase() === it.installDir.toLowerCase()));
+      if (g && require('./features/importer/stores').enrich(g, it)) touched = true;
+    }
+    if (touched) commit();
+  }
   return { ok: res.ok !== false || items.length > 0, error: res.error, items, emulators: res.emulators || [], cancelled: !!res.cancelled, dirs: res.dirs };
 });
 
@@ -871,7 +889,13 @@ function startDetectedSession(id, dir, start = Date.now()) {
 // Revérifie tout de suite les sessions en cours (ex. quand on revient sur le launcher)
 function recheckSessions() { for (const r of running.values()) r.check?.(); }
 
+// LAUNCHLOG : tout échec de lancement est consigné (hub 'launch:error') ; la commande et la sortie le sont plus bas
 async function launchGame(id) {
+  const r = await launchGameInner(id);
+  if (r && r.ok === false) hub.emit('launch:error', id, r.error === 'NO_EMULATOR' ? `Aucun émulateur configuré pour ${r.platform}` : r.error);
+  return r;
+}
+async function launchGameInner(id) {
   const g = findGame(id);
   if (!g) return { ok: false, error: 'Jeu introuvable.' };
   // GUIDE : relancer un jeu déjà en cours = le reprendre (remise au premier plan), pas une 2e instance
@@ -884,10 +908,21 @@ async function launchGame(id) {
     onSessionStart(id);
   };
 
+  // STORES : Epic en direct (sans ouvrir le client) / GOG via Galaxy — sinon comportement habituel plus bas
+  const stores = require('./features/importer/stores');
+  let sc = null;
+  if (stores.wantsEpicDirect(g, store.data.settings) && fs.existsSync(g.exePath)) sc = stores.epicDirectCommand(g, splitArgs, g.launch?.args);
+  else if (stores.wantsGalaxy(g, store.data.settings)) sc = stores.galaxyCommand(g, await stores.findGalaxy());
+  if (sc) {
+    hub.emit('launch:cmd', id, { via: sc.via, file: sc.file, args: sc.args, cwd: sc.cwd });
+    return spawnTracked(id, sc.file, sc.args, sc.cwd, begin, sc.followDir);
+  }
+
   // Steam / Epic : via le protocole du launcher, puis surveillance du dossier d'installation
   // IMPORTER : kind 'uri' = jeu d'un autre launcher (Xbox, EA, Ubisoft, Battle.net, Amazon), lancé par son lien
   if (g.kind === 'steam' || g.kind === 'epic' || g.kind === 'uri') {
     const uri = g.kind === 'steam' ? `steam://rungameid/${g.appid}` : g.launchUri;
+    hub.emit('launch:cmd', id, { via: 'launcher', file: uri, args: [] }); // LAUNCHLOG
     try { await (g.kind === 'uri' ? require('./features/importer/sources').openLaunchUri(uri, shell) : shell.openExternal(uri)); } catch (e) { return { ok: false, error: 'Impossible d’ouvrir ' + (g.kind === 'steam' ? 'Steam' : g.kind === 'uri' ? 'le launcher du jeu' : 'Epic Games') }; }
     begin();
     watchDir(id, g.installDir);
@@ -900,7 +935,11 @@ async function launchGame(id) {
     if (!emu?.path) return { ok: false, error: 'NO_EMULATOR', platform: g.platform };
     if (!fs.existsSync(emu.path)) return { ok: false, error: 'Émulateur introuvable : ' + emu.path };
     if (!fs.existsSync(g.romPath)) return { ok: false, error: 'ROM introuvable : ' + g.romPath };
-    const c = emuLaunch.command(g, emu, { splitArgs }); // EMU : plein écran, résolution, arguments, env, admin
+    // MODS : copie patchée de la ROM quand des patchs sont activés (l'original n'est jamais modifié)
+    const rp = hub.prepareRom ? hub.prepareRom(g) : { romPath: g.romPath };
+    if (rp.error) return { ok: false, error: rp.error };
+    const c = emuLaunch.command(rp.romPath === g.romPath ? g : { ...g, romPath: rp.romPath }, emu, { splitArgs }); // EMU : plein écran, résolution, arguments, env, admin
+    hub.emit('launch:cmd', id, { via: 'émulateur', file: c.admin ? c.target : c.file, args: c.args, cwd: c.cwd, admin: c.admin, env: Object.keys(emuLaunch.parseEnv(g.launch?.env)) }); // LAUNCHLOG
     return spawnTracked(id, c.file, c.args, c.cwd, begin, c.admin ? c.followDir : undefined, c.spawn);
   }
 
@@ -908,6 +947,7 @@ async function launchGame(id) {
   if (!fs.existsSync(g.exePath)) return { ok: false, error: 'Fichier introuvable : ' + g.exePath };
   const ext = path.extname(g.exePath).toLowerCase();
   if (ext === '.lnk' || ext === '.url') {
+    hub.emit('launch:cmd', id, { via: 'raccourci', file: g.exePath, args: [] }); // LAUNCHLOG
     const err = await shell.openPath(g.exePath);
     if (err) return { ok: false, error: err };
     begin();
@@ -915,6 +955,7 @@ async function launchGame(id) {
     return { ok: true };
   }
   const c = emuLaunch.command(g, null, { splitArgs }); // EMU : arguments supplémentaires, env, admin (sinon identique)
+  hub.emit('launch:cmd', id, { via: 'exécutable', file: c.admin ? c.target : c.file, args: c.args, cwd: c.cwd, admin: c.admin, env: Object.keys(emuLaunch.parseEnv(g.launch?.env)) }); // LAUNCHLOG
   return spawnTracked(id, c.file, c.args, c.cwd, begin, c.followDir, c.spawn);
 }
 
@@ -933,7 +974,8 @@ function spawnTracked(id, file, args, cwd, begin, followDir, opts = {}) { // EMU
       begin({ child });
       resolve({ ok: true });
     });
-    child.once('exit', async () => {
+    child.once('exit', async (code, signal) => {
+      hub.emit('launch:exit', id, { code, signal }); // LAUNCHLOG
       const r = running.get(id);
       if (!r) return;
       // Si le programme a passé la main à un autre processus (petit launcher, ou jeu relancé par lui-même),
@@ -949,6 +991,7 @@ function spawnTracked(id, file, args, cwd, begin, followDir, opts = {}) { // EMU
       if (settled) return;
       settled = true;
       // Exige les droits admin (erreur 740) : on passe par le shell (UAC).
+      hub.emit('launch:note', id, `démarrage direct impossible (${e.code || e.message}), repli sur le shell`); // LAUNCHLOG
       const err = await shell.openPath(file);
       if (!err) { begin(); watchDir(id, followDir || cwd, { graceMs: 60000, exe: file }); resolve({ ok: true }); }
       else resolve({ ok: false, error: e.message || err });
@@ -1211,6 +1254,7 @@ function loadFeatures() {
   const ctx = {
     app, ipcMain, store, meta, hub, running, DATA, MEDIA,
     commit, send, findGame, showWindow, bringToFront, hideToTray,
+    padCount: () => guideWatch?.padCount || 0, // KIOSK
     getWin: () => win, winNative: () => winNative(), log: (m) => meta.log(m),
     startDetectedSession, tooBroad, HELPER_EXE, normDir, // PLAYTIME
     protoRoute: (host, fn) => { protoRoutes[host] = fn; }, // CAPTURE
@@ -1244,7 +1288,7 @@ function heroWidth(g) {
 }
 async function upgradeHeroes(force) {
   const s = store.data.settings;
-  if (heroBusy || (!s.sgdbKey && !s.tgdbKey)) return;
+  if (heroBusy || (!meta.sgdbKeyOf(s) && !s.tgdbKey)) return;
   heroBusy = true;
   try {
     const WEEK = 7 * 864e5;

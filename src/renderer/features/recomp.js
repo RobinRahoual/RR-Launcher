@@ -182,6 +182,69 @@
     const st = x.installed ? `installé (${x.installed.version || '?'})` : x.soon ? 'à venir' : !x.installable ? (x.repo && !x.windows ? 'pas de version Windows' : 'page du projet') : 'installable';
     c.innerHTML = `<b>${esc(x.name)}</b> · ${esc(x.game)} <span class="dim">· ${esc(x.originName || '')} · ${esc(st)}</span>`;
   }
+
+  // ---------------------------------------------------------------- Navigation manette / clavier dans les étagères
+  // Gauche / droite suivent les étagères (fin de rangée → rangée suivante), haut / bas gardent la colonne,
+  // LB / RB (PageUp / PageDown) sautent d'une console à l'autre, LT / RT avancent de 3 rangées.
+  const shelfMode = () => S.mode === 'recomp' && ST.tab === 'recomp' && ST.view !== 'detail' && !!$('.rc-room', panel);
+  const rowsOf = () => $$('.rc-boxes', panel).map((r) => $$('[data-rc-open]', r));
+  function goBox(el, center = true) {
+    if (!el) return false;
+    setFocus(el);
+    el.scrollIntoView({ block: center ? 'center' : 'nearest', behavior: reduced() ? 'auto' : 'smooth' });
+    sfx('move');
+    return true;
+  }
+  function gridMove(dir) {
+    if (!shelfMode()) return false;
+    const a = document.activeElement;
+    if (!a?.matches?.('[data-rc-open]')) return false;
+    const rows = rowsOf(), ri = rows.findIndex((r) => r.includes(a));
+    if (ri < 0) return false;
+    const row = rows[ri], ci = row.indexOf(a);
+    if (dir === 'right') return ci < row.length - 1 ? goBox(row[ci + 1], false) : (rows[ri + 1] ? goBox(rows[ri + 1][0]) : true);
+    if (dir === 'left') return ci > 0 ? goBox(row[ci - 1], false) : (rows[ri - 1] ? goBox(rows[ri - 1].at(-1)) : true);
+    const to = rows[ri + (dir === 'down' ? 1 : -1)];
+    if (!to) return false; // première / dernière rangée : navigation habituelle (filtres, pied de page)
+    const cx = a.getBoundingClientRect().left + a.offsetWidth / 2;
+    let best = to[0], bd = Infinity;
+    for (const b of to) { const d = Math.abs(b.getBoundingClientRect().left + b.offsetWidth / 2 - cx); if (d < bd) { bd = d; best = b; } }
+    return goBox(best);
+  }
+  function jumpConsole(step) {
+    const secs = $$('.rc-room section', panel);
+    if (!secs.length) return;
+    const room = $('.rc-room', panel), top = room.getBoundingClientRect().top;
+    const a = document.activeElement;
+    let i = secs.findIndex((s) => s.contains(a));
+    if (i < 0) { i = 0; secs.forEach((s, k) => { if (s.getBoundingClientRect().top <= top + 12) i = k; }); }
+    const t = secs[Math.min(secs.length - 1, Math.max(0, i + step))];
+    const f = $('[data-rc-open]', t);
+    if (!f) return;
+    setFocus(f); t.scrollIntoView({ block: 'start', behavior: reduced() ? 'auto' : 'smooth' }); sfx('move');
+    const plaque = $('.rc-plaque', t); if (plaque) { const c = $('#rcCap', panel); void c; }
+  }
+  function pageMove(step) {
+    const a = document.activeElement, rows = rowsOf(), ri = rows.findIndex((r) => r.includes(a));
+    if (ri < 0) return;
+    const to = rows[Math.min(rows.length - 1, Math.max(0, ri + step * 3))];
+    const cx = a.getBoundingClientRect().left + a.offsetWidth / 2;
+    let best = to[0], bd = Infinity;
+    for (const b of to) { const d = Math.abs(b.getBoundingClientRect().left + b.offsetWidth / 2 - cx); if (d < bd) { bd = d; best = b; } }
+    goBox(best);
+  }
+  RR.navHooks.push(gridMove);
+  RR.on('input', (src, btn) => {
+    if (!shelfMode() || src !== 'pad') return;
+    if (btn === 'lb') jumpConsole(-1); else if (btn === 'rb') jumpConsole(1);
+    else if (btn === 'lt') pageMove(-1); else if (btn === 'rt') pageMove(1);
+  });
+  ov.addEventListener('keydown', (e) => {
+    if (!shelfMode() || e.target.matches?.('input')) return;
+    if (e.key === 'PageDown') { e.preventDefault(); jumpConsole(1); } else if (e.key === 'PageUp') { e.preventDefault(); jumpConsole(-1); }
+  });
+  RR.ovHints.push((h, mode) => { if (mode === 'recomp' && ST.tab === 'recomp' && ST.view !== 'detail') h(S.device === 'pad' ? ['lb', 'rb'] : ['pgud'], 'Console', null); });
+
   ov.addEventListener('focusin', (e) => {
     const b = e.target.closest?.('[data-rc-open]'); if (b) caption(b.dataset.rcOpen, b.dataset.rcIds);
     const j = e.target.closest?.('[data-rc-jump]'); if (j) j.scrollIntoView({ block: 'nearest', inline: 'nearest' }); // manette / clavier

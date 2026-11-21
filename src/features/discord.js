@@ -136,7 +136,7 @@ function init(ctx) {
 
   async function update() {
     clearTimeout(retry);
-    const id = String(S().discordClientId || '').trim();
+    const id = String(S().discordClientId || require('../metadata').getShared().discordId || '').trim();
     if (!S().discordRpc || !/^\d{15,22}$/.test(id)) { if (rpc.ready) rpc.setActivity(null); return; }
     const runId = [...running.keys()].pop();
     const g = runId ? findGame(runId) : null;
@@ -154,7 +154,10 @@ function init(ctx) {
   hub.on('session:end', () => setTimeout(update, 300));
 
   // ---- Stream (Go Live) via le raccourci Discord
-  let lastStream = 0;
+  let lastStream = 0, streaming = false; // le raccourci Discord est une bascule : on suit l'état de notre côté
+  const setStreaming = (v) => { if (streaming !== v) { streaming = v; send('x:discord:streamState', { streaming }); } };
+  hub.on('session:end', () => setStreaming(false));
+  hub.on('discord:voice', (st) => { if (!st?.inVoice) setStreaming(false); }); // quitter le vocal coupe le stream
   function stream() {
     if (Date.now() - lastStream < 1500) return { ok: false, error: 'Patiente une seconde' };
     lastStream = Date.now();
@@ -165,7 +168,8 @@ function init(ctx) {
     if (!native?.sendKeys) return { ok: false, error: 'Disponible uniquement sous Windows' };
     const ok = native.sendKeys(vks);
     log(`discord : raccourci stream ${S().discordStreamKeys} → ${ok}`);
-    return ok ? { ok: true } : { ok: false, error: 'Envoi du raccourci impossible' };
+    if (ok) setStreaming(!streaming);
+    return ok ? { ok: true, streaming } : { ok: false, error: 'Envoi du raccourci impossible' };
   }
   hub.on('pad:combo', (name) => {
     if (name !== 'stream' || S().discordStreamPad === false) return;
@@ -177,8 +181,9 @@ function init(ctx) {
     if (o.delay) await new Promise((r) => setTimeout(r, Math.min(2000, Number(o.delay) || 0)));
     return stream();
   });
+  ipcMain.handle('x:discord:streamState', () => ({ streaming }));
   ipcMain.handle('x:discord:test', async () => {
-    const id = String(S().discordClientId || '').trim();
+    const id = String(S().discordClientId || require('../metadata').getShared().discordId || '').trim();
     if (!/^\d{15,22}$/.test(id)) return { ok: false, error: "ID d'application invalide" };
     const ok = await rpc.connect(id);
     if (!ok) return { ok: false, error: 'Discord est-il ouvert ? (application de bureau)' };

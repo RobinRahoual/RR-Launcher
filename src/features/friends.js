@@ -18,6 +18,7 @@ const { createDiscordState } = require('./friends/discord-state');
 const { steamFriends } = require('./friends/steam');
 const model = require('./friends/model');
 const { createRR } = require('./friends/rr');
+const metadata = require('../metadata');
 const FIREBASE = require('./friends/firebase.json');
 
 const STEAM_VISIBLE_MS = 60 * 1000; // onglet Amis ouvert
@@ -31,7 +32,7 @@ function cleanToken(v) { return String(v || '').trim().replace(/^Bot\s+/i, '').r
 function init(ctx) {
   const { ipcMain, store, send, log, getWin } = ctx;
   const S = () => store.data.settings;
-  const F = () => { const f = (store.data.friends ||= {}); f.hidden ||= []; return f; };
+  const F = () => { const f = (store.data.friends ||= {}); f.hidden ||= []; f.links ||= []; return f; };
   const on = (k) => S()[k] !== false;
   const say = (m) => { try { log(`amis : ${m}`); } catch { /* */ } };
 
@@ -182,7 +183,7 @@ function init(ctx) {
   }
 
   // ------------------------------------------------------------ Instantané → renderer
-  function all() { return demo ? [...demo.discord, ...demo.steam] : [...rr.list(), ...dstate.friends(), ...steamList]; }
+  function all() { return model.merge(demo ? [...demo.discord, ...demo.steam] : [...rr.list(), ...dstate.friends(), ...steamList], F().links); }
   function snapshot() {
     const list = all();
     const sec = model.build(list, store.data.games || [], { hidden: new Set(F().hidden) });
@@ -222,7 +223,7 @@ function init(ctx) {
   }
   function push() {
     clearTimeout(pushTimer); pushTimer = null;
-    const list = all().filter((f) => !F().hidden.includes(f.key));
+    const list = all().filter((f) => !(f.keys || [f.key]).some((k) => F().hidden.includes(k)));
     notify(list);
     const snap = snapshot();
     const json = JSON.stringify(snap);
@@ -314,6 +315,37 @@ function init(ctx) {
   ipcMain.handle('x:friends:rrRemove', rrCall((_e, uid) => rr.remove(String(uid))));
   ipcMain.handle('x:friends:rrStats', async (_e, uid) => { try { return { ok: true, stats: await rr.stats(String(uid)) }; } catch (e) { return { ok: false, error: e.message }; } });
   ipcMain.handle('x:friends:rrRestart', async () => { await rr.start(); await pollRR(); return rr.info(); });
+  // Clés partagées (base Firebase : config/sgdbKey, config/discordClientId, config/discordClientSecret ; lecture réservée aux comptes connectés)
+  const sharedView = () => { const sh = metadata.getShared(); return { discord: !!(sh.discordId && sh.discordSecret), sgdb: !!sh.sgdb }; };
+  setTimeout(async () => {
+    if (demo) return;
+    const [k, did, dsec] = await Promise.all(['sgdbKey', 'discordClientId', 'discordClientSecret'].map((n) => rr.readPublic(`config/${n}`)));
+    const o = {};
+    if (!S().sgdbKey && typeof k === 'string' && /^[\w-]{16,64}$/.test(k)) o.sgdb = k;
+    if (typeof did === 'string' && /^\d{15,22}$/.test(did) && typeof dsec === 'string' && /^[\w-]{20,64}$/.test(dsec)) { o.discordId = did; o.discordSecret = dsec; }
+    if (Object.keys(o).length) { metadata.setShared(o); say(`configuration partagée chargée (${Object.keys(o).join(', ')})`); send('x:shared:update', sharedView()); }
+  }, 6000);
+  ipcMain.handle('x:shared:get', () => sharedView());
+  // Fusion manuelle de deux profils (même personne) / séparation
+  ipcMain.handle('x:friends:link', (_e, a, b) => {
+    a = String(a); b = String(b);
+    if (!a || !b || a === b) return false;
+    const links = F().links;
+    const ga = links.find((g) => g.includes(a)), gb = links.find((g) => g.includes(b));
+    if (ga && gb && ga !== gb) { ga.push(...gb.filter((k) => !ga.includes(k))); links.splice(links.indexOf(gb), 1); }
+    else if (ga) { if (!ga.includes(b)) ga.push(b); }
+    else if (gb) { if (!gb.includes(a)) gb.push(a); }
+    else links.push([a, b]);
+    store.save(); push();
+    return true;
+  });
+  ipcMain.handle('x:friends:unlink', (_e, keys) => {
+    const ks = new Set([].concat(keys).map(String));
+    F().links = F().links.map((g) => g.filter((k) => !ks.has(k))).filter((g) => g.length > 1);
+    // un même pseudo fusionné automatiquement : on le masque de la fusion en gardant juste les liens manuels
+    store.save(); push();
+    return true;
+  });
   ipcMain.handle('x:friends:unhideAll', () => { F().hidden = []; store.save(); push(); return 0; });
   ipcMain.handle('x:friends:refresh', async () => { await Promise.all([pollSteam(), pollRR()]); push(); return snapshot(); });
   // Réglages modifiés (interrupteurs, clé Steam) : le renderer prévient

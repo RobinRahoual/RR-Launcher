@@ -276,6 +276,28 @@
     await rr.x('x:friends:hide', f.key, true);
     toast(`${f.name} masqué — Réglages pour réafficher`, 'success');
   }
+  // Fusion : lier ce profil à un autre ami (même personne sur une autre source) ou séparer
+  function linkFocused() {
+    const f = friendOf(document.activeElement?.closest?.('[data-key]')?.dataset.key);
+    const d = FR.data;
+    if (!f || !d) return;
+    if ((f.keys || []).length > 1) {
+      return openPrompt({
+        title: `Séparer « ${f.name} » ?`, icon: 'edit',
+        body: `<p class="dim">Ce profil regroupe ${f.sources.length} comptes (${esc(f.sources.map((x) => ({ rr: 'RR Launcher', discord: 'Discord', steam: 'Steam' }[x] || x)).join(', '))}). Ils redeviendront des amis distincts, sauf s’ils ont exactement le même pseudo.</p>`,
+        actions: [{ label: 'Annuler', focus: true, onClick: () => closeOverlay() }, { label: 'Séparer', primary: true, onClick: async () => { closeOverlay(); await rr.x('x:friends:unlink', f.keys); toast('Profils séparés', 'success'); } }],
+      });
+    }
+    const others = [...d.playing, ...d.online, ...d.offline].filter((x) => x.key !== f.key && !(x.keys || []).includes(f.key));
+    if (!others.length) return toast('Aucun autre ami à fusionner', 'info');
+    others.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+    const src = { rr: 'RR Launcher', discord: 'Discord', steam: 'Steam' };
+    openPrompt({
+      title: `Fusionner « ${f.name} » avec…`, icon: 'edit',
+      body: `<p class="dim">Choisis le même ami sur une autre source (ex. son profil Steam). Il n’apparaîtra plus qu’une fois.</p><select id="frLinkSel" data-nav>${others.map((x) => `<option value="${esc(x.key)}">${esc(x.name)} · ${esc(src[x.source] || x.source)}</option>`).join('')}</select>`,
+      actions: [{ label: 'Annuler', focus: true, onClick: () => closeOverlay() }, { label: 'Fusionner', primary: true, onClick: async () => { const k = $('#frLinkSel')?.value; closeOverlay(); if (!k) return; await rr.x('x:friends:link', f.key, k); toast('Profils fusionnés', 'success'); } }],
+    });
+  }
   function openSettings() {
     action('settings');
     setTimeout(() => {
@@ -356,7 +378,7 @@
     };
     const f = friendOf(document.activeElement?.closest?.('[data-key]')?.dataset.key);
     add('y', 'R', 'Actualiser', () => refresh(true));
-    if (f) add('x', 'X', 'Masquer', hideFocused);
+    if (f) { add('x', 'X', 'Masquer', hideFocused); add('lb', 'L', (f.keys || []).length > 1 ? 'Séparer' : 'Fusionner', linkFocused); }
     const a = $$('#hintList .hint-label').pop();
     if (a && f) a.textContent = f.gameId ? 'Voir le jeu' : f.streaming && f.activity?.url ? 'Voir le stream' : 'Valider';
   };
@@ -366,6 +388,7 @@
     if (src !== 'pad' || S.mode !== 'friends') return;
     if (k === 'x') hideFocused();
     else if (k === 'y') refresh(true);
+    else if (k === 'lb') linkFocused();
   });
   addEventListener('keydown', (e) => {
     if (e.ctrlKey || e.altKey || e.metaKey || e.repeat || e.target.matches?.('input, select, textarea')) return;
@@ -373,6 +396,7 @@
     if (S.mode === 'friends') {
       if (k === 'x') { e.preventDefault(); hideFocused(); }
       else if (k === 'r') { e.preventDefault(); refresh(true); }
+      else if (k === 'l') { e.preventDefault(); linkFocused(); }
       else if (k === 'a') { e.preventDefault(); overlayBack(); }
       return;
     }
@@ -448,14 +472,8 @@
       <div><label for="frRRName"><strong>Pseudo</strong></label><span class="dim">Vide : le nom de ton profil joueur.</span></div>
       <input id="frRRName" maxlength="40" spellcheck="false" data-nav />
     </div>
-    <div class="setting col fr-guide" id="frRRFb">
-      <div><strong>Projet Firebase</strong><span class="dim" id="frRRFbState"></span></div>
-      <div class="fr-tok-row">
-        <input id="frRRKey" placeholder="apiKey" autocomplete="off" spellcheck="false" aria-label="Clé API Firebase (apiKey)" data-nav />
-        <input id="frRRDb" placeholder="https://…firebasedatabase.app" autocomplete="off" spellcheck="false" aria-label="Adresse de la base (databaseURL)" data-nav />
-        <button class="btn" id="frRRSave" data-nav>Se connecter</button>
-      </div>
-      <span class="dim">Déjà renseigné dans le launcher pour tes amis : ce champ ne sert qu’à changer de projet.</span>
+    <div class="setting" id="frRRFb">
+      <div><strong>Compte amis RR Launcher</strong><span class="dim" id="frRRFbState"></span></div>
     </div>
     <div class="setting">
       <div><strong id="lbFrNotify">Prévenir quand un ami lance un jeu</strong><span class="dim">Petite notification en bas de l’écran (jamais pendant une partie).</span></div>
@@ -510,14 +528,6 @@
       test();
     });
     $('#frClear').addEventListener('click', async () => { await rr.x('x:friends:clearToken'); toast('Jeton du bot retiré', 'success'); setStatus('', ''); refresh(); });
-    $('#frRRSave').addEventListener('click', async () => {
-      const k = $('#frRRKey').value.trim(), u = $('#frRRDb').value.trim().replace(/\/+$/, '');
-      if ((k || u) && !(k && /^https:\/\/[\w.-]+\.(firebaseio\.com|firebasedatabase\.app)$/.test(u))) return toast('Il faut l’apiKey et l’adresse de la base (databaseURL)', true);
-      await rr.setSettings({ rrFirebaseApiKey: k, rrFirebaseDb: u });
-      const r = await rr.x('x:friends:rrRestart');
-      toast(r?.state === 'ok' ? `Amis RR connectés · code ${r.code}` : r?.error || 'Connexion…', r?.state === 'ok' ? 'success' : r?.state === 'error');
-      refresh();
-    });
     $('#frRRName').addEventListener('change', async (e) => { await rr.setSettings({ friendsRRName: e.target.value.trim().slice(0, 40) }); rr.x('x:friends:rrRestart'); toast('Pseudo enregistré', 'success'); });
     $('#frUnhide').addEventListener('click', async () => { await rr.x('x:friends:unhideAll'); toast('Tous les membres sont réaffichés', 'success'); });
   }
@@ -540,10 +550,9 @@
     }
     const d = FR.data;
     if ($('#frRRName') && document.activeElement !== $('#frRRName')) $('#frRRName').value = s.friendsRRName || '';
-    if ($('#frRRKey') && !$('#frRRKey').value && s.rrFirebaseApiKey) { $('#frRRKey').value = s.rrFirebaseApiKey; $('#frRRDb').value = s.rrFirebaseDb || ''; }
     if (d && $('#frRRFbState')) {
       const r = d.rr || {};
-      $('#frRRFbState').textContent = !r.configured ? 'Pas encore configuré.' : r.state === 'ok' ? `Connecté · ton code : ${r.code}` : r.state === 'error' ? r.error : r.state === 'off' ? 'Désactivé' : 'Connexion…';
+      $('#frRRFbState').textContent = !r.configured ? 'Indisponible.' : r.state === 'ok' ? `Connecté · ton code : ${r.code}` : r.state === 'error' ? r.error : r.state === 'off' ? 'Désactivé' : 'Connexion…';
     }
     if (d) {
       $('#frClear').hidden = !d.discord.hasToken;
