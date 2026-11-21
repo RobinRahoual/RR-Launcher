@@ -21,7 +21,7 @@
     const panel = $('#menu .panel'), before = panel?.querySelector('[data-action="settings"]');
     if (!panel || panel.querySelector('[data-action="apolloStream"]')) return;
     const b = document.createElement('button');
-    b.className = 'menu-item'; b.dataset.action = 'apolloStream'; b.dataset.nav = ''; b.hidden = true;
+    b.className = 'menu-item'; b.dataset.action = 'apolloStream'; b.dataset.nav = ''; b.hidden = false;
     b.innerHTML = `${ICO_SUN}<span class="mi-label">Streamer (Apollo)</span><span class="mi-meta" id="apolloMenuMeta"></span>`;
     if (before) before.before(b); else panel.append(b);
   }
@@ -29,10 +29,15 @@
     const b = $('[data-action="apolloStream"]');
     if (!b) return;
     const ap = st?.apollo;
-    b.hidden = !ap?.installed;
-    $('#apolloMenuMeta').textContent = ap?.running ? 'Actif' : 'Démarrer';
+    b.hidden = false; // toujours visible : sans Apollo, l'entrée ouvre l'assistant d'installation
+    $('#apolloMenuMeta').textContent = !ap?.installed ? 'Installer' : ap.running ? 'Actif' : 'Démarrer';
   }
   RR.actions.apolloStream = async () => {
+    if (!st?.apollo?.installed) { // pas encore installé : Réglages → Streaming (assistant)
+      closeAll(); renderSettings(); openOverlay('settings');
+      setTimeout(() => box.scrollIntoView({ block: 'start' }), 50);
+      return;
+    }
     closeAll(true);
     toast('Démarrage d’Apollo…', 'progress');
     const r = await rr.x('x:stream:start');
