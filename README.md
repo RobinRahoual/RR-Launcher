@@ -151,7 +151,12 @@ Une vraie liste d’amis dans le launcher, sans Steam ni Discord, portée par un
 - **Journal de lancement** : commande exacte, code de sortie, erreurs — consultable et exportable.
 - **Mods & patchs** : activer / ordonner des mods de fichiers (réversible, sauvegardes) et appliquer des patchs IPS / BPS / UPS sur une copie de la ROM (« <ROM> (patché) »).
 - **Vocal Discord à la manette** : Guide + X rejoint / quitte le salon, Guide + A coupe le micro (+ entrées du menu en jeu). Réglages → Discord : renseigner le *Client Secret* de ton application Discord, choisir le salon, « Se connecter ». Le redirect `http://127.0.0.1` doit être ajouté dans l'application Discord (OAuth2).
-- **Streaming vers un autre écran** : Réglages → Streaming. Détecte / démarre Sunshine, affiche l'adresse à saisir dans Moonlight, ajoute « RR Launcher » ou un jeu précis comme application Sunshine (`RR Launcher.exe --launch=<id>` lance le jeu directement).
+- **Streaming vers un autre écran** (Apollo, fork de Sunshine) : Réglages → Streaming, un assistant en 4 étapes.
+  1. *Installer Apollo* : installation automatique (confirmation Windows), puis démarrage ; les identifiants de l'interface sont créés automatiquement.
+  2. *Mon objectif* : receveur (TV, Fire TV, Apple TV, téléphone, PC…), liaison Ethernet / Wi-Fi, cible (4K 60, 1440p 120, 1080p 120, 1080p 60).
+  3. *Mesurer ma connexion* (optionnel) : ouvre l'adresse affichée dans le navigateur du receveur pour mesurer le débit réel.
+  4. *Appliquer* : le launcher calcule le profil (résolution, codec, débit, avertissements) et configure Apollo ; il affiche les réglages à saisir dans Moonlight / Artemis et permet d'appairer avec le code PIN.
+  Ensuite, ajoute « RR Launcher » ou un jeu précis comme application Apollo (`RR Launcher.exe --launch=<id>` lance le jeu directement).
 
 ### Signature de l'installateur (SignPath)
 Le workflow `release.yml` signe l'installateur si le secret `SIGNPATH_API_TOKEN` existe (sinon publication non signée, comme avant). Prérequis : candidature **SignPath Foundation** (gratuit pour l'open source, validation manuelle), puis dans GitHub → Settings : secret `SIGNPATH_API_TOKEN` et variables `SIGNPATH_ORGANIZATION_ID`, `SIGNPATH_PROJECT_SLUG`, `SIGNPATH_SIGNING_POLICY_SLUG`. Après signature, `build/finalize-release.js` recalcule `latest.yml` (sha512 / taille) pour que la mise à jour automatique reste valide.

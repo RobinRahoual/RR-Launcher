@@ -56,15 +56,13 @@
           <li>Choisis le salon que la manette rejoint :
             <div class="ob-row"><select id="obDcSel" data-nav><option value="">— charge tes salons —</option></select><button class="btn" id="obDcLoad" data-nav>Charger mes salons</button></div></li>
         </ol>` },
-    { id: 'stream', title: 'Streaming vers une TV, un Steam Deck, un téléphone…',
-      html: () => `<p class="dim">Facultatif. <b>Sunshine</b> diffuse ton PC, <b>Moonlight</b> reçoit le flux sur l'autre écran.</p>
+    { id: 'stream', title: 'Streaming vers une TV, un téléphone…',
+      html: () => `<p class="dim">Facultatif. <b>Apollo</b> diffuse ton PC, <b>Moonlight</b> (ou Artemis) reçoit le flux sur l'autre écran.</p>
         <ol class="ob-ol">
-          <li>Installe Sunshine sur ce PC : <div class="ob-row"><button class="btn" id="obSun" data-nav>Télécharger Sunshine</button><span class="dim" id="obSunState"></span></div></li>
+          <li>Installe Apollo sur ce PC (une confirmation Windows est demandée, environ 1 minute) : <div class="ob-row"><button class="btn" id="obApollo" data-nav>Installer Apollo</button><span class="dim" id="obApolloState"></span></div></li>
           <li>Installe Moonlight sur l'écran qui reçoit : <div class="ob-row"><button class="btn" id="obMoon" data-nav>Télécharger Moonlight</button></div></li>
-          <li>Au premier lancement de Sunshine, crée ton identifiant et ton mot de passe, puis saisis-les ici pour que le launcher ouvre l'interface déjà connectée :
-            <div class="ob-row"><input id="obSunUser" placeholder="Identifiant" autocomplete="off" spellcheck="false" data-nav /><input id="obSunPass" type="password" placeholder="Mot de passe" autocomplete="off" data-nav /><button class="btn" id="obSunSave" data-nav>Enregistrer</button></div></li>
         </ol>
-        <p class="dim">La suite (appairage, ajout de tes jeux) se fait dans Réglages → Fonctions → Streaming.</p>` },
+        <p class="dim">La suite (objectif, mesure de la connexion, configuration automatique, appairage, ajout de tes jeux) se fait dans Réglages → Fonctions → Streaming.</p>` },
     { id: 'import', title: 'Importer tes jeux',
       html: () => `<p>Dernière étape : récupère les jeux déjà installés sur ce PC (Steam, Epic, GOG, Xbox, EA, Ubisoft, Battle.net, itch…), puis ajoute des ROMs ou des dossiers si tu veux.</p>
         <div class="ob-row"><button class="btn primary" id="obImport" data-nav>Importer mes jeux maintenant</button></div>
@@ -128,15 +126,16 @@
       const cur = S.lib?.settings?.discordVoiceChannel; if (cur?.name) info(`Salon actuel : ${cur.name}`, true);
     } else if (id === 'stream') {
       const st = await rr.x('x:stream:status').catch(() => null);
-      const t = $('#obSunState', panel);
-      if (t && st) t.textContent = st.sunshine.installed ? 'Sunshine est déjà installé' : '';
-      on('#obSun', 'click', () => rr.x('x:stream:install'));
-      on('#obMoon', 'click', () => rr.x('x:stream:installMoonlight'));
-      if (st?.login) $('#obSunUser', panel).value = st.login;
-      on('#obSunSave', 'click', async () => {
-        const r = await rr.x('x:stream:login', { user: $('#obSunUser', panel).value, pass: $('#obSunPass', panel).value });
-        toast(r.saved ? 'Identifiants Sunshine enregistrés' : 'Renseigne l’identifiant et le mot de passe', r.saved ? 'success' : 'info');
+      const t = $('#obApolloState', panel);
+      if (t && st) t.textContent = st.apollo?.installed ? 'Apollo est déjà installé' : '';
+      on('#obApollo', 'click', async (e) => {
+        e.target.disabled = true; toast('Installation d’Apollo… (environ 1 minute)', 'progress');
+        const r = await rr.x('x:stream:install').catch((er) => ({ ok: false, error: er.message }));
+        e.target.disabled = false;
+        if (r.ok) { if (t) t.textContent = 'Apollo est installé'; toast(r.rebootAdvised ? 'Apollo installé — redémarre le PC pour activer l’écran virtuel' : 'Apollo installé', 'success'); }
+        else toast(r.error || 'Installation échouée', true);
       });
+      on('#obMoon', 'click', () => rr.x('x:stream:installMoonlight'));
     } else if (id === 'import') {
       on('#obImport', 'click', () => finish(true));
     }
@@ -154,7 +153,7 @@
       { id: 'stores', label: 'Compte Epic Games', ok: !!pt?.epic?.connected },
       { id: 'art', label: 'Clés de visuels (SteamGridDB / TheGamesDB)', ok: !!(st.sgdbKey || st.tgdbKey) },
       { id: 'discord', label: 'Discord (application + salon vocal)', ok: !!(st.discordClientId && st.discordClientSecret && st.discordVoiceChannel?.id) },
-      { id: 'stream', label: 'Streaming (Sunshine + identifiants)', ok: !!(sm?.sunshine?.installed && sm?.login) },
+      { id: 'stream', label: 'Streaming (Apollo)', ok: !!sm?.apollo?.installed },
       { id: 'import', label: 'Jeux importés', ok: (S.lib?.games || []).length > 0 },
     ];
   }

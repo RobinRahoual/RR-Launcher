@@ -209,7 +209,7 @@ function send(ch, payload) {
   if (win && !win.isDestroyed()) win.webContents.send(ch, payload);
 }
 
-// STREAM : « RR Launcher.exe --launch=<id> » (application Sunshine d'un jeu) lance le jeu, au démarrage comme à chaud
+// STREAM : « RR Launcher.exe --launch=<id> » (application Apollo d’un jeu) lance le jeu, au démarrage comme à chaud
 function launchFromArgv(argv) {
   const id = require('./features/stream').launchArg(argv);
   if (id && findGame(id)) launchGame(id).then((r) => { if (r?.ok === false) meta.log(`--launch ${id} : ${r.error}`); });
